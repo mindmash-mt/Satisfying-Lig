@@ -41,7 +41,7 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 - **Kaleciler** topu sürekli takip eder; her takımın kalecisine maç başında rastgele bir yetenek (`skill`) atanır.
 - **Oyuncular** sahada rastgele dolaşır, topa çarptıklarında topun son dokunan takımı olurlar.
 - **Goller:** Gol, topa en son dokunan takımın hanesine yazılır (oyuncu **veya kaleci**). Kendi kalesine atılan goller hiçbir takımın gol sayısına eklenmez (final düellosu ve derby skorunu ise yine değiştirir). Atılan goller lig tablosunda (`AG`/GF) birikir.
-- **Bitiş ekranı:** Kazanan kartı → **MATCH RESULT** (tüm takımların sırası, attığı gol ve aldığı puan) → **LEAGUE TABLE** (oynanan maç, toplam gol, puan) → *See you tomorrow*. Toplam ~9 sn (`END_DURATION`).
+- **Bitiş ekranı:** Kazanan kartı → **MATCH RESULT** (tüm takımların sırası, attığı gol ve aldığı puan) → **LEAGUE TABLE** (oynanan maç, toplam gol, puan). Video lig tablosunda biter. Toplam ~8,6 sn (`END_DURATION`).
 - **Gol** yiyen takım elenir:
   - Kalesi takım renginde parlayan bir duvarla **kapanır** (kapanan kale duvar gibi davranır).
   - Kalesinin arkasında **adı yazmaya devam eder**, önünde **sırası ve aldığı puan** belirir (ör. `6TH · +2 PTS`).
