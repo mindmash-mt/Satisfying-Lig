@@ -654,15 +654,16 @@ const EndScreen = {
     ctx.fillStyle = `rgba(4,6,12,${0.88 * clamp01(et / 0.35)})`;
     ctx.fillRect(0, 0, 1080, 1920);
     if (et < 2.1) this.card(ctx, e, et, SX);
-    if (et >= 1.9 && et < 5.8) this.table(ctx, e, et - 2, SX);
+    if (et >= 1.9 && et < 5.1) this.standings(ctx, e, et - 2, SX);
+    if (et >= 4.8 && et < 8.7) this.table(ctx, e, et - 4.9, SX);
     for (const p of FX.endParts) {
       if (et > 2.3) break;
       ctx.save(); ctx.globalAlpha = clamp01((2.3 - et) / 0.3); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
       ctx.fillStyle = p.color; ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2 * (0.3 + 0.7 * Math.abs(Math.cos(p.rot))));
       ctx.restore();
     }
-    if (et >= 5.5) {
-      const t = et - 5.5;
+    if (et >= 8.4) {
+      const t = et - 8.4;
       ctx.fillStyle = `rgba(0,0,0,${0.85 * clamp01(t / 0.5)})`; ctx.fillRect(0, 0, 1080, 1920);
       const s = easeOutBack(t / 0.4, 2);
       ctx.save(); ctx.translate(SX, 935); ctx.scale(s, s);
@@ -704,6 +705,50 @@ const EndScreen = {
     outlinedText(ctx, e.subtitle, 0, 300, `600 34px ${FONT_UI}`, light ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.85)', null, 0);
     ctx.restore();
   },
+  /* this match's result: place, team, goals scored, points earned (last place appears first, winner last) */
+  standings(ctx, e, tt, SX) {
+    const rows = e.standings || [];
+    const fadeIn = clamp01(tt / 0.3), fadeOut = tt > 2.7 ? clamp01((3.1 - tt) / 0.4) : 1;
+    const alpha = Math.min(fadeIn, fadeOut);
+    if (alpha <= 0 || !rows.length) return;
+    ctx.save(); ctx.globalAlpha = alpha;
+    const ts = easeOutBack(tt / 0.4, 2);
+    ctx.save(); ctx.translate(SX, 430); ctx.scale(ts, ts);
+    outlinedText(ctx, e.champion ? 'FINAL RESULT' : 'MATCH RESULT', 0, 0, `110px ${FONT_BIG}`, '#ffffff', null, 0);
+    ctx.restore();
+    const n = rows.length, X0 = 70, W = 880, top = 545, rh = Math.min(124, Math.floor(860 / n));
+    const showPts = rows.some(r => r.pts !== null);
+    const head = `600 24px ${FONT_UI}`, hc = 'rgba(255,255,255,0.55)';
+    outlinedText(ctx, 'TEAM', X0 + 150, top - 26, head, hc, null, 0, 'left');
+    outlinedText(ctx, 'GOALS', X0 + W - (showPts ? 230 : 80), top - 26, head, hc, null, 0);
+    if (showPts) outlinedText(ctx, 'PTS', X0 + W - 80, top - 26, head, hc, null, 0);
+    const step = Math.min(0.12, 0.8 / n);
+    rows.forEach((r, i) => {
+      const enter = easeOutCubic((tt - 0.15 - step * (n - 1 - i)) / 0.4);
+      if (enter <= 0) return;
+      const x = X0 + (1 - enter) * 500, y = top + i * rh, cy = y + rh / 2, win = r.place === 1;
+      ctx.save(); ctx.globalAlpha *= enter;
+      roundRect(ctx, x, y + 6, W, rh - 12, 22);
+      ctx.fillStyle = win ? rgba(r.c1, 0.4) : 'rgba(255,255,255,0.07)'; ctx.fill();
+      if (win) { ctx.lineWidth = 4; ctx.strokeStyle = '#FFD54F'; ctx.stroke(); }
+      ctx.fillStyle = r.c1; roundRect(ctx, x, y + 6, 14, rh - 12, 7); ctx.fill();
+      outlinedText(ctx, win ? '🏆' : ordinal(r.place), x + 64, cy + 3, win ? `44px ${FONT_UI}` : `48px ${FONT_BIG}`, '#ffffff', null, 0);
+      ctx.beginPath(); ctx.arc(x + 140, cy, 20, 0, TAU); ctx.fillStyle = r.c1; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = r.c2; ctx.stroke();
+      const maxName = showPts ? 380 : 520;
+      let fs = Math.min(50, rh * 0.5); ctx.font = `${fs}px ${FONT_BIG}`;
+      while (ctx.measureText(upTR(r.name)).width > maxName && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
+      outlinedText(ctx, upTR(r.name), x + 174, cy + 3, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
+      outlinedText(ctx, `⚽ ${r.gf}`, x + W - (showPts ? 230 : 80), cy + 3, `600 36px ${FONT_UI}`, '#ffffff', null, 0);
+      if (r.pts !== null) {
+        ctx.save(); ctx.translate(x + W - 80, cy);
+        roundRect(ctx, -54, -26, 108, 52, 26); ctx.fillStyle = r.pts > 0 ? '#00C853' : 'rgba(255,255,255,0.14)'; ctx.fill();
+        outlinedText(ctx, `+${r.pts}`, 0, 3, `44px ${FONT_BIG}`, '#ffffff', null, 0);
+        ctx.restore();
+      }
+      ctx.restore();
+    });
+    ctx.restore();
+  },
   table(ctx, e, tt, SX) {
     const fadeIn = clamp01(tt / 0.3), fadeOut = tt > 3.4 ? clamp01((3.8 - tt) / 0.4) : 1;
     const alpha = Math.min(fadeIn, fadeOut);
@@ -715,7 +760,8 @@ const EndScreen = {
     ctx.restore();
     const X0 = 70, W = 880, top = 545, rh = 104;
     outlinedText(ctx, 'TEAM', X0 + 150, top - 26, `600 24px ${FONT_UI}`, 'rgba(255,255,255,0.55)', null, 0, 'left');
-    outlinedText(ctx, 'P', X0 + W - 250, top - 26, `600 24px ${FONT_UI}`, 'rgba(255,255,255,0.55)', null, 0);
+    outlinedText(ctx, 'P', X0 + W - 310, top - 26, `600 24px ${FONT_UI}`, 'rgba(255,255,255,0.55)', null, 0);
+    outlinedText(ctx, 'GF', X0 + W - 235, top - 26, `600 24px ${FONT_UI}`, 'rgba(255,255,255,0.55)', null, 0);
     outlinedText(ctx, 'PTS', X0 + W - 70, top - 26, `600 24px ${FONT_UI}`, 'rgba(255,255,255,0.55)', null, 0);
     ctx.save();
     ctx.beginPath(); ctx.rect(0, top - 4, 1080, rh * 8 + 4); ctx.clip();
@@ -735,9 +781,10 @@ const EndScreen = {
       outlinedText(ctx, String(rank), x + 54, y + rh / 2 + 3, `56px ${FONT_BIG}`, '#ffffff', null, 0);
       ctx.beginPath(); ctx.arc(x + 140, y + rh / 2, 20, 0, TAU); ctx.fillStyle = r.c1; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = r.c2; ctx.stroke();
       let fs = 50; ctx.font = `${fs}px ${FONT_BIG}`;
-      while (ctx.measureText(upTR(r.name)).width > 370 && fs > 30) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
+      while (ctx.measureText(upTR(r.name)).width > 320 && fs > 30) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
       outlinedText(ctx, upTR(r.name), x + 174, y + rh / 2 + 3, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
-      outlinedText(ctx, String(r.played), x + W - 250, y + rh / 2 + 2, `600 30px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
+      outlinedText(ctx, String(r.played), x + W - 310, y + rh / 2 + 2, `600 30px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
+      outlinedText(ctx, String(r.gf || 0), x + W - 235, y + rh / 2 + 2, `600 30px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
       const pts = Math.round(lerp(r.oldPts, r.newPts, countP));
       outlinedText(ctx, String(pts), x + W - 70, y + rh / 2 + 3, `60px ${FONT_BIG}`, '#ffffff', null, 0);
       if (r.delta > 0 && tt > 0.35 && tt < 2.8) {
