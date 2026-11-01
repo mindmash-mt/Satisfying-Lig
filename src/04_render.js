@@ -645,7 +645,7 @@ const HUD = {
 };
 
 /* =====================================================================
-   END SCREEN  (winner card → animated league table → "See you tomorrow")
+   END SCREEN  (winner card → match standings → animated league table, which stays on screen to the end)
    ===================================================================== */
 const EndScreen = {
   draw(ctx, e, et) {
@@ -655,19 +655,11 @@ const EndScreen = {
     ctx.fillRect(0, 0, 1080, 1920);
     if (et < 2.1) this.card(ctx, e, et, SX);
     if (et >= 1.9 && et < 5.1) this.standings(ctx, e, et - 2, SX);
-    if (et >= 4.8 && et < 8.7) this.table(ctx, e, et - 4.9, SX);
+    if (et >= 4.8) this.table(ctx, e, et - 4.9, SX);
     for (const p of FX.endParts) {
       if (et > 2.3) break;
       ctx.save(); ctx.globalAlpha = clamp01((2.3 - et) / 0.3); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
       ctx.fillStyle = p.color; ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2 * (0.3 + 0.7 * Math.abs(Math.cos(p.rot))));
-      ctx.restore();
-    }
-    if (et >= 8.4) {
-      const t = et - 8.4;
-      ctx.fillStyle = `rgba(0,0,0,${0.85 * clamp01(t / 0.5)})`; ctx.fillRect(0, 0, 1080, 1920);
-      const s = easeOutBack(t / 0.4, 2);
-      ctx.save(); ctx.translate(SX, 935); ctx.scale(s, s);
-      outlinedText(ctx, 'See you tomorrow ⚽', 0, 0, `104px ${FONT_BIG}`, '#ffffff', null, 0);
       ctx.restore();
     }
     ctx.restore();
@@ -750,8 +742,7 @@ const EndScreen = {
     ctx.restore();
   },
   table(ctx, e, tt, SX) {
-    const fadeIn = clamp01(tt / 0.3), fadeOut = tt > 3.4 ? clamp01((3.8 - tt) / 0.4) : 1;
-    const alpha = Math.min(fadeIn, fadeOut);
+    const alpha = clamp01(tt / 0.3);   // no fade-out: the video ends on the league table
     if (alpha <= 0) return;
     ctx.save(); ctx.globalAlpha = alpha;
     const ts = easeOutBack(tt / 0.4, 2);
