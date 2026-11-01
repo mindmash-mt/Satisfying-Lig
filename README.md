@@ -2,7 +2,7 @@
 
 Instagram Reels, TikTok ve YouTube Shorts için **"satisfying" futbol simülasyonu videoları** üreten tek dosyalık bir tarayıcı uygulaması.
 
-Çokgen bir arenanın her kenarında bir Süper Lig takımının kalesi var. Top duvarlara çarptıkça hızlanır, kaleciler topu takip eder. Gol yiyen takım elenir, kalesi kapanır. **Son kalan takım kazanır** ve aldığı puanlar kalıcı bir **lig tablosuna** işlenir.
+Çokgen bir arenanın her kenarında dünyanın önde gelen bir futbol kulübünün kalesi var. Top duvarlara çarptıkça hızlanır, kaleciler topu takip eder. Gol yiyen takım elenir, kalesi kapanır. **Son kalan takım kazanır** ve aldığı puanlar kalıcı bir **lig tablosuna** işlenir.
 
 - Kurulum yok: `index.html` dosyasını Chrome'da açmanız yeterli.
 - Dikey 1080×1920 (9:16) video, 60 FPS, sesli kayıt.
@@ -43,7 +43,7 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 - **Gol** yiyen takım elenir:
   - Kalesi takım renginde parlayan bir duvarla **kapanır** (kapanan kale duvar gibi davranır).
   - Kalesinin arkasında **adı yazmaya devam eder**, önünde **sırası ve aldığı puan** belirir (ör. `6TH · +2 PTS`).
-  - Ekranın üstünde `❌ GÖZTEPE ELIMINATED`, altında `❌ GÖZTEPE · 6TH · +2 PTS` yazar.
+  - Ekranın üstünde `❌ CHELSEA ELIMINATED`, altında `❌ CHELSEA · 6TH · +2 PTS` yazar.
   - Arena küçülmez; kalan açık kaleler her elemede %25 genişler.
 - **Uzatma:** Son elemeden 45 sn içinde yeni eleme olmazsa kaleler kademeli olarak genişler. Sayaç her elemede sıfırlanır.
 - **Final düellosu:** İki takım kalınca arena dikey bir futbol sahasına dönüşür. Top kaleye yaklaştığında ağır çekim ve kamera yakınlaşması olur.
@@ -63,7 +63,9 @@ Otomatik (seed ile) veya elle seçilir: **Classic**, **Snow** (top %10 hızlı),
 ## Lig sistemi
 
 ### Takımlar
-2026-27 Trendyol Süper Lig'in 18 kulübü, kendi renkleriyle: Galatasaray, Fenerbahçe, Beşiktaş, Trabzonspor, Başakşehir, Samsunspor, Göztepe, Eyüpspor, Kasımpaşa, Çaykur Rizespor, Konyaspor, Alanyaspor, Gaziantep FK, Gençlerbirliği, Kocaelispor, Erzurumspor, Amedspor, Çorum FK.
+Dünyanın önde gelen 18 kulübü, kendi renkleriyle: Real Madrid, Barcelona, Atlético Madrid, Manchester City, Liverpool, Arsenal, Chelsea, Manchester United, Bayern München, Borussia Dortmund, Bayer Leverkusen, Paris Saint-Germain, Inter, AC Milan, Juventus, Fenerbahçe, Beşiktaş, Galatasaray.
+
+Daha eski varsayılan takımlarla kaydedilmiş bir lig, uygulama ilk açıldığında bu takımlarla sıfırdan başlar.
 
 Ad, 3 harfli kod ve renkler panelden **✏️ Takımları düzenle** ile değiştirilebilir; takım eklenip silinebilir.
 
