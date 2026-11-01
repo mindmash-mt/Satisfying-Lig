@@ -346,7 +346,8 @@ const TeamEditor = {
    APP  (match setup, lifecycle, results, caption)
    ===================================================================== */
 const App = {
-  game: null, setup: null, running: false, paused: false, end: null, endT: 0, matchRealT: 0, title: '',
+  game: null, setup: null, running: false, paused: false, end: null, endT: 0, matchRealT: 0, title: '', intro: null, introT: 0,
+  introOn() { return !!(this.running && this.intro && this.introT < CONFIG.INTRO_DURATION); },
   simSpeed() { return League.data.settings.simSpeed || 1; },
   /* league points a finishing place earns in the current mode (null = no points, e.g. Season Final) */
   pointsForPlace(place) {
@@ -430,16 +431,41 @@ const App = {
     return { err, title, mode: s.mode, week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(), matchNo: d.matchNo, seed, theme, test: s.testMatch,
       opts: { mode: s.mode, teams: (teams || []).map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false } };
   },
+  /* what the video shows before the match: the full table, then today's matches (played ones with their results, the rest as fixtures) */
+  buildIntro() {
+    const s = this.setup, d = League.data;
+    const cur = new Set(s.opts.teams.map(t => t.id));
+    const rows = League.ranking().map((x, i) => ({ id: x.t.id, name: x.t.name, c1: x.t.c1, c2: x.t.c2, today: cur.has(x.t.id),
+      oldRank: i, newRank: i, oldPts: x.r.pts, newPts: x.r.pts, played: x.r.played, dPlayed: 0, oldGd: x.r.gf - x.r.ga, newGd: x.r.gf - x.r.ga, place: null, delta: null }));
+    const tm = (id) => d.teams.find(t => t.id === id);
+    const tObj = (t, extra) => Object.assign({ id: t.id, name: t.name, c1: t.c1, c2: t.c2 }, extra || {});
+    const matches = [];
+    if (s.mode === 'arena') {
+      const plan = this.weekPlan();
+      for (let j = 1; j <= s.perWeek; j++) {
+        const label = `GROUP MATCH ${j}`;
+        if (j < s.weekMatch) {
+          const h = d.history.slice().reverse().find(x => x.mode === 'arena' && x.week === s.week && x.weekMatch === j);
+          if (h) matches.push({ label, status: 'done', teams: h.result.slice().sort((a, b) => a.place - b.place)
+            .map(r => { const t = tm(r.id); return t ? tObj(t, { place: r.place, pts: d.points[r.place - 1] || 0 }) : null; }).filter(Boolean) });
+        } else if (j === s.weekMatch) matches.push({ label, status: 'now', teams: s.opts.teams.map(t => tObj(t)) });
+        else matches.push({ label, status: 'later', teams: (plan.groups[j - 1] || []).map(tm).filter(Boolean).map(t => tObj(t)) });
+      }
+    } else matches.push({ label: s.mode === 'final' ? 'SEASON FINAL' : 'DERBY', status: 'now', teams: s.opts.teams.map(t => tObj(t)) });
+    return { title: s.title, sub: s.mode === 'arena' ? `WEEK ${s.week}` : s.title, rows, matches };
+  },
   prepare() {
     if (Recorder.active) return false;
     const setup = this.buildSetup();
     this.setup = setup;
     this.title = setup.title;
     this.end = null; this.endT = 0; this.running = false; this.paused = false; this.matchRealT = 0; acc = 0;
+    this.intro = null; this.introT = 0;
     if (setup.err) { this.game = null; UI.toast('⚠️ ' + setup.err); UI.status(); return false; }
     this.game = new Game(setup.opts);
     this.game.onEvent = (t, dd) => FX.onEvent(t, dd);
     FX.reset(this.game); Renderer.resetTrails();
+    this.intro = this.buildIntro();
     UI.status();
     return true;
   },
@@ -477,12 +503,15 @@ const App = {
     const rkB = League.ranking(before), rkA = League.ranking(after);
     const oldRank = new Map(rkB.map((x, i) => [x.t.id, i])), newRank = new Map(rkA.map((x, i) => [x.t.id, i]));
     const today = new Set(res.teams.map(t => t.id));
+    const gdOf = (tab, id) => { const r = League.rowOf(tab, id); return r.gf - r.ga; };
     const rows = d.teams.map(t => {
       const tm = res.teams.find(x => x.id === t.id);
       return { id: t.id, name: t.name, c1: t.c1, c2: t.c2, today: today.has(t.id),
         oldRank: oldRank.get(t.id), newRank: newRank.get(t.id),
         oldPts: League.rowOf(before, t.id).pts, newPts: League.rowOf(after, t.id).pts,
-        played: League.rowOf(after, t.id).played, gf: League.rowOf(after, t.id).gf, delta: tm ? League.pointsFor(res, tm) : 0 };
+        played: League.rowOf(after, t.id).played, dPlayed: tm && s.mode !== 'final' ? 1 : 0,
+        oldGd: gdOf(before, t.id), newGd: gdOf(after, t.id),
+        place: tm ? tm.place : null, delta: tm && s.mode !== 'final' ? League.pointsFor(res, tm) : null };
     });
     const leaderBefore = rkB[0] && rkB[0].r.played ? rkB[0].t.id : null;
     const leaderAfter = rkA[0].t;
@@ -497,9 +526,9 @@ const App = {
       const T = g.teams[tm.slot];
       return { name: T.name, code: T.code, c1: T.c1, c2: T.c2, place: tm.place, gf: tm.gf, pts: s.mode === 'final' ? null : League.pointsFor(res, tm) };
     });
-    this.end = { winner: { name: W.name, code: W.code, c1: W.c1, c2: W.c2 }, rows, standings, champion: s.mode === 'final', subtitle };
+    this.end = { title: s.title, winner: { name: W.name, code: W.code, c1: W.c1, c2: W.c2 }, rows, standings, champion: s.mode === 'final', subtitle };
     this.endT = 0;
-    FX.startEndConfetti([W.c1, W.c2, '#FFD54F', '#ffffff']);
+    if (s.mode === 'final') FX.startEndConfetti([W.c1, W.c2, '#FFD54F', '#ffffff']);
     /* persist */
     if (!s.test) {
       if (s.mode === 'final') d.champions.push({ id: W.id, name: W.name, week: s.week, seed: s.seed });
@@ -610,7 +639,9 @@ function frame(now) {
   if (rdt > 0.1) rdt = 0.1; if (rdt < 0) rdt = 0;
   const g = App.game;
   let dtW = 0;
-  if (g && App.running && !App.paused && !g.over) {
+  if (g && App.running && !App.paused && !g.over && App.introOn()) {
+    App.introT += rdt;                         // the pre-match screens play first; the match itself waits
+  } else if (g && App.running && !App.paused && !g.over) {
     const sp = Recorder.active ? 1 : App.simSpeed();
     const ts = g.timeScale();
     acc += rdt * sp * ts;
@@ -624,7 +655,7 @@ function frame(now) {
   FX.update(dtW, App.paused ? 0 : rdt);
   if (App.end && !App.paused) {
     App.endT += rdt;
-    if (Recorder.active && App.endT >= CONFIG.END_DURATION + 0.3) { Recorder.stop(false); UI.status(); }
+    if (Recorder.active && App.endT >= endDuration(App.setup && App.setup.mode) + 0.3) { Recorder.stop(false); UI.status(); }
   }
   Renderer.draw(g, App);
   UI.tick();
