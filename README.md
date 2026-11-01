@@ -45,7 +45,7 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 - **Bitiş ekranı:** Kazanan kartı → **MATCH RESULT** (tüm takımların sırası, attığı gol ve aldığı puan) → **LEAGUE TABLE** (oynanan maç, toplam gol, puan). Video lig tablosunda biter. Toplam ~8,6 sn (`END_DURATION`).
 - **Gol** yiyen takım elenir:
   - Kalesi takım renginde parlayan bir duvarla **kapanır** (kapanan kale duvar gibi davranır).
-  - Kalesinin arkasında **adı yazmaya devam eder**, önünde **sırası ve aldığı puan** belirir (ör. `6TH · +2 PTS`).
+  - Kalesinin arkasında **adı yazmaya devam eder** (her temada okunsun diye düz beyaz harfler, koyu çerçeveli), önünde **sırası ve aldığı puan** belirir (ör. `6TH · +2 PTS`).
   - Ekranın üstünde iki satır belirir: önce yeşil bir artıyla golü atan takım (`+ ARSENAL GOAL`; kendi kalesine atılan golde artısız `OWN GOAL`), altında elenen takım, sırası ve aldığı puan (`❌ CHELSEA · 6TH · +2 PTS`).
   - Arena küçülmez; kaleler maç boyunca hiç genişlemez.
 - **Final düellosu:** İki takım kalınca arena dar ve uzun, dikey bir futbol sahasına dönüşür (kaleler arenadakinden biraz kısa) ve skor 0–0'dan başlar. **İlk 2 golü atan kazanır** (`FINAL_GOALS`).

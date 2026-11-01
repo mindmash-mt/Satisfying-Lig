@@ -239,33 +239,30 @@ const Renderer = {
     ctx.restore();
   },
   /* team name written across the net behind each goal (also after elimination), parallel to the goal line.
-     Letters alternate between the club's two colours; each letter gets a contrasting outline so it reads on any pitch. */
+     Plain white letters with a dark outline, so the name reads on any pitch/theme. */
   nameTag(gl, T, D, hearts) {
     const ctx = this.ctx;
     const ang = Math.atan2(gl.ty, gl.tx);
     const chars = [...upTR(T.name)];
-    let fs = Math.min(40, D - 10);
+    let fs = Math.min(44, D - 4);
     const maxW = Math.min(gl.L * 0.92, 470);
-    const widthAt = (f) => { ctx.font = `${f}px ${FONT_BIG}`; return chars.reduce((w, ch) => w + ctx.measureText(ch).width, 0) + (chars.length - 1) * f * 0.04; };
+    const widthAt = (f) => { ctx.font = `${f}px ${FONT_BIG}`; return chars.reduce((w, ch) => w + ctx.measureText(ch).width, 0) + (chars.length - 1) * f * 0.06; };
     while (widthAt(fs) > maxW && fs > 16) fs -= 2;
     const hs = hearts ? fs * 0.55 : 0, heartsW = hearts ? 10 + hearts * (hs + 3) : 0;
     while (hearts && widthAt(fs) + heartsW > maxW && fs > 16) fs -= 2;
-    const total = widthAt(fs) + heartsW, gap = fs * 0.04;
+    const total = widthAt(fs) + heartsW, gap = fs * 0.06;
     ctx.save();
     ctx.translate(gl.mx + gl.nx * (D / 2 + 2), gl.my + gl.ny * (D / 2 + 2));
     ctx.rotate(ang);
     if (Math.cos(ang) < 0) ctx.rotate(Math.PI);                // keep text upright
     ctx.font = `${fs}px ${FONT_BIG}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
-    let x = -total / 2, k = 0;
+    let x = -total / 2;
     for (const ch of chars) {
       const w = ctx.measureText(ch).width;
       if (ch.trim()) {
-        const col = k % 2 === 0 ? T.c1 : T.c2;
-        const dark = luminance(col) < 0.35;
-        ctx.lineWidth = 6; ctx.strokeStyle = dark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.85)';
+        ctx.lineWidth = Math.max(5, fs * 0.2); ctx.strokeStyle = 'rgba(0,0,0,0.9)';
         ctx.strokeText(ch, x, 2);
-        ctx.fillStyle = col; ctx.fillText(ch, x, 2);
-        k++;
+        ctx.fillStyle = '#ffffff'; ctx.fillText(ch, x, 2);
       }
       x += w + gap;
     }
