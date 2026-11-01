@@ -7,6 +7,7 @@ const League = {
     return {
       version: 1, teamsVersion: 3,
       teams: DEFAULT_TEAMS.map((t, i) => ({ id: 't' + (i + 1), name: t.name, code: t.code, c1: t.c1, c2: t.c2 })),
+      reserve: RESERVE_TEAMS.map((t, i) => ({ id: 't' + (DEFAULT_TEAMS.length + i + 1), name: t.name, code: t.code, c1: t.c1, c2: t.c2 })),
       table: {}, week: 1, weekMatch: 1, matchNo: 1, seasonLength: CONFIG.SEASON_LENGTH,
       points: CONFIG.POINTS.slice(), derbyWinPoints: CONFIG.DERBY_WIN_POINTS,
       history: [], champions: [], settings: {},
@@ -22,13 +23,20 @@ const League = {
     if (!d || typeof d !== 'object' || !Array.isArray(d.teams) || d.teams.length < 2) { f.settings = this.defaultSettings(); return f; }
     const out = Object.assign(f, d);
     const used = new Set();
-    out.teams = d.teams.filter(t => t && t.name).map((t, i) => {
+    const clean = (arr) => arr.filter(t => t && t.name).map((t, i) => {
       let id = String(t.id || ('t' + (i + 1)));
       while (used.has(id)) id += '_';
       used.add(id);
       return { id, name: String(t.name).slice(0, 40), code: upTR(t.code || t.name).replace(CODE_STRIP, '').slice(0, 3).padEnd(3, 'X'),
         c1: validColor(t.c1, '#888888'), c2: validColor(t.c2, '#ffffff') };
     });
+    out.teams = clean(d.teams);
+    /* reserve queue (clubs that can join after a season); older leagues get the default queue minus the clubs already in */
+    if (Array.isArray(d.reserve)) out.reserve = clean(d.reserve);
+    else {
+      const have = new Set(out.teams.map(t => t.name));
+      out.reserve = clean(RESERVE_TEAMS.filter(t => !have.has(t.name)).map((t, i) => ({ ...t, id: 't' + (DEFAULT_TEAMS.length + i + 1) })));
+    }
     out.table = (d.table && typeof d.table === 'object') ? d.table : {};
     for (const id of Object.keys(out.table)) {
       const r = out.table[id] || {};
@@ -45,6 +53,7 @@ const League = {
     out.history = Array.isArray(d.history) ? d.history : [];
     out.champions = Array.isArray(d.champions) ? d.champions : [];
     out.settings = Object.assign(this.defaultSettings(), d.settings || {});
+    if (out.settings.mode === 'final') out.settings.mode = 'arena';   // Season Final was removed: the table leader is the champion
     /* settings v2: single life by default — migrate older saved settings once */
     if (!d.settings || d.settings.sv !== 2) { out.settings.lives = CONFIG.DEFAULT_LIVES; out.settings.sv = 2; }
     if (out.settings.theme !== 'auto' && !THEME_DEFS[out.settings.theme]) out.settings.theme = 'auto';   // removed themes (bumpers)
@@ -61,7 +70,7 @@ const League = {
     /* teams v3 = top European clubs + Turkey's big three: a saved league built on older default teams starts a fresh season */
     if (d && d.teamsVersion !== 3) {
       const f = this.fresh();
-      Object.assign(this.data, { teams: f.teams, table: {}, week: 1, weekMatch: 1, matchNo: 1, history: [], champions: [], teamsVersion: 3 });
+      Object.assign(this.data, { teams: f.teams, reserve: f.reserve, table: {}, week: 1, weekMatch: 1, matchNo: 1, history: [], champions: [], teamsVersion: 3 });
       this.data.settings.manual = [];
       this.migrated = true;
     }
@@ -81,8 +90,31 @@ const League = {
     if (res.mode === 'derby') return tm.place === 1 ? this.data.derbyWinPoints : 0;
     return 0;
   },
+  /* end of season: the table leader is the champion; the last RELEGATE_COUNT teams go out, the next clubs of the reserve queue come in */
+  seasonChange() {
+    const d = this.data, rk = this.ranking();
+    const k = Math.max(0, Math.min(CONFIG.RELEGATE_COUNT, d.reserve.length, rk.length - 2));
+    return { champion: rk[0].t, pts: rk[0].r.pts, out: rk.slice(rk.length - k).map(x => x.t), in: d.reserve.slice(0, k) };
+  },
+  /* archive the finished season (returned, for the season file) and start the next one with the new team list */
+  endSeason() {
+    const d = this.data, ch = this.seasonChange(), season = d.season || 1;
+    const brief = (t) => ({ id: t.id, name: t.name, code: t.code });
+    const archive = { season, endedAt: new Date().toISOString(),
+      champion: { id: ch.champion.id, name: ch.champion.name, season, pts: ch.pts },
+      relegated: ch.out.map(brief), promoted: ch.in.map(brief),
+      table: this.ranking().map((x, i) => ({ rank: i + 1, id: x.t.id, name: x.t.name, code: x.t.code, ...x.r })),
+      history: d.history };
+    d.champions.push(Object.assign({}, archive.champion));
+    d.teams = d.teams.filter(t => !ch.out.some(o => o.id === t.id)).concat(ch.in);
+    d.reserve = d.reserve.slice(ch.in.length).concat(ch.out);
+    d.season = season + 1;
+    d.table = {}; d.week = 1; d.weekMatch = 1; d.history = []; d.weekPlan = null;
+    d.settings.mode = 'arena'; d.settings.manual = [];
+    this.save();
+    return archive;
+  },
   applyTo(table, res) {
-    if (res.mode === 'final') return;
     for (const tm of res.teams) {
       if (!this.data.teams.some(t => t.id === tm.id)) continue;
       const r = table[tm.id] || (table[tm.id] = { played: 0, pts: 0, wins: 0, gf: 0, ga: 0 });
@@ -241,8 +273,7 @@ const UI = {
     $('speedVal').textContent = '×' + (+s.speedMult).toFixed(2);
     $('btnMute').textContent = s.muted ? '🔇' : '🔊';
     $('rowTeamCount').style.display = s.mode === 'arena' ? '' : 'none';
-    $('rowSel').style.display = s.mode === 'final' ? 'none' : '';
-    $('manualList').classList.toggle('hidden', s.selMode !== 'manual' || s.mode === 'final');
+    $('manualList').classList.toggle('hidden', s.selMode !== 'manual');
     if (s.selMode === 'manual') {
       const ml = $('manualList');
       const need = s.mode === 'derby' ? 2 : s.teamCount;
@@ -258,14 +289,19 @@ const UI = {
     const note = $('seasonNote');
     if (d.week >= d.seasonLength) {
       note.classList.remove('hidden');
-      note.innerHTML = d.week > d.seasonLength
-        ? `🏁 <b>Sezon tamamlandı!</b> Mod olarak <b>Season Final</b> seçip şampiyonluk maçını oynayın. Ardından yeni sezon için "Ligi sıfırla".`
-        : `🏁 Sezonun son haftası. Haftanın maçlarından sonra <b>Season Final</b> modunu oynayabilirsiniz.`;
+      if (d.week > d.seasonLength) {
+        const c = League.seasonChange(), nm = (a) => a.map(t => esc(t.name)).join(', ') || '—';
+        note.innerHTML = `🏁 <b>Sezon tamamlandı!</b> Şampiyon: <b>🏆 ${esc(c.champion.name)}</b> (${c.pts} puan).<br>Ligden çıkacaklar: ${nm(c.out)}<br>Gelecekler: ${nm(c.in)}<br><button id="btnEndSeason" style="margin-top:8px">Yeni sezonu başlat</button>`;
+        $('btnEndSeason').addEventListener('click', () => {
+          if (!confirm('Şampiyon kaydedilecek, son takımlar çıkıp yedeklerden takımlar gelecek ve yeni sezon 1. haftadan başlayacak. Emin misiniz?')) return;
+          League.endSeason(); this.init2(); App.prepare(); this.toast('🏆 Yeni sezon başladı.');
+        });
+      } else note.innerHTML = `🏁 Sezonun son haftası. Haftanın maçlarından sonra tablonun lideri şampiyon olur; son ${CONFIG.RELEGATE_COUNT} takım ligden çıkar.`;
     } else note.classList.add('hidden');
     const rk = League.ranking();
     $('leagueTable').innerHTML = `<table><thead><tr><th>#</th><th>Takım</th><th title="Oynanan">O</th><th title="Puan">P</th><th title="Birincilik">1st</th><th title="Atılan gol">AG</th><th title="Yenilen gol">YG</th><th title="Averaj">AV</th></tr></thead><tbody>` +
       rk.map((x, i) => { const av = x.r.gf - x.r.ga; return `<tr><td>${i + 1}</td><td class="tn"><span class="dot" style="background:${x.t.c1};border-color:${x.t.c2}"></span>${esc(x.t.name)}</td><td>${x.r.played}</td><td><b>${x.r.pts}</b></td><td>${x.r.wins}</td><td>${x.r.gf}</td><td>${x.r.ga}</td><td>${av > 0 ? '+' : ''}${av}</td></tr>`; }).join('') +
-      `</tbody></table>` + (d.champions.length ? `<div class="hint">🏆 Şampiyonlar: ${d.champions.map(c => `${esc(c.name)} (hafta ${c.week})`).join(', ')}</div>` : '');
+      `</tbody></table>` + (d.champions.length ? `<div class="hint">🏆 Şampiyonlar: ${d.champions.map(c => `${esc(c.name)} (sezon ${c.season || '?'})`).join(', ')}</div>` : '');
     this.status();
   },
   status() {
@@ -349,7 +385,7 @@ const App = {
   game: null, setup: null, running: false, paused: false, end: null, endT: 0, matchRealT: 0, title: '', intro: null, introT: 0,
   introOn() { return !!(this.running && this.intro && this.introT < CONFIG.INTRO_DURATION); },
   simSpeed() { return League.data.settings.simSpeed || 1; },
-  /* league points a finishing place earns in the current mode (null = no points, e.g. Season Final) */
+  /* league points a finishing place earns in the current mode */
   pointsForPlace(place) {
     const mode = this.setup ? this.setup.mode : 'arena';
     if (mode === 'arena') return League.data.points[place - 1] || 0;
@@ -397,10 +433,7 @@ const App = {
     const seed = (s.seed >>> 0);
     const srng = new RNG((seed ^ 0x5BD1E995) >>> 0);
     let teams, err = null;
-    if (s.mode === 'final') {
-      teams = League.ranking().slice(0, Math.min(4, d.teams.length)).map(x => x.t);
-      if (teams.length < 3) err = 'Season Final için en az 3 takım gerekli.';
-    } else {
+    {
       const n = s.mode === 'derby' ? 2 : s.teamCount;
       if (s.selMode === 'manual') {
         teams = d.teams.filter(t => s.manual.includes(t.id));
@@ -427,7 +460,7 @@ const App = {
     let theme = s.theme;
     if (theme === 'auto') theme = srng.pick(THEME_IDS);
     else if (!THEME_DEFS[theme]) theme = 'classic';
-    const title = s.mode === 'final' ? 'SEASON FINAL' : s.mode === 'derby' ? `WEEK ${d.week} · DERBY` : `WEEK ${d.week} · GROUP MATCH ${d.weekMatch}`;
+    const title = s.mode === 'derby' ? `WEEK ${d.week} · DERBY` : `WEEK ${d.week} · GROUP MATCH ${d.weekMatch}`;
     return { err, title, mode: s.mode, week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(), matchNo: d.matchNo, seed, theme, test: s.testMatch,
       opts: { mode: s.mode, teams: (teams || []).map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false } };
   },
@@ -448,7 +481,7 @@ const App = {
         } else if (j === s.weekMatch) matches.push({ label, status: 'now', teams: s.opts.teams.map(t => tObj(t)) });
         else matches.push({ label, status: 'later', teams: (plan.groups[j - 1] || []).map(tm).filter(Boolean).map(t => tObj(t)) });
       }
-    } else matches.push({ label: s.mode === 'final' ? 'SEASON FINAL' : 'DERBY', status: 'now', teams: s.opts.teams.map(t => tObj(t)) });
+    } else matches.push({ label: 'DERBY', status: 'now', teams: s.opts.teams.map(t => tObj(t)) });
     return { title: s.title, sub: s.mode === 'arena' ? `WEEK ${s.week}` : s.title, matches };
   },
   prepare() {
@@ -506,9 +539,9 @@ const App = {
       return { id: t.id, name: t.name, c1: t.c1, c2: t.c2, today: today.has(t.id),
         oldRank: oldRank.get(t.id), newRank: newRank.get(t.id),
         oldPts: League.rowOf(before, t.id).pts, newPts: League.rowOf(after, t.id).pts,
-        played: League.rowOf(after, t.id).played, dPlayed: tm && s.mode !== 'final' ? 1 : 0,
+        played: League.rowOf(after, t.id).played, dPlayed: tm ? 1 : 0,
         oldGd: gdOf(before, t.id), newGd: gdOf(after, t.id),
-        place: tm ? tm.place : null, delta: tm && s.mode !== 'final' ? League.pointsFor(res, tm) : null };
+        place: tm ? tm.place : null, delta: tm ? League.pointsFor(res, tm) : null };
     });
     const leaderBefore = rkB[0] && rkB[0].r.played ? rkB[0].t.id : null;
     const leaderAfter = rkA[0].t;
@@ -521,14 +554,12 @@ const App = {
     /* this match's full result: every team's place, goals scored (own goals excluded) and points earned */
     const standings = res.teams.slice().sort((a, b) => a.place - b.place).map(tm => {
       const T = g.teams[tm.slot];
-      return { name: T.name, code: T.code, c1: T.c1, c2: T.c2, place: tm.place, gf: tm.gf, pts: s.mode === 'final' ? null : League.pointsFor(res, tm) };
+      return { name: T.name, code: T.code, c1: T.c1, c2: T.c2, place: tm.place, gf: tm.gf, pts: League.pointsFor(res, tm) };
     });
-    this.end = { title: s.title, winner: { name: W.name, code: W.code, c1: W.c1, c2: W.c2 }, rows, standings, champion: s.mode === 'final', subtitle };
+    this.end = { title: s.title, winner: { name: W.name, code: W.code, c1: W.c1, c2: W.c2 }, rows, standings, seasonEnd: null, subtitle };
     this.endT = 0;
-    if (s.mode === 'final') FX.startEndConfetti([W.c1, W.c2, '#FFD54F', '#ffffff']);
     /* persist */
     if (!s.test) {
-      if (s.mode === 'final') d.champions.push({ id: W.id, name: W.name, week: s.week, seed: s.seed });
       d.table = after;
       d.history.push({ matchNo: s.matchNo, week: s.week, weekMatch: s.mode === 'arena' ? s.weekMatch : null, mode: s.mode, seed: s.seed, theme: res.theme, date: new Date().toISOString(),
         teams: res.teams.map(t => t.id), winner: W.id, duration: res.duration,
@@ -540,6 +571,13 @@ const App = {
       }
       d.settings.seed = randomSeed(); $('seed').value = d.settings.seed;
       League.save();
+      /* last group match of the season: the table leader is the champion, the last teams will be relegated */
+      if (s.mode === 'arena' && d.week > d.seasonLength) {
+        const ch = League.seasonChange();
+        this.end.seasonEnd = { season: d.season || 1, champion: { id: ch.champion.id, name: ch.champion.name }, out: ch.out.map(t => t.id), in: ch.in.map(t => ({ id: t.id, name: t.name })) };
+        for (const r of this.end.rows) { r.champ = r.id === ch.champion.id; r.out = ch.out.some(t => t.id === r.id); }
+        FX.startEndConfetti([ch.champion.c1, ch.champion.c2, '#FFD54F', '#ffffff']);
+      }
     }
     $('caption').value = this.caption(res, W, leaderBefore !== leaderAfter.id && rkA[0].r.pts > 0 ? leaderAfter : null);
     UI.refresh();
@@ -547,8 +585,7 @@ const App = {
   caption(res, W, newLeader) {
     const s = this.setup, g = this.game;
     let l1;
-    if (s.mode === 'final') l1 = `Season Final 🏆 ${W.name} are the champions!`;
-    else if (s.mode === 'derby') { const L = g.teams[1 - g.winner]; l1 = `Week ${s.week} · Derby 🏆 ${W.name} win ${W.score}–${L.score} vs ${L.name}!`; }
+    if (s.mode === 'derby') { const L = g.teams[1 - g.winner]; l1 = `Week ${s.week} · Derby 🏆 ${W.name} win ${W.score}–${L.score} vs ${L.name}!`; }
     else {
       const L = g.teams.find(t => t.place === 2);
       l1 = `Week ${s.week} · Group Match ${s.weekMatch} 🏆 ${W.name} win${L && g.finalDuel ? ` the final ${W.score}–${L.score} vs ${L.name}` : ''}!`;
@@ -560,8 +597,15 @@ const App = {
       if (newLeader && !s.test) extra += newLeader.id === top.id ? ' and they are the new league leader!' : ` — and ${newLeader.name} is the new league leader!`;
       else extra += '!';
     } else if (newLeader && !s.test) extra = `New league leader: ${newLeader.name}!`;
-    const l2 = s.mode === 'final' ? 'Who wins next season? Comment your team 👇' : 'Who takes the top spot next? Comment your team 👇';
-    return [l1, extra, l2, '#satisfying #football #simulation #arena #oddlysatisfying #league'].filter(Boolean).join('\n');
+    let l2 = 'Who takes the top spot next? Comment your team 👇';
+    let season = '';
+    const se = this.end && this.end.seasonEnd;
+    if (se) {
+      const nm = (ids) => ids.map(id => (League.data.teams.find(t => t.id === id) || (League.data.reserve.find(t => t.id === id)) || {}).name).filter(Boolean).join(', ');
+      season = `🏆 ${se.champion.name} are the Season ${se.season} champions!\n🔻 Relegated: ${nm(se.out)}\n🔺 Joining next season: ${se.in.map(t => t.name).join(', ')}`;
+      l2 = 'Who wins next season? Comment your team 👇';
+    }
+    return [l1, season, extra, l2, '#satisfying #football #simulation #arena #oddlysatisfying #league'].filter(Boolean).join('\n');
   },
 };
 
@@ -573,7 +617,7 @@ const Balance = {
   run() {
     if (this.busy || Recorder.active) return;
     const s = League.data.settings, teamsAll = League.data.teams;
-    const mode = s.mode, n = mode === 'derby' ? 2 : mode === 'final' ? Math.min(4, teamsAll.length) : s.teamCount;
+    const mode = s.mode, n = mode === 'derby' ? 2 : s.teamCount;
     if (teamsAll.length < n) { alert('Yeterli takım yok.'); return; }
     this.busy = true; $('btnBalance').disabled = true;
     const N = 100, res = [];
@@ -652,7 +696,7 @@ function frame(now) {
   FX.update(dtW, App.paused ? 0 : rdt);
   if (App.end && !App.paused) {
     App.endT += rdt;
-    if (Recorder.active && App.endT >= endDuration(App.setup && App.setup.mode) + 0.3) { Recorder.stop(false); UI.status(); }
+    if (Recorder.active && App.endT >= CONFIG.END_DURATION + 0.3) { Recorder.stop(false); UI.status(); }
   }
   Renderer.draw(g, App);
   UI.tick();

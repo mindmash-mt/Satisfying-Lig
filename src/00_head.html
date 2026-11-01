@@ -119,7 +119,7 @@
     <section>
       <h2>Ayarlar</h2>
       <label>Mod
-        <select id="mode"><option value="arena">Arena — günlük ana video</option><option value="derby">Derby — 2 takım</option><option value="final">Season Final — tablonun ilk 4'ü</option></select>
+        <select id="mode"><option value="arena">Arena — günlük ana video</option><option value="derby">Derby — 2 takım</option></select>
       </label>
       <div class="grid2">
         <label id="rowTeamCount">Takım sayısı (4–10)<input type="number" id="teamCount" min="4" max="10"></label>
@@ -179,7 +179,7 @@
           <li><b>Başlat</b> (veya Boşluk): seçili seed ve ayarlarla maçı oynatır. Aynı seed + takımlar + ayarlar = birebir aynı maç.</li>
           <li><b>Kaydet ve Başlat</b>: maçı sıfırdan 1x gerçek zamanlı oynatır; bitiş ekranından sonra video otomatik iner. Kayıt sırasında sekmeyi arka plana atmayın (tarayıcı çizimi yavaşlatır).</li>
           <li>Kayıtlı (test olmayan) her arena maçından sonra grup maçı numarası artar ve yeni rastgele seed atanır. Haftada her takım bir kez oynar; haftanın son grup maçından sonra hafta kendiliğinden ilerler (<b>Yeni hafta</b> ile elle de geçilebilir).</li>
-          <li>Sezon bitince <b>Season Final</b> modunu seçin: tablonun ilk 4'ü oynar, puan verilmez, şampiyon kaydedilir.</li>
+          <li>Sezonun son haftası oynanınca final maçı yoktur: tabloda <b>1. olan şampiyon</b> olur. Panelde <b>Yeni sezonu başlat</b> ile sezon arşivlenir; tablonun son 3 takımı ligden çıkar, yedek kuyruğundaki 3 kulüp onların yerine gelir (çıkanlar kuyruğun sonuna geçer).</li>
         </ul>
         <p>WebM dosyasını Instagram'a uygun MP4'e çevirmek için:</p>
         <pre>ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c:a aac -b:a 192k cikti.mp4</pre>

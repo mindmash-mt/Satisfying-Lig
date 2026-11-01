@@ -749,6 +749,8 @@ const LeagueTable = {
       roundRect(ctx, x, y + 3, W, rh - 6, Math.min(20, rh * 0.28));
       ctx.fillStyle = r.today ? rgba(r.c1, 0.30) : 'rgba(255,255,255,0.07)'; ctx.fill();
       if (r.today) { ctx.lineWidth = 3; ctx.strokeStyle = rgba(r.c1, 0.9); ctx.stroke(); }
+      if (r.champ) { ctx.lineWidth = 5; ctx.strokeStyle = '#FFD54F'; ctx.stroke(); }          // season champion
+      else if (r.out) { ctx.lineWidth = 4; ctx.strokeStyle = this.RED; ctx.stroke(); }          // relegated
       ctx.fillStyle = r.c1; roundRect(ctx, x, y + 3, 12, rh - 6, 6); ctx.fill();
       const rank = Math.round(pos) + 1;
       outlinedText(ctx, String(rank), x + 52, cy + 2, `${Math.round(rh * 0.56)}px ${FONT_BIG}`, '#ffffff', null, 0);
@@ -853,59 +855,21 @@ const IntroScreen = {
 };
 
 /* =====================================================================
-   END SCREEN  (one animated league table, which stays on screen to the end; the Season Final adds a champion card first)
+   END SCREEN  (one animated league table, which stays on screen to the end; after the season's last match the champion / relegated rows are marked)
    ===================================================================== */
 const EndScreen = {
   draw(ctx, e, et) {
-    const SX = 510;
     ctx.save();
     ctx.fillStyle = `rgba(4,6,12,${clamp01(et / 0.35)})`;
     ctx.fillRect(0, 0, 1080, 1920);
-    let tt = et;
-    if (e.champion) {
-      if (et < CONFIG.END_CARD) this.card(ctx, e, et, SX);
-      tt = et - (CONFIG.END_CARD - 0.2);
-    }
-    if (tt > 0) LeagueTable.draw(ctx, e.rows, e.champion ? 'FINAL STANDINGS' : 'LEAGUE TABLE', e.champion ? 'SEASON FINAL' : 'AFTER ' + e.title, { tt, post: true, alpha: clamp01(tt / 0.3) });
+    const se = e.seasonEnd;
+    LeagueTable.draw(ctx, e.rows, 'LEAGUE TABLE', se ? `🏆 ${upTR(se.champion.name)} · SEASON ${se.season} CHAMPIONS` : 'AFTER ' + e.title, { tt: et, post: true, alpha: clamp01(et / 0.3) });
     for (const p of FX.endParts) {
       if (et > 2.3) break;
       ctx.save(); ctx.globalAlpha = clamp01((2.3 - et) / 0.3); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
       ctx.fillStyle = p.color; ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2 * (0.3 + 0.7 * Math.abs(Math.cos(p.rot))));
       ctx.restore();
     }
-    ctx.restore();
-  },
-  card(ctx, e, et, SX) {
-    const W = e.winner;
-    const inS = easeOutBack(et / 0.5, 1.8);
-    const out = et > 1.8 ? clamp01((2.1 - et) / 0.3) : 1;
-    ctx.save();
-    ctx.globalAlpha = out;
-    ctx.translate(SX, 945); ctx.scale(inS * (0.9 + 0.1 * out), inS * (0.9 + 0.1 * out));
-    const w = 780, h = 840;
-    ctx.shadowColor = rgba(W.c1, 0.7); ctx.shadowBlur = 60;
-    roundRect(ctx, -w / 2, -h / 2, w, h, 48);
-    const gr = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
-    gr.addColorStop(0, shade(W.c1, 0.15)); gr.addColorStop(1, shade(W.c1, -0.55));
-    ctx.fillStyle = gr; ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.lineWidth = 10; ctx.strokeStyle = W.c2; ctx.stroke();
-    /* rays */
-    ctx.save(); roundRect(ctx, -w / 2, -h / 2, w, h, 48); ctx.clip();
-    ctx.globalAlpha *= 0.12; ctx.fillStyle = '#ffffff';
-    for (let i = 0; i < 14; i++) { const a = i * TAU / 14 + et * 0.5; ctx.beginPath(); ctx.moveTo(0, -150); ctx.arc(0, -150, 900, a, a + 0.12); ctx.closePath(); ctx.fill(); }
-    ctx.restore();
-    const ts = 1 + 0.06 * Math.sin(et * 6);
-    ctx.save(); ctx.translate(0, -170); ctx.scale(ts, ts);
-    ctx.font = `230px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🏆', 0, 0);
-    ctx.restore();
-    const light = luminance(W.c1) > 0.62;
-    const txt = light ? '#111111' : '#ffffff';
-    outlinedText(ctx, e.champion ? 'CHAMPION' : 'WINNER', 0, 85, `170px ${FONT_BIG}`, txt, null, 0);
-    let fs = 92; ctx.font = `${fs}px ${FONT_BIG}`;
-    while (ctx.measureText(upTR(W.name)).width > w - 80 && fs > 40) { fs -= 4; ctx.font = `${fs}px ${FONT_BIG}`; }
-    outlinedText(ctx, upTR(W.name), 0, 205, `${fs}px ${FONT_BIG}`, txt, null, 0);
-    outlinedText(ctx, e.subtitle, 0, 300, `600 34px ${FONT_UI}`, light ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.85)', null, 0);
     ctx.restore();
   },
 };

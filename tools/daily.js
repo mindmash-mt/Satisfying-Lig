@@ -15,7 +15,7 @@
   Sezon arşivi: data/active/seasons/season-<n>.json
   Çıktı:        <out>/*.mp4, <out>/captions.txt, <out>/summary.json
 
-  Sezonun son haftası bittiğinde aynı çalıştırmada Season Final videosu da üretilir, sezon arşivlenir
+  Sezonun son haftası bittiğinde final oynanmaz: tablonun lideri şampiyon olur, sezon arşivlenir
   ve yeni sezon 1. haftadan başlar.
 
   KEEP_TMP=1 ortam değişkeniyle ara dosyalar (ham H.264 + WAV) silinmez.
@@ -80,7 +80,7 @@ function standingsMd(d) {
     L.push('## Son maçlar', '', '| Maç | Hafta · grup | Sıralama (gol) | Tema | Süre | Seed | Tarih |', '|---:|---|---|---|---:|---:|---|');
     for (const h of last) {
       const order = h.result.slice().sort((a, b) => a.place - b.place).map(r => `${r.place}. ${code(r.id)} (${r.gf})`).join(' · ');
-      const when = h.mode === 'final' ? 'Season Final' : h.mode === 'derby' ? `H${h.week} · derby` : `H${h.week} · ${h.weekMatch}`;
+      const when = h.mode === 'derby' ? `H${h.week} · derby` : `H${h.week} · ${h.weekMatch}`;
       L.push(`| ${h.matchNo} | ${when} | ${order} | ${h.theme} | ${Math.round(h.duration)} sn | ${h.seed} | ${istanbul(new Date(h.date)).date} |`);
     }
     L.push('');
@@ -151,19 +151,17 @@ function standingsMd(d) {
       d = await renderOne(); played++;
       if (d.week !== startWeek) break;   // week finished
     }
-    /* season over → Season Final + new season */
-    if (d.week > d.seasonLength && played < maxMatches) {
-      log('🏆 Sezon bitti — Season Final oynanıyor.');
-      await page.evaluate(() => { League.data.settings.mode = 'final'; League.save(); });
-      d = await renderOne(); played++;
-      archived = await page.evaluate(() => Offline.newSeason());
+    /* season over → the table leader is the champion; last teams out, reserve clubs in; new season */
+    if (d.week > d.seasonLength) {
+      archived = await page.evaluate(() => League.endSeason());
       if (!dry) {
         fs.mkdirSync(path.join(dataDir, 'seasons'), { recursive: true });
         fs.writeFileSync(path.join(dataDir, 'seasons', `season-${archived.season}.json`), JSON.stringify(archived, null, 2) + '\n');
       }
       d = await page.evaluate(() => League.data);
       writeLeague(d);
-      log(`📦 Sezon ${archived.season} arşivlendi (şampiyon: ${archived.champion && archived.champion.name}); Sezon ${d.season} başladı.`);
+      log(`🏆 Sezon ${archived.season} bitti — şampiyon: ${archived.champion.name}. Çıkanlar: ${archived.relegated.map(t => t.name).join(', ')} · Gelenler: ${archived.promoted.map(t => t.name).join(', ')}`);
+      log(`📦 Sezon ${archived.season} arşivlendi; Sezon ${d.season} başladı.`);
     }
   } finally {
     await browser.close();
