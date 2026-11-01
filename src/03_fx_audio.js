@@ -106,9 +106,11 @@ const FX = {
       }
       case 'eliminate': {
         const T = this.team(d.team);
-        /* the only on-screen text during play: who went out, in which place, how many points (big, above the pitch) */
-        const pts = App.pointsForPlace(d.place);
-        this.announce({ kind: 'elim', text: `❌ ${upTR(T.name)} · ${ordinal(d.place)}${pts === null ? '' : ` · +${pts} PTS`}`, color: T.c1, dur: 2.2 });
+        /* the only on-screen text during play (above the pitch): the goal that did it ("ARSENAL GOAL"), and under it,
+           behind a green arrow, who went out, in which place and how many points */
+        const pts = App.pointsForPlace(d.place), S = !d.own && d.scorer >= 0 ? this.team(d.scorer) : null;
+        const goal = S ? { text: `${upTR(S.name)} GOAL`, c1: S.c1, c2: S.c2 } : { text: d.own ? 'OWN GOAL' : 'GOAL', c1: T.c1, c2: T.c2 };
+        this.announce({ kind: 'elim', text: `❌ ${upTR(T.name)} · ${ordinal(d.place)}${pts === null ? '' : ` · +${pts} PTS`}`, color: T.c1, goal, dur: 2.2 });
         this.shake(0.3, 10); AudioSys.eliminate(); break;
       }
       case 'powerup': {

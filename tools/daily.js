@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 /*
-  Günlük maç günü — haftanın kalan grup maçlarını oynatır, her biri için MP4 üretir ve lig verisini günceller.
+  Günlük maç günü — aktif ligin bu haftaki kalan grup maçlarını oynatır, her biri için MP4 üretir
+  ve lig verisini günceller. Her sabah zamanlanmış görev çalıştırır; elle çalıştırmak ligi bir hafta ilerletir.
 
-  Kullanım:  node tools/daily.js <lig> [--max N] [--bitrate MBPS] [--reset] [--out KLASÖR]
-    <lig>       active (sosyal medya ligi) | test (geliştirme ligi)
-    --max N     en fazla N maç oynat (deneme için; hafta yarım kalırsa sonraki çalıştırma tamamlar)
+  Kullanım:  node tools/daily.js [active] [--dry-run] [--max N] [--bitrate MBPS] [--reset] [--out KLASÖR]
+    --dry-run   videoları üretir ama lig verisine hiçbir şey yazmaz (deneme için; çıktı out/dry-run/<tarih>)
+    --max N     en fazla N maç oynat (hafta yarım kalırsa sonraki çalıştırma tamamlar)
     --bitrate   video bit hızı, Mbps (varsayılan 8)
     --reset     ligi sıfırdan başlat (mevcut league.json yok sayılır; --max 0 ile maç oynatmadan sadece sıfırlar)
-    --out       videoların yazılacağı klasör (varsayılan out/<lig>/<İstanbul tarihi>)
+    --out       videoların yazılacağı klasör (varsayılan out/active/<İstanbul tarihi>)
 
-  Lig verisi:   data/<lig>/league.json   (tarayıcıdaki "Tabloyu dışa aktar" ile aynı biçim)
-  Okunur tablo: data/<lig>/STANDINGS.md
-  Sezon arşivi: data/<lig>/seasons/season-<n>.json
+  Lig verisi:   data/active/league.json   (tarayıcıdaki "Tabloyu dışa aktar" ile aynı biçim)
+  Okunur tablo: data/active/STANDINGS.md
+  Sezon arşivi: data/active/seasons/season-<n>.json
   Çıktı:        <out>/*.mp4, <out>/captions.txt, <out>/summary.json
 
   Sezonun son haftası bittiğinde aynı çalıştırmada Season Final videosu da üretilir, sezon arşivlenir
@@ -26,11 +27,12 @@ const fs = require('fs'), path = require('path'), { execFileSync } = require('ch
 const ROOT = path.join(__dirname, '..');
 const args = process.argv.slice(2);
 const opt = (name, def) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : def; };
-const league = args[0];
-if (!['active', 'test'].includes(league)) {
-  console.error('Kullanım: node tools/daily.js <active|test> [--max N] [--bitrate MBPS] [--out KLASÖR]');
+const league = 'active';
+if (args[0] && !args[0].startsWith('--') && args[0] !== league) {
+  console.error('Kullanım: node tools/daily.js [active] [--dry-run] [--max N] [--bitrate MBPS] [--reset] [--out KLASÖR]');
   process.exit(2);
 }
+const dry = args.includes('--dry-run');
 const maxMatches = +opt('--max', 99);
 const bitrate = +opt('--bitrate', 8) * 1e6;
 const STORAGE_KEY = 'arenaLeague_v1';
@@ -43,7 +45,7 @@ const istanbul = (d = new Date()) => {
 const now = istanbul();
 const dataDir = path.join(ROOT, 'data', league);
 const leagueFile = path.join(dataDir, 'league.json');
-const outDir = path.resolve(ROOT, opt('--out', path.join('out', league, now.date)));
+const outDir = path.resolve(ROOT, opt('--out', path.join('out', dry ? 'dry-run' : league, now.date)));
 const tmpDir = path.join(outDir, '.tmp');
 fs.mkdirSync(dataDir, { recursive: true });
 fs.mkdirSync(tmpDir, { recursive: true });
@@ -55,19 +57,19 @@ catch (e) { ({ chromium } = require(path.join(execFileSync('npm', ['root', '-g']
 const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);
 
 function writeLeague(d) {
+  if (dry) return;
   const tmp = leagueFile + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(d, null, 2) + '\n');
   fs.renameSync(tmp, leagueFile);
 }
 
 function standingsMd(d) {
-  const name = league === 'active' ? 'Aktif lig' : 'Test ligi';
   const row = (id) => d.table[id] || { played: 0, pts: 0, wins: 0, gf: 0, ga: 0 };
   const rk = d.teams.map(t => ({ t, r: row(t.id) })).sort((a, b) =>
     b.r.pts - a.r.pts || (b.r.gf - b.r.ga) - (a.r.gf - a.r.ga) || b.r.gf - a.r.gf || b.r.wins - a.r.wins || a.t.name.localeCompare(b.t.name));
   const code = (id) => (d.teams.find(t => t.id === id) || {}).code || id;
   const L = [];
-  L.push(`# Satisfying Lig — ${name}`, '');
+  L.push('# Satisfying Lig — Aktif lig', '');
   L.push(`Sezon **${d.season || 1}** · sıradaki: **Hafta ${d.week} / ${d.seasonLength}**, grup maçı ${d.weekMatch} · bu sezon oynanan maç: **${d.history.length}**`, '');
   L.push(`_Son güncelleme: ${now.date} ${istanbul().time} (İstanbul)_`, '');
   L.push('| # | Takım | O | P | 1. | AG | YG | AV |', '|---:|---|---:|---:|---:|---:|---:|---:|');
@@ -94,7 +96,7 @@ function standingsMd(d) {
   execFileSync('sh', [path.join(ROOT, 'build.sh'), html], { stdio: 'ignore' });
   const reset = args.includes('--reset');
   const saved = !reset && fs.existsSync(leagueFile) ? fs.readFileSync(leagueFile, 'utf8') : null;
-  log(`Lig: ${league} · ${saved ? 'mevcut veri yüklendi' : reset ? 'lig sıfırlandı' : 'yeni lig başlıyor'} · çıktı: ${path.relative(ROOT, outDir)}`);
+  log(`${dry ? 'DENEME (lig verisi değişmez) · ' : ''}Lig: ${league} · ${saved ? 'mevcut veri yüklendi' : reset ? 'lig sıfırlandı' : 'yeni lig başlıyor'} · çıktı: ${path.relative(ROOT, outDir)}`);
 
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1400, height: 1000 } });
@@ -155,17 +157,19 @@ function standingsMd(d) {
       await page.evaluate(() => { League.data.settings.mode = 'final'; League.save(); });
       d = await renderOne(); played++;
       archived = await page.evaluate(() => Offline.newSeason());
-      fs.mkdirSync(path.join(dataDir, 'seasons'), { recursive: true });
-      fs.writeFileSync(path.join(dataDir, 'seasons', `season-${archived.season}.json`), JSON.stringify(archived, null, 2) + '\n');
+      if (!dry) {
+        fs.mkdirSync(path.join(dataDir, 'seasons'), { recursive: true });
+        fs.writeFileSync(path.join(dataDir, 'seasons', `season-${archived.season}.json`), JSON.stringify(archived, null, 2) + '\n');
+      }
       d = await page.evaluate(() => League.data);
       writeLeague(d);
       log(`📦 Sezon ${archived.season} arşivlendi (şampiyon: ${archived.champion && archived.champion.name}); Sezon ${d.season} başladı.`);
     }
   } finally {
     await browser.close();
-    if (d) fs.writeFileSync(path.join(dataDir, 'STANDINGS.md'), standingsMd(d));
+    if (d && !dry) fs.writeFileSync(path.join(dataDir, 'STANDINGS.md'), standingsMd(d));
     if (!process.env.KEEP_TMP) fs.rmSync(tmpDir, { recursive: true, force: true });
-    const summary = { league, date: now.date, videos, seasonArchived: archived ? archived.season : null,
+    const summary = { league, dryRun: dry, date: now.date, videos, seasonArchived: archived ? archived.season : null,
       next: d ? { season: d.season, week: d.week, weekMatch: d.weekMatch } : null };
     fs.writeFileSync(path.join(outDir, 'summary.json'), JSON.stringify(summary, null, 2) + '\n');
     fs.writeFileSync(path.join(outDir, 'captions.txt'), videos.map(v => `=== ${path.basename(v.file)} ===\n${v.caption}\n`).join('\n'));

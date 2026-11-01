@@ -613,9 +613,9 @@ class Game {
     if (this.finalDuel) { const other = this.activeTeams().find(i => i !== g.team); if (other !== undefined) this.teams[other].score++; }
     T.lives--;
     this.emit('goal', ev);
-    if (T.lives <= 0) this.eliminate(g.team);
+    if (T.lives <= 0) this.eliminate(g.team, { scorer, own });
   }
-  eliminate(i) {
+  eliminate(i, by) {
     const T = this.teams[i];
     if (T.eliminated) return;
     const act = this.activeTeams().length;
@@ -624,7 +624,8 @@ class Game {
     /* reset the overtime clock: next overtime starts OT_AT seconds after this elimination */
     this.otStart = this.t; this.overtime = false; this.otMult = 1;
     T.k.active = false;
-    this.emit('eliminate', { team: i, place: act });
+    /* by: the goal that knocked the team out (scorer = last touch, -1 if nobody touched it; own = own goal) */
+    this.emit('eliminate', { team: i, place: act, scorer: by ? by.scorer : -1, own: !!(by && by.own) });
     const left = this.activeTeams();
     if (left.length <= 1) { this.finish(left.length ? left[0] : i); return; }
     this.elimSlow = Math.max(this.elimSlow, CONFIG.ELIM_SLOW_GAME);

@@ -611,6 +611,18 @@ const HUD = {
     ctx.restore();
   },
 
+  /* green downward arrow (goal → eliminated team), centred on (x, y), s = height */
+  greenArrow(ctx, x, y, s) {
+    const hw = s * 0.5, sw = s * 0.2, hh = s * 0.45;
+    ctx.save(); ctx.translate(x, y);
+    ctx.beginPath();
+    ctx.moveTo(-sw, -s / 2); ctx.lineTo(sw, -s / 2); ctx.lineTo(sw, s / 2 - hh); ctx.lineTo(hw, s / 2 - hh);
+    ctx.lineTo(0, s / 2); ctx.lineTo(-hw, s / 2 - hh); ctx.lineTo(-sw, s / 2 - hh); ctx.closePath();
+    ctx.shadowColor = 'rgba(34,197,94,0.7)'; ctx.shadowBlur = 12;
+    ctx.fillStyle = '#22C55E'; ctx.fill();
+    ctx.restore();
+  },
+
   /* single announcement lane: above the pitch (arena) or in the bottom band (derby, under the scoreboard layout) */
   announcement(ctx, y) {
     const a = FX.ann;
@@ -630,6 +642,24 @@ const HUD = {
       outlinedText(ctx, a.text, 0, 4, `${fs}px ${FONT_BIG}`, '#ffffff', a.color, 14);
       ctx.shadowBlur = 0;
       outlinedText(ctx, a.text, 0, 4, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
+    } else if (a.kind === 'elim' && a.goal) {
+      /* line 1: "ARSENAL GOAL" in the scoring team's colours; line 2: green arrow + the eliminated-team pill */
+      const G = a.goal;
+      let gs = 64; ctx.font = `${gs}px ${FONT_BIG}`;
+      while (ctx.measureText(G.text).width > 820 && gs > 36) { gs -= 2; ctx.font = `${gs}px ${FONT_BIG}`; }
+      const edge = luminance(G.c1) > 0.8 ? G.c2 : G.c1;
+      ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 16;
+      outlinedText(ctx, G.text, 0, -74, `${gs}px ${FONT_BIG}`, '#ffffff', edge, 12);
+      ctx.shadowBlur = 0;
+      outlinedText(ctx, G.text, 0, -74, `${gs}px ${FONT_BIG}`, '#ffffff', null, 0);
+      let fs = 56; ctx.font = `${fs}px ${FONT_BIG}`;
+      while (ctx.measureText(a.text).width > 700 && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
+      const tw = ctx.measureText(a.text).width, aw = fs * 0.62, w = tw + aw + 86, h = fs + 22, cy = -2;
+      roundRect(ctx, -w / 2, cy - h / 2, w, h, h / 2);
+      ctx.fillStyle = 'rgba(10,10,20,0.85)'; ctx.fill();
+      ctx.lineWidth = 5; ctx.strokeStyle = a.color; ctx.stroke();
+      this.greenArrow(ctx, -w / 2 + 34 + aw / 2, cy, aw);
+      outlinedText(ctx, a.text, -w / 2 + 34 + aw + 18 + tw / 2, cy + 3, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
     } else {
       const elim = a.kind === 'elim';
       let fs = elim ? 76 : 56; ctx.font = `${fs}px ${FONT_BIG}`;
