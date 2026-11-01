@@ -26,7 +26,7 @@ const CONFIG = {
   DERBY_W: 720, DERBY_H: 880, DERBY_TIME: 30,
   PU_R: 26, PU_LIFE: 8, PU_MIN: 6, PU_MAX: 10, PU_MAX_COUNT: 2, PU_WALL_MARGIN: 80,
   DEFAULT_LIVES: 1, DEFAULT_TEAM_COUNT: 6, DEFAULT_SPEED_MULT: 1.0,
-  POINTS: [4, 3, 2, 1, 0, 0, 0, 0, 0, 0], DERBY_WIN_POINTS: 5, SEASON_LENGTH: 30,
+  POINTS: [4, 3, 2, 1, 0, 0, 0, 0, 0, 0], DERBY_WIN_POINTS: 5, SEASON_LENGTH: 17,
   STORAGE_KEY: 'arenaLeague_v1',
   /* before the match: today's group matches (results / fixtures) → match. After it: one animated league table (held until the video ends) */
   INTRO_DURATION: 3.4,

@@ -215,7 +215,7 @@ const UI = {
       League.data.points = arr; $('pointsInput').value = arr.join(','); League.save();
     });
     $('derbyPts').addEventListener('change', () => { League.data.derbyWinPoints = Math.max(0, Math.round(+$('derbyPts').value) || 0); League.save(); });
-    $('seasonLen').addEventListener('change', () => { League.data.seasonLength = Math.max(1, Math.round(+$('seasonLen').value) || 30); League.save(); this.refresh(); });
+    $('seasonLen').addEventListener('change', () => { League.data.seasonLength = Math.max(1, Math.round(+$('seasonLen').value) || CONFIG.SEASON_LENGTH); League.save(); this.refresh(); });
     $('btnCopy').addEventListener('click', async () => {
       const t = $('caption').value; if (!t) return;
       try { await navigator.clipboard.writeText(t); } catch (e) { $('caption').select(); document.execCommand('copy'); }

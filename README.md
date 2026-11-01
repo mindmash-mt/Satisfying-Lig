@@ -80,7 +80,7 @@ Ad, 3 harfli kod ve renkler panelden **✏️ Takımları düzenle** ile değiş
 ### Haftalar ve adil gruplar
 - 18 takım, maç başına 6 takım → **haftada 3 grup maçı**. Her takım haftada bir kez oynar.
 - Başlıkta `WEEK 3 · GROUP MATCH 2` yazar. Haftanın son grup maçı kaydedilince hafta kendiliğinden ilerler (**📅 Yeni hafta** ile elle de geçilir).
-- Haftanın grupları, geçmişte **birbiriyle en az aynı grupta bulunmuş** takımları bir araya getirecek şekilde dağıtılır. 30 haftalık bir sezonda her takım ikilisi 8–10 kez aynı grupta bulunur (rastgele dağıtımda bu aralık 1–15'tir). Panel, haftanın gruplarını ve en az/en çok karşılaşma sayısını gösterir.
+- Haftanın grupları, geçmişte **birbiriyle en az aynı grupta bulunmuş** takımları bir araya getirecek şekilde dağıtılır. 17 haftalık bir sezonda her takım ikilisi 4–6 kez aynı grupta bulunur (rastgele dağıtımda bu aralık çok daha geniştir). Panel, haftanın gruplarını ve en az/en çok karşılaşma sayısını gösterir.
 
 ### Puanlama
 | Sıra | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
@@ -93,7 +93,7 @@ Ad, 3 harfli kod ve renkler panelden **✏️ Takımları düzenle** ile değiş
 - Lig verisi tarayıcının `localStorage`'ında `arenaLeague_v1` anahtarıyla saklanır. Depolama kullanılamazsa uygulama bellekte çalışır ve panelde uyarı gösterir.
 - **⬇ Tabloyu dışa aktar** / **⬆ Tabloyu içe aktar**: takımlar, tablo, hafta, maç geçmişi (seed, mod, tema, takımlar, sonuç) tek bir JSON dosyasında.
 - **Test maçı** kutusu işaretliyse sonuç tabloya yazılmaz.
-- Sezon uzunluğu varsayılan 30 haftadır; sezon bitince panel **Season Final** modunu önerir.
+- Sezon uzunluğu varsayılan 17 haftadır; sezon bitince panel **Season Final** modunu önerir.
 - Tarayıcıdaki lig, repodaki aktif ligden ayrıdır; tarayıcıda yapılan denemeler aktif lige yansımaz. Aktif ligi tarayıcıda görmek için `data/active/league.json` dosyasını **⬆ Tabloyu içe aktar** ile yükleyin (bkz. [Otomatik günlük maç günü](#otomatik-günlük-maç-günü)).
 
 ---
@@ -116,7 +116,7 @@ Klasörde:
 - `STANDINGS.md`: GitHub'da doğrudan okunabilen lig tablosu ve son maçlar.
 - `seasons/season-N.json`: biten sezonların arşivi (son tablo, şampiyon, maç geçmişi).
 
-Sezonun son haftası (varsayılan 30. hafta) oynandığında aynı çalıştırmada **Season Final** videosu da üretilir. Ardından sezon arşivlenir ve yeni sezon 1. haftadan başlar.
+Sezonun son haftası (varsayılan 17. hafta) oynandığında aynı çalıştırmada **Season Final** videosu da üretilir. Ardından sezon arşivlenir ve yeni sezon 1. haftadan başlar.
 
 Videolar ve açıklama metinleri `out/active/<tarih>/` klasörüne yazılır (`--dry-run` ile `out/dry-run/<tarih>/`) (repoya eklenmez): `*.mp4`, `captions.txt`, `summary.json`.
 
