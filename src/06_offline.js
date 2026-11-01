@@ -15,7 +15,9 @@ const Offline = {
   stepFrame(st, rdt) {
     const g = App.game;
     let dtW = 0;
-    if (g && !g.over) {
+    if (g && !g.over && App.introOn()) {
+      App.introT += rdt;
+    } else if (g && !g.over) {
       const ts = g.timeScale();
       st.acc += rdt * ts;
       let n = 0;
@@ -40,7 +42,7 @@ const Offline = {
       if (k >= 200) acc = 0;
       n++;
     }
-    return n + Math.ceil((CONFIG.END_DURATION + 0.3) / rdt) + 1;
+    return n + Math.ceil((CONFIG.INTRO_DURATION + endDuration(opts.mode) + 0.3) / rdt) + 1;
   },
 
   async blobB64(blob) {
@@ -106,7 +108,7 @@ const Offline = {
       if (encErr) throw encErr;
       while (enc.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 0));
       if (pendBytes > 4e6) await flush();
-      if (App.end && App.endT >= CONFIG.END_DURATION + 0.3) break;
+      if (App.end && App.endT >= endDuration(s.mode) + 0.3) break;
       if (i > total + fps * 5) throw new Error('Video beklenenden uzun sürdü.');
     }
     await enc.flush(); enc.close();
