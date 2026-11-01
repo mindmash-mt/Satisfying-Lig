@@ -22,13 +22,13 @@ const FONT_UI = 'Inter, system-ui, sans-serif';
 const vrng = new RNG(20240601);
 const FX = {
   game: null,
-  parts: [], floats: [], ann: null, annQ: [], feed: [], ripples: {}, flashes: {}, pops: [],
+  parts: [], floats: [], ann: null, annQ: [], ripples: {}, flashes: {}, pops: [],
   shakeT: 0, shakeDur: 0.25, shakeMag: 0, wt: 0, ut: 0,
   cam: { k: 0, x: CONFIG.CX, y: CONFIG.CY },
   weather: [], splashes: [], endParts: [],
   reset(game) {
     this.game = game;
-    this.parts = []; this.floats = []; this.ann = null; this.annQ = []; this.feed = []; this.ripples = {}; this.flashes = {}; this.pops = [];
+    this.parts = []; this.floats = []; this.ann = null; this.annQ = []; this.ripples = {}; this.flashes = {}; this.pops = [];
     this.shakeT = 0; this.wt = 0; this.cam = { k: 0, x: CONFIG.CX, y: CONFIG.CY }; this.endParts = [];
     vrng.reseed(((game.o.seed >>> 0) * 31 + 7) >>> 0);
     this.initWeather(game.themeId);
@@ -40,7 +40,6 @@ const FX = {
   },
   shake(dur, mag) { this.shakeT = Math.max(this.shakeT, dur); this.shakeDur = dur; this.shakeMag = Math.max(mag, this.shakeT > 0 ? this.shakeMag : 0); },
   team(i) { return this.game && i >= 0 ? this.game.teams[i] : null; },
-  addFeed(text, color) { this.feed.push({ text, color: color || '#ffffff', t: this.ut }); if (this.feed.length > 6) this.feed.shift(); },
   /* Announcements (GOAL!, SAVE!, OVERTIME, power-ups, eliminations) share ONE lane above the pitch.
      A newcomer waits until the current one has been visible for ANN_MIN seconds, so texts never overlap
      and nothing is written over the pitch. */
@@ -107,10 +106,9 @@ const FX = {
       }
       case 'eliminate': {
         const T = this.team(d.team);
-        /* the only on-screen texts during play: who went out, in which place, how many points */
+        /* the only on-screen text during play: who went out, in which place, how many points (big, above the pitch) */
         const pts = App.pointsForPlace(d.place);
-        this.addFeed(`❌ ${upTR(T.name)} · ${ordinal(d.place)}${pts === null ? '' : ` · +${pts} PTS`}`, T.c1);
-        this.addBanner(`❌ ${upTR(T.name)} ELIMINATED`, T.c1);
+        this.announce({ kind: 'elim', text: `❌ ${upTR(T.name)} · ${ordinal(d.place)}${pts === null ? '' : ` · +${pts} PTS`}`, color: T.c1, dur: 2.2 });
         this.shake(0.3, 10); AudioSys.eliminate(); break;
       }
       case 'powerup': {

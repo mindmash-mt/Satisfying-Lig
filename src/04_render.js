@@ -145,7 +145,7 @@ const Renderer = {
         ctx.lineWidth = 4; ctx.strokeStyle = T.c1; ctx.stroke();
       }
       if (!T.eliminated) this.goalIcons(g, gl, T);
-      if (!g.isDerby) this.nameTag(gl, T, geo.netDepth, g.o.lives > 1 && !T.eliminated ? T.lives : 0);
+      if (!g.isDerby) this.nameTag(gl, T, geo.netDepth, g.o.lives > 1 && !T.eliminated && !g.finalDuel ? T.lives : 0);
       if (gl.locked) this.resultTag(g, gl, T);
     }
     ctx.restore();
@@ -533,7 +533,7 @@ function drawHeart(ctx, x, y, s, fill, stroke) {
 }
 
 /* =====================================================================
-   HUD  (title, team strips / derby scoreboard, big texts, feed, seed)
+   HUD  (title, derby / final-duel scoreboard, big texts, seed)
    ===================================================================== */
 const HUD = {
   draw(ctx, g, app, vis) {
@@ -559,9 +559,9 @@ const HUD = {
       ctx.restore();
     }
     if (g.isDerby) { this.scoreboard(ctx, g, SX); this.announcement(ctx, 1462); }
-    else { this.announcement(ctx, 394); this.feed(ctx, SX); }
+    else { this.announcement(ctx, 394); if (g.finalDuel && !g.morph) this.duelScore(ctx, g, SX); }
     ctx.save(); ctx.globalAlpha = 0.42;
-    outlinedText(ctx, `seed ${g.o.seed >>> 0}`, SX, 1532, `500 22px ${FONT_UI}`, '#ffffff', null, 0);
+    outlinedText(ctx, `seed ${g.o.seed >>> 0}`, SX, g.finalDuel && !g.isDerby ? 1556 : 1532, `500 22px ${FONT_UI}`, '#ffffff', null, 0);
     ctx.restore();
   },
 
@@ -588,6 +588,28 @@ const HUD = {
     ctx.restore();
   },
 
+  /* final duel score (first to CONFIG.FINAL_GOALS) in the band under the pitch: top team on the left */
+  duelScore(ctx, g, SX) {
+    const [ia, ib] = g.rectTeams || [], A = g.teams[ia], B = g.teams[ib];
+    if (!A || !B) return;
+    ctx.save();
+    const cy = 1436;
+    roundRect(ctx, SX - 360, cy - 52, 720, 104, 30);
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(SX - 315, cy, 22, 0, TAU); ctx.fillStyle = A.c1; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = A.c2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(SX + 315, cy, 22, 0, TAU); ctx.fillStyle = B.c1; ctx.fill(); ctx.strokeStyle = B.c2; ctx.stroke();
+    outlinedText(ctx, A.code, SX - 280, cy + 4, `72px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
+    outlinedText(ctx, B.code, SX + 280, cy + 4, `72px ${FONT_BIG}`, '#ffffff', null, 0, 'right');
+    const pulseA = g.t - (B.hitT >= 0 ? B.hitT : -9), pulseB = g.t - (A.hitT >= 0 ? A.hitT : -9);
+    const sa = pulseA < 0.5 ? 1 + 0.35 * Math.sin(pulseA / 0.5 * Math.PI) : 1, sb = pulseB < 0.5 ? 1 + 0.35 * Math.sin(pulseB / 0.5 * Math.PI) : 1;
+    ctx.save(); ctx.translate(SX - 70, cy + 4); ctx.scale(sa, sa); outlinedText(ctx, String(A.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
+    outlinedText(ctx, '–', SX, cy + 2, `80px ${FONT_BIG}`, 'rgba(255,255,255,0.7)', null, 0);
+    ctx.save(); ctx.translate(SX + 70, cy + 4); ctx.scale(sb, sb); outlinedText(ctx, String(B.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
+    outlinedText(ctx, `FIRST TO ${CONFIG.FINAL_GOALS} WINS`, SX, cy + 74, `600 26px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
+    ctx.restore();
+  },
+
   /* single announcement lane: above the pitch (arena) or in the bottom band (derby, under the scoreboard layout) */
   announcement(ctx, y) {
     const a = FX.ann;
@@ -608,8 +630,9 @@ const HUD = {
       ctx.shadowBlur = 0;
       outlinedText(ctx, a.text, 0, 4, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
     } else {
-      let fs = 56; ctx.font = `${fs}px ${FONT_BIG}`;
-      while (ctx.measureText(a.text).width > 820 && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
+      const elim = a.kind === 'elim';
+      let fs = elim ? 76 : 56; ctx.font = `${fs}px ${FONT_BIG}`;
+      while (ctx.measureText(a.text).width > (elim ? 860 : 820) && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
       const w = ctx.measureText(a.text).width + 70, h = fs + 26;
       roundRect(ctx, -w / 2, -h / 2, w, h, h / 2);
       ctx.fillStyle = 'rgba(10,10,20,0.85)'; ctx.fill();
@@ -617,30 +640,6 @@ const HUD = {
       outlinedText(ctx, a.text, 0, 3, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
     }
     ctx.restore();
-  },
-  feed(ctx, SX) {
-    const items = FX.feed.slice(-3);
-    if (!items.length) return;
-    const newest = items[items.length - 1];
-    const p = easeOutCubic((FX.ut - newest.t) / 0.38);
-    const row0 = 1428, row1 = 1490;
-    for (let i = 0; i < items.length; i++) {
-      const idx = items.length - 1 - i;          // 0 = newest
-      const it = items[i];
-      let y, a;
-      if (idx === 0) { y = row1 + 48 * (1 - p); a = p; }
-      else if (idx === 1) { y = row0 + (row1 - row0) * (1 - p); a = 1 - 0.25 * p; }
-      else { y = row0 - 40 * p; a = (1 - p) * 0.75; }
-      if (a <= 0.01) continue;
-      ctx.save(); ctx.globalAlpha = a;
-      ctx.font = `700 32px ${FONT_UI}`;
-      const w = Math.min(880, ctx.measureText(it.text).width + 50);
-      roundRect(ctx, SX - w / 2, y - 26, w, 52, 26);
-      ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
-      ctx.fillStyle = it.color; ctx.fillRect(SX - w / 2 + 14, y - 12, 5, 24);
-      outlinedText(ctx, it.text, SX + 6, y + 1, `700 32px ${FONT_UI}`, '#ffffff', null, 0);
-      ctx.restore();
-    }
   },
 };
 

@@ -485,7 +485,10 @@ const App = {
     const leaderAfter = rkA[0].t;
     let subtitle;
     if (g.isDerby) { const a = g.teams[0], b = g.teams[1]; subtitle = `${a.code} ${a.score} – ${b.score} ${b.code}`; }
-    else subtitle = `${W.gf} goals · ${W.saves} saves`;
+    else {
+      const L = g.teams.find(t => t.place === 2);
+      subtitle = L && g.finalDuel ? `Final: ${W.code} ${W.score} – ${L.score} ${L.code}` : `${W.gf} goals · ${W.saves} saves`;
+    }
     this.end = { winner: { name: W.name, code: W.code, c1: W.c1, c2: W.c2 }, rows, champion: s.mode === 'final', subtitle };
     this.endT = 0;
     FX.startEndConfetti([W.c1, W.c2, '#FFD54F', '#ffffff']);
@@ -512,7 +515,10 @@ const App = {
     let l1;
     if (s.mode === 'final') l1 = `Season Final 🏆 ${W.name} are the champions!`;
     else if (s.mode === 'derby') { const L = g.teams[1 - g.winner]; l1 = `Week ${s.week} · Derby 🏆 ${W.name} win ${W.score}–${L.score} vs ${L.name}!`; }
-    else l1 = `Week ${s.week} · Group Match ${s.weekMatch} 🏆 ${W.name} win!`;
+    else {
+      const L = g.teams.find(t => t.place === 2);
+      l1 = `Week ${s.week} · Group Match ${s.weekMatch} 🏆 ${W.name} win${L && g.finalDuel ? ` the final ${W.score}–${L.score} vs ${L.name}` : ''}!`;
+    }
     const top = g.teams.slice().sort((a, b) => b.gf - a.gf || a.place - b.place)[0];
     let extra = '';
     if (top && top.gf > 0) {
