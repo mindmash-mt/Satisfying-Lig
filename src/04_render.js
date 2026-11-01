@@ -792,22 +792,16 @@ const LeagueTable = {
 };
 
 /* =====================================================================
-   INTRO SCREEN  (before the match: full league table → today's results / fixtures → fades into the match)
+   INTRO SCREEN  (before the match: today's group matches — played ones with results, then fixtures — and it fades into the match)
    ===================================================================== */
 const IntroScreen = {
   draw(ctx, intro, t) {
-    const S1 = CONFIG.INTRO_TABLE, D = CONFIG.INTRO_DURATION;
-    const out = clamp01((D - t) / 0.45);
+    const out = clamp01((CONFIG.INTRO_DURATION - t) / 0.45);
     ctx.save();
     ctx.fillStyle = `rgba(4,6,12,${out})`;
     ctx.fillRect(0, 0, 1080, 1920);
     ctx.globalAlpha = out;
-    if (t < S1) {
-      const a = Math.min(clamp01(t / 0.2), clamp01((S1 - t) / 0.3));
-      LeagueTable.draw(ctx, intro.rows, 'LEAGUE TABLE', intro.title, { tt: t, post: false, alpha: a });
-    } else {
-      this.matches(ctx, intro, t - S1);
-    }
+    this.matches(ctx, intro, t);
     ctx.restore();
   },
   /* played matches with their results, the match that is about to start, and later fixtures */
