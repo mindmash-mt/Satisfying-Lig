@@ -10,10 +10,11 @@ const CONFIG = {
   /* Tuned with the balance test. Single-ball mode: MAX_BALLS 1 (set >1 to bring back the ball schedule). */
   /* ball starts at BALL_SPEED and gets WALL_ACCEL faster on every wall/post bounce, up to BALL_MAX_MULT × */
   BALL_R: 16, BALL_SPEED: 600, WALL_ACCEL: 0.10, BALL_MAX_MULT: 2.4, MAX_BALLS: 1, BALL_ADD_EVERY: 3, GOAL_RESPAWN: 1.1,
-  POST_R: 10, GOAL_FRAC: 0.50, ELIM_GOAL_GROW: 0.25, FINAL_GOAL_FRAC: 0.75, DERBY_GOAL_FRAC: 0.50, NET_DEPTH: 50, NET_DEPTH_RECT: 34,
+  POST_R: 10, GOAL_FRAC: 0.50, ELIM_GOAL_GROW: 0.25, FINAL_GOAL_FRAC: 0.61, DERBY_GOAL_FRAC: 0.50, NET_DEPTH: 50, NET_DEPTH_RECT: 34,
   KEEPER_INSET: 28, KEEPER_LEN_FRAC: 0.30, KEEPER_THICK: 14, KEEPER_SPEED: 320, KEEPER_GAIN: 3, KEEPER_READ: 0.3,
   PLAYER_R: 24, PLAYER_SPEED: 260,
   ROT_SPEED_DEG: 0, ROT_GROWTH: 1.12,
+  GOAL_GROW: false,   // false: goals never widen (no growth after eliminations, in overtime or derby golden goal)
   OT_AT: 45, OT_RAMP: 10, OT_MULT: 1.6,
   ELIM_SLOW_GAME: 0.18, ELIM_FREEZE: 1.0, WIN_SLOW_GAME: 0.24, TS_SLOW: 0.3,
   FINAL_SLOWMO_GAME: 0.375, FINAL_SLOWMO_TS: 0.25, FINAL_SLOWMO_DIST: 120,

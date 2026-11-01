@@ -119,9 +119,9 @@ class Game {
     const T = this.teams[team], t = this.t;
     /* a locked goal keeps the width it had when its team went out */
     if (T.eliminated) return { mult: T.lockMult || 1, closed: true, locked: true, wallPU: false };
-    let mult = this.otMult;
-    /* arena keeps its size, so the remaining open goals grow a little after every elimination */
-    if (this.shape === 'poly') mult *= 1 + CONFIG.ELIM_GOAL_GROW * (this.N0 - this.activeTeams().length);
+    let mult = CONFIG.GOAL_GROW ? this.otMult : 1;
+    /* arena keeps its size, so (with GOAL_GROW) the remaining open goals grow a little after every elimination */
+    if (CONFIG.GOAL_GROW && this.shape === 'poly') mult *= 1 + CONFIG.ELIM_GOAL_GROW * (this.N0 - this.activeTeams().length);
     if (t < T.fx.small) mult *= 0.6;
     if (t < T.fx.big) mult *= 1.4;
     const wallPU = t < T.fx.wall && !T.eliminated;
@@ -265,7 +265,7 @@ class Game {
     const t = this.t;
     if (!this.isDerby) {
       const ot = t - this.otStart;
-      if (!this.overtime && ot >= CONFIG.OT_AT && !this.winnerSet) { this.overtime = true; this.everOvertime = true; this.emit('overtime'); }
+      if (CONFIG.GOAL_GROW && !this.overtime && ot >= CONFIG.OT_AT && !this.winnerSet) { this.overtime = true; this.everOvertime = true; this.emit('overtime'); }
       if (this.overtime) {
         this.otMult = 1 + (CONFIG.OT_MULT - 1) * clamp01((ot - CONFIG.OT_AT) / CONFIG.OT_RAMP)
           + 1.2 * clamp01((ot - CONFIG.OT_AT - CONFIG.OT_RAMP) / 5);
@@ -279,7 +279,7 @@ class Game {
       }
       if (this.goldenGoal && !this.winnerSet) {
         const x = t - this.ggStart - 10;
-        if (x > 0 && !this.overtime) { this.overtime = true; this.everOvertime = true; this.emit('overtime'); }
+        if (CONFIG.GOAL_GROW && x > 0 && !this.overtime) { this.overtime = true; this.everOvertime = true; this.emit('overtime'); }
         this.otMult = 1 + 0.8 * clamp01(x / 10) + 0.5 * clamp01((x - 10) / 10);
       }
     }

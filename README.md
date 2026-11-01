@@ -44,13 +44,12 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
   - Kalesi takım renginde parlayan bir duvarla **kapanır** (kapanan kale duvar gibi davranır).
   - Kalesinin arkasında **adı yazmaya devam eder**, önünde **sırası ve aldığı puan** belirir (ör. `6TH · +2 PTS`).
   - Ekranın üstünde büyük harflerle `❌ CHELSEA · 6TH · +2 PTS` yazar (takım, sıra ve aldığı puan).
-  - Arena küçülmez; kalan açık kaleler her elemede %25 genişler.
-- **Uzatma:** Son elemeden 45 sn içinde yeni eleme olmazsa kaleler kademeli olarak genişler. Sayaç her elemede sıfırlanır.
+  - Arena küçülmez; kaleler maç boyunca hiç genişlemez.
 - **Final düellosu:** İki takım kalınca arena dikey bir futbol sahasına dönüşür ve skor 0–0'dan başlar. **İlk 2 golü atan kazanır** (`FINAL_GOALS`). Skor sahanın üstünde gösterilir (eleme yazısı çıkarken kısa süre gizlenir); maç puanına düşen takımın kalesine top yaklaştığında ağır çekim ve kamera yakınlaşması olur.
 - Maç sırasında **sadece eleme bilgileri** (ve final düellosunda skor) yazı olarak görünür; gol, kurtarış vb. sadece efekt ve sesle anlatılır.
 
 ### Derby
-İki takım, klasik saha, takım başına 1 kaleci + 2 oyuncu. 30 sn sonunda çok gol atan kazanır; berabere biterse ilk gol kazanır (uzayan sürede kaleler genişler). Galibe +5 puan.
+İki takım, klasik saha, takım başına 1 kaleci + 2 oyuncu. 30 sn sonunda çok gol atan kazanır; berabere biterse ilk gol kazanır. Galibe +5 puan.
 
 ### Season Final
 Lig tablosunun ilk 4 takımı arena modunda şampiyonluk maçı oynar. Puan verilmez, şampiyon kaydedilir.
@@ -108,9 +107,10 @@ Varsayılan ayarlarla (6 takım, 1 can) 100 maçlık testlerde:
 
 | Mod | Ortalama süre |
 |---|---|
-| Arena, 6 takım | ~46 sn |
-| Arena, 4 takım | ~34 sn |
-| Arena, 8 takım | ~62 sn |
+| Arena, 6 takım | ~58 sn |
+| Arena, 4 takım | ~36 sn |
+| Arena, 8 takım | ~94 sn |
+| Arena, 10 takım | ~140 sn (bazı maçlar 300 sn sınırına ulaşır) |
 | Derby | ~31 sn |
 | Season Final (4 takım) | ~35 sn |
 
@@ -124,12 +124,12 @@ Varsayılan ayarlarla (6 takım, 1 can) 100 maçlık testlerde:
 | `GOAL_FRAC` | 0.50 | Arena kale ağzı (ortalama kenar uzunluğunun oranı) |
 | `ARENA_HALF_H` | 465 | Arenanın merkezden üst/alt köşelerine yüksekliği (uzatma miktarı) |
 | `ROT_SPEED_DEG` | 0 | Arenanın dönme hızı (°/sn; 0 = sabit) |
-| `ELIM_GOAL_GROW` | 0.25 | Her elemede açık kalelerin büyümesi |
-| `FINAL_GOAL_FRAC` | 0.75 | Final düellosu kale ağzı |
+| `GOAL_GROW` | false | `true` yapılırsa kaleler elemelerden sonra (`ELIM_GOAL_GROW` 0.25), uzatmada ve derby altın golünde genişler |
+| `FINAL_GOAL_FRAC` | 0.61 | Final düellosu kale ağzı (saha genişliğinin oranı) |
 | `FINAL_GOALS` | 2 | Final düellosunu kazanmak için gereken gol |
 | `FINAL_W` / `FINAL_H` | 860 / 930 | Final düellosu sahasının boyutu |
 | `KEEPER_GAIN` / `KEEPER_READ` | 3 / 0.3 | Kalecinin tepki hızı / topun yolunu okuma oranı |
-| `OT_AT` | 45 | Son elemeden kaç sn sonra uzatma başlar |
+| `OT_AT` | 45 | `GOAL_GROW` açıkken son elemeden kaç sn sonra uzatma başlar |
 | `DEFAULT_LIVES` | 1 | Takım başına can |
 
 ---
