@@ -1,0 +1,199 @@
+{
+  "version": 1,
+  "teamsVersion": 3,
+  "teams": [
+    {
+      "id": "t1",
+      "name": "Real Madrid",
+      "code": "RMA",
+      "c1": "#FFFFFF",
+      "c2": "#FEBE10"
+    },
+    {
+      "id": "t2",
+      "name": "Barcelona",
+      "code": "BAR",
+      "c1": "#A50044",
+      "c2": "#004D98"
+    },
+    {
+      "id": "t3",
+      "name": "Atlético Madrid",
+      "code": "ATM",
+      "c1": "#CB3524",
+      "c2": "#272E61"
+    },
+    {
+      "id": "t4",
+      "name": "Manchester City",
+      "code": "MCI",
+      "c1": "#6CABDD",
+      "c2": "#1C2C5B"
+    },
+    {
+      "id": "t5",
+      "name": "Liverpool",
+      "code": "LIV",
+      "c1": "#C8102E",
+      "c2": "#00B2A9"
+    },
+    {
+      "id": "t6",
+      "name": "Arsenal",
+      "code": "ARS",
+      "c1": "#EF0107",
+      "c2": "#FFFFFF"
+    },
+    {
+      "id": "t7",
+      "name": "Chelsea",
+      "code": "CHE",
+      "c1": "#034694",
+      "c2": "#FFFFFF"
+    },
+    {
+      "id": "t8",
+      "name": "Manchester United",
+      "code": "MUN",
+      "c1": "#DA291C",
+      "c2": "#FBE122"
+    },
+    {
+      "id": "t9",
+      "name": "Bayern München",
+      "code": "BAY",
+      "c1": "#DC052D",
+      "c2": "#0066B2"
+    },
+    {
+      "id": "t10",
+      "name": "Borussia Dortmund",
+      "code": "BVB",
+      "c1": "#FDE100",
+      "c2": "#000000"
+    },
+    {
+      "id": "t11",
+      "name": "Bayer Leverkusen",
+      "code": "B04",
+      "c1": "#E32221",
+      "c2": "#000000"
+    },
+    {
+      "id": "t12",
+      "name": "Paris Saint-Germain",
+      "code": "PSG",
+      "c1": "#004170",
+      "c2": "#DA291C"
+    },
+    {
+      "id": "t13",
+      "name": "Inter",
+      "code": "INT",
+      "c1": "#0068A8",
+      "c2": "#000000"
+    },
+    {
+      "id": "t14",
+      "name": "AC Milan",
+      "code": "MIL",
+      "c1": "#FB090B",
+      "c2": "#000000"
+    },
+    {
+      "id": "t15",
+      "name": "Juventus",
+      "code": "JUV",
+      "c1": "#111111",
+      "c2": "#FFFFFF"
+    },
+    {
+      "id": "t16",
+      "name": "Fenerbahçe",
+      "code": "FEN",
+      "c1": "#FFED00",
+      "c2": "#002D72"
+    },
+    {
+      "id": "t17",
+      "name": "Beşiktaş",
+      "code": "BJK",
+      "c1": "#111111",
+      "c2": "#FFFFFF"
+    },
+    {
+      "id": "t18",
+      "name": "Galatasaray",
+      "code": "GAL",
+      "c1": "#A90432",
+      "c2": "#FDB912"
+    }
+  ],
+  "table": {},
+  "week": 1,
+  "weekMatch": 1,
+  "matchNo": 1,
+  "seasonLength": 30,
+  "points": [
+    10,
+    7,
+    5,
+    4,
+    3,
+    2,
+    1,
+    0,
+    0,
+    0
+  ],
+  "derbyWinPoints": 5,
+  "history": [],
+  "champions": [],
+  "settings": {
+    "mode": "arena",
+    "teamCount": 6,
+    "selMode": "auto",
+    "manual": [],
+    "seed": 61001,
+    "theme": "auto",
+    "lives": 1,
+    "speedMult": 1,
+    "powerups": false,
+    "simSpeed": 1,
+    "volume": 0.8,
+    "muted": false,
+    "testMatch": false,
+    "sv": 2
+  },
+  "weekPlan": {
+    "week": 1,
+    "key": "t1,t2,t3,t4,t5,t6,t7,t8,t9,t10,t11,t12,t13,t14,t15,t16,t17,t18#6",
+    "groups": [
+      [
+        "t2",
+        "t5",
+        "t6",
+        "t7",
+        "t8",
+        "t13"
+      ],
+      [
+        "t1",
+        "t10",
+        "t11",
+        "t14",
+        "t16",
+        "t17"
+      ],
+      [
+        "t3",
+        "t4",
+        "t9",
+        "t12",
+        "t15",
+        "t18"
+      ]
+    ]
+  },
+  "season": 1
+}
