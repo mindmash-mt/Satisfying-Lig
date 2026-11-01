@@ -558,10 +558,16 @@ const HUD = {
       outlinedText(ctx, 'Who wins? Comment below 👇', SX, 316, `600 30px ${FONT_UI}`, '#ffffff', 'rgba(0,0,0,0.55)', 6);
       ctx.restore();
     }
-    if (g.isDerby) { this.scoreboard(ctx, g, SX); this.announcement(ctx, 1462); }
-    else { this.announcement(ctx, 394); if (g.finalDuel && !g.morph) this.duelScore(ctx, g, SX); }
+    if (g.isDerby) { this.scoreboard(ctx, g, SX); this.announcement(ctx, 1512); }
+    else {
+      /* final duel score shares the lane above the pitch with the elimination text and fades out while one shows */
+      const want = g.finalDuel && !g.morph && !FX.ann ? 1 : 0;
+      this.duelA = (this.duelA || 0) + (want - (this.duelA || 0)) * 0.18;
+      if (this.duelA > 0.02) { ctx.save(); ctx.globalAlpha = this.duelA; this.duelScore(ctx, g, SX); ctx.restore(); }
+      this.announcement(ctx, 394);
+    }
     ctx.save(); ctx.globalAlpha = 0.42;
-    outlinedText(ctx, `seed ${g.o.seed >>> 0}`, SX, g.finalDuel && !g.isDerby ? 1556 : 1532, `500 22px ${FONT_UI}`, '#ffffff', null, 0);
+    outlinedText(ctx, `seed ${g.o.seed >>> 0}`, SX, g.isDerby ? 1572 : 1532, `500 22px ${FONT_UI}`, '#ffffff', null, 0);
     ctx.restore();
   },
 
@@ -588,12 +594,12 @@ const HUD = {
     ctx.restore();
   },
 
-  /* final duel score (first to CONFIG.FINAL_GOALS) in the band under the pitch: top team on the left */
+  /* final duel score (first to CONFIG.FINAL_GOALS) above the pitch: top-goal team on the left */
   duelScore(ctx, g, SX) {
     const [ia, ib] = g.rectTeams || [], A = g.teams[ia], B = g.teams[ib];
     if (!A || !B) return;
     ctx.save();
-    const cy = 1436;
+    const cy = 380;
     roundRect(ctx, SX - 360, cy - 52, 720, 104, 30);
     ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.stroke();
@@ -606,7 +612,7 @@ const HUD = {
     ctx.save(); ctx.translate(SX - 70, cy + 4); ctx.scale(sa, sa); outlinedText(ctx, String(A.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
     outlinedText(ctx, '–', SX, cy + 2, `80px ${FONT_BIG}`, 'rgba(255,255,255,0.7)', null, 0);
     ctx.save(); ctx.translate(SX + 70, cy + 4); ctx.scale(sb, sb); outlinedText(ctx, String(B.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
-    outlinedText(ctx, `FIRST TO ${CONFIG.FINAL_GOALS} WINS`, SX, cy + 74, `600 26px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
+    outlinedText(ctx, `FIRST TO ${CONFIG.FINAL_GOALS} WINS`, SX, cy + 78, `600 26px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
     ctx.restore();
   },
 

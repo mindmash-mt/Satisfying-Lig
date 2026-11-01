@@ -36,7 +36,7 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 
 ### Arena (günlük ana video)
 - Varsayılan **6 takım**, her takımın **1 canı** var. Sahada her an **tek top** bulunur.
-- Arena düzgün çokgendir ve yavaşça döner (7°/sn; her elemede %12 hızlanır).
+- Arena dönmeyen, dikey ekrana sığacak şekilde yukarı-aşağı uzatılmış bir çokgendir (`ARENA_HALF_H`). Kenar uzunlukları ve açıları farklıdır ama tüm kale ağızları eşit genişliktedir (kenarların ortalama uzunluğuna göre).
 - **Top:** 600 px/sn ile başlar, her **duvar veya direk** çarpmasında %10 hızlanır (en fazla 2,4 katı). Oyuncu ve kaleci çarpmaları hızı değiştirmez. Gol olunca yeni top yine başlangıç hızıyla doğar. Top hızlandıkça izi uzar ve son dokunan takımın renginde parlar.
 - **Kaleciler** topu sürekli takip eder; her takımın kalecisine maç başında rastgele bir yetenek (`skill`) atanır.
 - **Oyuncular** sahada rastgele dolaşır, topa çarptıklarında topun son dokunan takımı olurlar.
@@ -46,7 +46,7 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
   - Ekranın üstünde büyük harflerle `❌ CHELSEA · 6TH · +2 PTS` yazar (takım, sıra ve aldığı puan).
   - Arena küçülmez; kalan açık kaleler her elemede %25 genişler.
 - **Uzatma:** Son elemeden 45 sn içinde yeni eleme olmazsa kaleler kademeli olarak genişler. Sayaç her elemede sıfırlanır.
-- **Final düellosu:** İki takım kalınca arena dikey bir futbol sahasına dönüşür ve skor 0–0'dan başlar. **İlk 2 golü atan kazanır** (`FINAL_GOALS`). Skor sahanın altında gösterilir; maç puanına düşen takımın kalesine top yaklaştığında ağır çekim ve kamera yakınlaşması olur.
+- **Final düellosu:** İki takım kalınca arena dikey bir futbol sahasına dönüşür ve skor 0–0'dan başlar. **İlk 2 golü atan kazanır** (`FINAL_GOALS`). Skor sahanın üstünde gösterilir (eleme yazısı çıkarken kısa süre gizlenir); maç puanına düşen takımın kalesine top yaklaştığında ağır çekim ve kamera yakınlaşması olur.
 - Maç sırasında **sadece eleme bilgileri** (ve final düellosunda skor) yazı olarak görünür; gol, kurtarış vb. sadece efekt ve sesle anlatılır.
 
 ### Derby
@@ -108,9 +108,9 @@ Varsayılan ayarlarla (6 takım, 1 can) 100 maçlık testlerde:
 
 | Mod | Ortalama süre |
 |---|---|
-| Arena, 6 takım | ~42 sn |
-| Arena, 4 takım | ~29 sn |
-| Arena, 8 takım | ~54 sn |
+| Arena, 6 takım | ~43 sn |
+| Arena, 4 takım | ~31 sn |
+| Arena, 8 takım | ~59 sn |
 | Derby | ~31 sn |
 | Season Final (4 takım) | ~29 sn |
 
@@ -121,7 +121,9 @@ Varsayılan ayarlarla (6 takım, 1 can) 100 maçlık testlerde:
 | `BALL_SPEED` | 600 | Topun başlangıç hızı (px/sn) |
 | `WALL_ACCEL` | 0.10 | Her duvar/direk çarpmasında hız artışı (%10) |
 | `BALL_MAX_MULT` | 2.4 | Hız tavanı (başlangıç hızının katı) |
-| `GOAL_FRAC` | 0.50 | Arena kale ağzı (kenar uzunluğunun oranı) |
+| `GOAL_FRAC` | 0.50 | Arena kale ağzı (ortalama kenar uzunluğunun oranı) |
+| `ARENA_HALF_H` | 465 | Arenanın merkezden üst/alt köşelerine yüksekliği (uzatma miktarı) |
+| `ROT_SPEED_DEG` | 0 | Arenanın dönme hızı (°/sn; 0 = sabit) |
 | `ELIM_GOAL_GROW` | 0.25 | Her elemede açık kalelerin büyümesi |
 | `FINAL_GOAL_FRAC` | 0.75 | Final düellosu kale ağzı |
 | `FINAL_GOALS` | 2 | Final düellosunu kazanmak için gereken gol |
