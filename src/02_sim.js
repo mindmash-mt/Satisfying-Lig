@@ -67,7 +67,7 @@ class Game {
     this.N0 = defs.length;
     this.teams = defs.map((d, i) => ({
       i, id: d.id, name: d.name, code: d.code, c1: d.c1, c2: d.c2,
-      lives: o.lives, eliminated: false, place: 0, gf: 0, ga: 0, saves: 0, score: 0,
+      lives: o.lives, eliminated: false, place: 0, gf: 0, gfT: [], ga: 0, saves: 0, score: 0,
       skill: this.rng.range(0.25, 0.55),
       fx: { giant: -1, wall: -1, small: -1, big: -1 },
       elimT: -1, hitT: -1,
@@ -590,6 +590,8 @@ class Game {
     }
     return false;
   }
+  /* a goal scored by team i: bump its tally and remember when (the ball icon behind its goal pops in then) */
+  creditGoal(i) { const T = this.teams[i]; T.gf++; T.gfT.push(this.t); }
   scoreGoal(b, g, along, out) {
     b.state = 'net'; b.netTeam = g.team; b.netT = 0;
     b.nl = { a: along, o: out, va: b.vx * g.tx + b.vy * g.ty, vo: Math.max(120, b.vx * g.nx + b.vy * g.ny) };
@@ -603,13 +605,13 @@ class Game {
       const other = 1 - g.team;
       this.teams[other].score++;                    // the match score still counts own goals…
       if (own) this.stats.ownGoals++;
-      else if (scorer >= 0) this.teams[scorer].gf++;  // …but a team's goal tally only counts its own goals
+      else if (scorer >= 0) this.creditGoal(scorer);  // …but a team's goal tally only counts its own goals
       this.emit('goal', ev);
       if (this.goldenGoal) this.finish(other);
       return;
     }
     if (own) this.stats.ownGoals++;
-    else if (scorer >= 0) this.teams[scorer].gf++;
+    else if (scorer >= 0) this.creditGoal(scorer);
     if (this.finalDuel) { const other = this.activeTeams().find(i => i !== g.team); if (other !== undefined) this.teams[other].score++; }
     T.lives--;
     this.emit('goal', ev);
