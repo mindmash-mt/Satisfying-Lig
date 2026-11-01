@@ -80,7 +80,7 @@ class Game {
       this.netDepth = CONFIG.NET_DEPTH_RECT; this.derbyLeft = CONFIG.DERBY_TIME; this.goldenGoal = false; this.ggStart = 0;
     } else if (defs.length <= 2) {
       this.shape = 'rect'; this.W = CONFIG.FINAL_W; this.H = CONFIG.FINAL_H; this.rectTeams = [0, 1];
-      this.netDepth = CONFIG.NET_DEPTH_RECT; this.finalDuel = true;
+      this.netDepth = CONFIG.NET_DEPTH_RECT; this.finalDuel = true; this.startDuelScore();
     } else {
       this.shape = 'poly';
       const N = defs.length;
@@ -109,6 +109,8 @@ class Game {
 
   emit(type, data) { if (this.onEvent) this.onEvent(type, data || {}); }
   radiusFor(N) { return CONFIG.R0 * (0.82 + 0.18 * N / this.N0); }
+  /* final duel: scores start at 0–0 and the first team to CONFIG.FINAL_GOALS goals wins (lives = goals still allowed) */
+  startDuelScore() { for (const i of this.activeTeams()) { const T = this.teams[i]; T.lives = CONFIG.FINAL_GOALS; T.score = 0; } }
   activeTeams() { const a = []; for (const T of this.teams) if (!T.eliminated) a.push(T.i); return a; }
   liveBalls() { return this.balls.filter(b => b.state === 'live'); }
 
@@ -575,6 +577,7 @@ class Game {
     }
     if (own) this.stats.ownGoals++;
     else if (scorer >= 0) this.teams[scorer].gf++;
+    if (this.finalDuel) { const other = this.activeTeams().find(i => i !== g.team); if (other !== undefined) this.teams[other].score++; }
     T.lives--;
     this.emit('goal', ev);
     if (T.lives <= 0) this.eliminate(g.team);
@@ -610,7 +613,7 @@ class Game {
       const gb = this.geo.goals.find(g => g.team === this.sides[rem[1]]);
       const ta = this.sides[rem[0]], tb = this.sides[rem[1]];
       const top = (ga && gb && ga.my > gb.my) ? tb : ta, bottom = top === ta ? tb : ta;
-      this.finalDuel = true;
+      this.finalDuel = true; this.startDuelScore();
       const live = this.liveBalls();
       let keep = null, bd = Infinity;
       for (const b of live) { const d = (b.x - this.cx) ** 2 + (b.y - this.cy) ** 2; if (d < bd) { bd = d; keep = b; } }

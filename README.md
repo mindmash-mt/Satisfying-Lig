@@ -43,11 +43,11 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 - **Gol** yiyen takım elenir:
   - Kalesi takım renginde parlayan bir duvarla **kapanır** (kapanan kale duvar gibi davranır).
   - Kalesinin arkasında **adı yazmaya devam eder**, önünde **sırası ve aldığı puan** belirir (ör. `6TH · +2 PTS`).
-  - Ekranın üstünde `❌ CHELSEA ELIMINATED`, altında `❌ CHELSEA · 6TH · +2 PTS` yazar.
+  - Ekranın üstünde büyük harflerle `❌ CHELSEA · 6TH · +2 PTS` yazar (takım, sıra ve aldığı puan).
   - Arena küçülmez; kalan açık kaleler her elemede %25 genişler.
 - **Uzatma:** Son elemeden 45 sn içinde yeni eleme olmazsa kaleler kademeli olarak genişler. Sayaç her elemede sıfırlanır.
-- **Final düellosu:** İki takım kalınca arena dikey bir futbol sahasına dönüşür. Top kaleye yaklaştığında ağır çekim ve kamera yakınlaşması olur.
-- Maç sırasında **sadece eleme bilgileri** yazı olarak görünür; gol, kurtarış vb. sadece efekt ve sesle anlatılır.
+- **Final düellosu:** İki takım kalınca arena dikey bir futbol sahasına dönüşür ve skor 0–0'dan başlar. **İlk 2 golü atan kazanır** (`FINAL_GOALS`). Skor sahanın altında gösterilir; maç puanına düşen takımın kalesine top yaklaştığında ağır çekim ve kamera yakınlaşması olur.
+- Maç sırasında **sadece eleme bilgileri** (ve final düellosunda skor) yazı olarak görünür; gol, kurtarış vb. sadece efekt ve sesle anlatılır.
 
 ### Derby
 İki takım, klasik saha, takım başına 1 kaleci + 2 oyuncu. 30 sn sonunda çok gol atan kazanır; berabere biterse ilk gol kazanır (uzayan sürede kaleler genişler). Galibe +5 puan.
@@ -108,11 +108,11 @@ Varsayılan ayarlarla (6 takım, 1 can) 100 maçlık testlerde:
 
 | Mod | Ortalama süre |
 |---|---|
-| Arena, 6 takım | ~31 sn |
-| Arena, 4 takım | ~18 sn |
-| Arena, 8 takım | ~45 sn |
+| Arena, 6 takım | ~42 sn |
+| Arena, 4 takım | ~29 sn |
+| Arena, 8 takım | ~54 sn |
 | Derby | ~31 sn |
-| Season Final (4 takım) | ~18 sn |
+| Season Final (4 takım) | ~29 sn |
 
 Önemli ayarlar `src/01_core.js` dosyasının başındaki `CONFIG` nesnesinde:
 
@@ -124,6 +124,7 @@ Varsayılan ayarlarla (6 takım, 1 can) 100 maçlık testlerde:
 | `GOAL_FRAC` | 0.50 | Arena kale ağzı (kenar uzunluğunun oranı) |
 | `ELIM_GOAL_GROW` | 0.25 | Her elemede açık kalelerin büyümesi |
 | `FINAL_GOAL_FRAC` | 0.75 | Final düellosu kale ağzı |
+| `FINAL_GOALS` | 2 | Final düellosunu kazanmak için gereken gol |
 | `KEEPER_GAIN` / `KEEPER_READ` | 3 / 0.3 | Kalecinin tepki hızı / topun yolunu okuma oranı |
 | `OT_AT` | 45 | Son elemeden kaç sn sonra uzatma başlar |
 | `DEFAULT_LIVES` | 1 | Takım başına can |
