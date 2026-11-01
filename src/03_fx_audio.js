@@ -170,12 +170,27 @@ const FX = {
 const AudioSys = {
   ctx: null, master: null, comp: null, recDest: null, noiseBuf: null,
   vol: 0.8, muted: false, rl: {}, enabled: true,
+  /* offline (headless video render): sounds go to an OfflineAudioContext and are timed by `clock` (video seconds) */
+  offline: false, clock: null,
   init() {
     if (this.ctx) return true;
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       this.ctx = new AC();
     } catch (e) { return false; }
+    this.offline = false; this.clock = null;
+    this.build(true);
+    return true;
+  },
+  /* fresh OfflineAudioContext long enough for `seconds` of video (see Offline in 06_offline.js) */
+  initOffline(seconds) {
+    const rate = 48000;
+    this.ctx = new OfflineAudioContext(2, Math.ceil(seconds * rate), rate);
+    this.offline = true; this.clock = 0; this.rl = {};
+    this.vol = 0.8; this.muted = false;
+    this.build(false);
+  },
+  build(live) {
     const c = this.ctx;
     this.master = c.createGain();
     this.comp = c.createDynamicsCompressor();
@@ -183,26 +198,26 @@ const AudioSys = {
     this.comp.attack.value = 0.003; this.comp.release.value = 0.2;
     this.master.connect(this.comp);
     this.comp.connect(c.destination);
-    this.recDest = c.createMediaStreamDestination();
-    this.comp.connect(this.recDest);
+    this.recDest = null;
+    if (live) { this.recDest = c.createMediaStreamDestination(); this.comp.connect(this.recDest); }
     const len = c.sampleRate * 2;
     this.noiseBuf = c.createBuffer(1, len, c.sampleRate);
     const d = this.noiseBuf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     this.apply();
-    return true;
   },
-  resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
-  apply() { if (this.master) this.master.gain.setTargetAtTime(this.muted ? 0 : this.vol, this.ctx.currentTime, 0.02); },
-  ready() { return this.enabled && this.ctx && this.ctx.state === 'running'; },
+  now() { return this.clock != null ? this.clock : this.ctx.currentTime; },
+  resume() { if (this.ctx && !this.offline && this.ctx.state === 'suspended') this.ctx.resume(); },
+  apply() { if (this.master) this.master.gain.setTargetAtTime(this.muted ? 0 : this.vol, this.now(), 0.02); },
+  ready() { return this.enabled && this.ctx && (this.offline || this.ctx.state === 'running'); },
   limit(key, n, win) {
-    const now = this.ctx.currentTime;
+    const now = this.now();
     const arr = (this.rl[key] = (this.rl[key] || []).filter(t => now - t < win));
     if (arr.length >= n) return false;
     arr.push(now); return true;
   },
   tone(type, f, dur, gain, opt = {}) {
-    const c = this.ctx, t = c.currentTime + (opt.delay || 0);
+    const c = this.ctx, t = this.now() + (opt.delay || 0);
     const o = c.createOscillator(), g = c.createGain();
     o.type = type; o.frequency.setValueAtTime(f, t);
     if (opt.f2) o.frequency.exponentialRampToValueAtTime(Math.max(20, opt.f2), t + (opt.glide || dur));
@@ -217,7 +232,7 @@ const AudioSys = {
     return o;
   },
   noise(dur, gain, opt = {}) {
-    const c = this.ctx, t = c.currentTime + (opt.delay || 0);
+    const c = this.ctx, t = this.now() + (opt.delay || 0);
     const s = c.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true;
     const fl = c.createBiquadFilter(); fl.type = opt.type || 'bandpass';
     fl.frequency.setValueAtTime(opt.f || 1000, t);
@@ -253,7 +268,7 @@ const AudioSys = {
   pop(k) { if (!this.ready() || !this.limit('pop', 2, 0.08)) return; this.tone('sine', 520, 0.08, 0.13 * k, { f2: 980 }); },
   whistle(dur, gain, delay) {
     if (!this.ready()) return;
-    const c = this.ctx, t = c.currentTime + (delay || 0);
+    const c = this.ctx, t = this.now() + (delay || 0);
     [2850, 2990].forEach((f, i) => {
       const o = c.createOscillator(), g = c.createGain(), lfo = c.createOscillator(), lg = c.createGain(), bp = c.createBiquadFilter();
       o.type = i ? 'sine' : 'square'; o.frequency.value = f; lfo.frequency.value = 32; lg.gain.value = 90;
