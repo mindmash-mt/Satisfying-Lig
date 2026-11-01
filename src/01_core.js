@@ -10,7 +10,7 @@ const CONFIG = {
   /* Tuned with the balance test. Single-ball mode: MAX_BALLS 1 (set >1 to bring back the ball schedule). */
   /* ball starts at BALL_SPEED and gets WALL_ACCEL faster on every wall/post bounce, up to BALL_MAX_MULT × */
   BALL_R: 16, BALL_SPEED: 600, WALL_ACCEL: 0.10, BALL_MAX_MULT: 2.4, MAX_BALLS: 1, BALL_ADD_EVERY: 3, GOAL_RESPAWN: 1.1,
-  POST_R: 10, GOAL_FRAC: 0.50, ELIM_GOAL_GROW: 0.25, FINAL_GOAL_FRAC: 0.61, DERBY_GOAL_FRAC: 0.50, NET_DEPTH: 50, NET_DEPTH_RECT: 34,
+  POST_R: 10, GOAL_FRAC: 0.50, ELIM_GOAL_GROW: 0.25, FINAL_GOAL_FRAC: 0.54, DERBY_GOAL_FRAC: 0.50, NET_DEPTH: 50, NET_DEPTH_RECT: 34,
   KEEPER_INSET: 28, KEEPER_LEN_FRAC: 0.30, KEEPER_THICK: 14, KEEPER_SPEED: 320, KEEPER_GAIN: 3, KEEPER_READ: 0.3,
   PLAYER_R: 24, PLAYER_SPEED: 260,
   ROT_SPEED_DEG: 0, ROT_GROWTH: 1.12,
@@ -18,10 +18,13 @@ const CONFIG = {
   OT_AT: 45, OT_RAMP: 10, OT_MULT: 1.6,
   ELIM_SLOW_GAME: 0.18, ELIM_FREEZE: 1.0, WIN_SLOW_GAME: 0.24, TS_SLOW: 0.3,
   FINAL_SLOWMO_GAME: 0.375, FINAL_SLOWMO_TS: 0.25, FINAL_SLOWMO_DIST: 120,
-  FINAL_W: 860, FINAL_H: 930, FINAL_GOALS: 2,   // final duel: first to FINAL_GOALS goals wins
+  FINAL_W: 820, FINAL_H: 1030, FINAL_GOALS: 2,   // final duel: first to FINAL_GOALS goals wins (narrower, longer pitch)
+  FINAL_DY: 30,   // the longer final pitch sits this much below the arena centre so it clears the scoreboard
+  /* final duel: 2 players per team, one is the captain. A captain touch that sends the ball toward the rival goal
+     (within CAPTAIN_AIM_DEG of the goal centre) makes it CAPTAIN_SHOT_MULT × faster until it hits anything else. */
+  CAPTAIN_SHOT_MULT: 2, CAPTAIN_AIM_DEG: 55,
   DERBY_W: 720, DERBY_H: 880, DERBY_TIME: 30,
   PU_R: 26, PU_LIFE: 8, PU_MIN: 6, PU_MAX: 10, PU_MAX_COUNT: 2, PU_WALL_MARGIN: 80,
-  BUMPER_R: 30,
   DEFAULT_LIVES: 1, DEFAULT_TEAM_COUNT: 6, DEFAULT_SPEED_MULT: 1.0,
   POINTS: [10, 7, 5, 4, 3, 2, 1, 0, 0, 0], DERBY_WIN_POINTS: 5, SEASON_LENGTH: 30,
   STORAGE_KEY: 'arenaLeague_v1',
@@ -73,9 +76,9 @@ const THEME_DEFS = {
   snow:    { id: 'snow',    icon: '❄️', name: 'Snow',    speed: 1.1, dev: 2 },
   rain:    { id: 'rain',    icon: '🌧️', name: 'Rain',    speed: 0.85, dev: 4 },
   night:   { id: 'night',   icon: '🌙', name: 'Night',   speed: 1.0, dev: 4 },
-  bumpers: { id: 'bumpers', icon: '🔴', name: 'Bumpers', speed: 1.0, dev: 4, bumpers: true },
 };
-const THEME_IDS = ['classic', 'snow', 'rain', 'night', 'bumpers'];
+/* no obstacles on the pitch: the old 'bumpers' theme is gone (a saved 'bumpers' choice falls back to Classic) */
+const THEME_IDS = ['classic', 'snow', 'rain', 'night'];
 
 /* =====================================================================
    RNG  (mulberry32 — seed based, deterministic)

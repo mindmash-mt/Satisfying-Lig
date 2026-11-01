@@ -24,7 +24,7 @@ let goals = 0, saves = 0, own = 0, ot = 0, esc = 0;
 for (let i = 0; i < N; i++) {
   const seed = 1000 + i * 7919, rng = new RNG(seed ^ 0x51ED27);
   const teams = rng.shuffle(teamsAll).slice(0, n);
-  const theme = rng.pick(mode === 'derby' ? THEME_IDS.filter((t) => t !== 'bumpers') : THEME_IDS);
+  const theme = rng.pick(THEME_IDS);
   const r = run({ mode, teams, seed, theme, lives, speedMult: 1, powerups: false });
   durs.push(r.duration); goals += r.goals; saves += r.saves; own += r.ownGoals; esc += r.escapes; if (r.overtime) ot++;
   for (const t of r.teams) slot[t.slot][t.place - 1]++;

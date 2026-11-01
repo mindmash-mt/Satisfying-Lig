@@ -45,7 +45,11 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
   - Kalesinin arkasında **adı yazmaya devam eder**, önünde **sırası ve aldığı puan** belirir (ör. `6TH · +2 PTS`).
   - Ekranın üstünde büyük harflerle `❌ CHELSEA · 6TH · +2 PTS` yazar (takım, sıra ve aldığı puan).
   - Arena küçülmez; kaleler maç boyunca hiç genişlemez.
-- **Final düellosu:** İki takım kalınca arena dikey bir futbol sahasına dönüşür ve skor 0–0'dan başlar. **İlk 2 golü atan kazanır** (`FINAL_GOALS`). Skor sahanın üstünde gösterilir (eleme yazısı çıkarken kısa süre gizlenir); maç puanına düşen takımın kalesine top yaklaştığında ağır çekim ve kamera yakınlaşması olur.
+- **Final düellosu:** İki takım kalınca arena dar ve uzun, dikey bir futbol sahasına dönüşür (kaleler arenadakinden biraz kısa) ve skor 0–0'dan başlar. **İlk 2 golü atan kazanır** (`FINAL_GOALS`).
+  - Final düellosunda **her takımın 2 oyuncusu** vardır: arenadaki oyuncu **kaptan** olur (sarı **C** rozeti), yanından bir takım arkadaşı kayarak kendi yarı sahasına geçer.
+  - **Kaptan şutu:** Kaptan topa dokunduğunda top rakip kaleye doğru gidiyorsa (kale merkezine `CAPTAIN_AIM_DEG` = 55° içinde) **2 kat hızlı** gider (`CAPTAIN_SHOT_MULT`); top parlar, izi uzar. Başka bir oyuncuya, kaleciye, duvara veya direğe çarpınca hız önceki değerine döner (duvar/direkte her zamanki %10 hızlanma yine uygulanır).
+  - Skor sahanın üstünde gösterilir (eleme yazısı çıkarken kısa süre gizlenir); maç puanına düşen takımın kalesine top yaklaştığında ağır çekim ve kamera yakınlaşması olur.
+- Saha çizgileri her temada beyazdır; sahada hiçbir engel (tampon vb.) yoktur.
 - Maç sırasında **sadece eleme bilgileri** (ve final düellosunda skor) yazı olarak görünür; gol, kurtarış vb. sadece efekt ve sesle anlatılır.
 
 ### Derby
@@ -55,7 +59,7 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 Lig tablosunun ilk 4 takımı arena modunda şampiyonluk maçı oynar. Puan verilmez, şampiyon kaydedilir.
 
 ### Temalar
-Otomatik (seed ile) veya elle seçilir: **Classic**, **Snow** (top %10 hızlı), **Rain** (top %15 yavaş), **Night** (karanlık, ışık saçan top ve kaleler), **Bumpers** (sahada sektiren tamponlar; derby'de kullanılmaz).
+Otomatik (seed ile) veya elle seçilir: **Classic**, **Snow** (top %10 hızlı), **Rain** (top %15 yavaş), **Night** (karanlık, ışık saçan top ve kaleler). Eski **Bumpers** teması (sahadaki tamponlar) kaldırıldı; kayıtlı ayarda seçiliyse Otomatik'e döner.
 
 ---
 
@@ -125,9 +129,10 @@ Varsayılan ayarlarla (6 takım, 1 can) 100 maçlık testlerde:
 | `ARENA_HALF_H` | 465 | Arenanın merkezden üst/alt köşelerine yüksekliği (uzatma miktarı) |
 | `ROT_SPEED_DEG` | 0 | Arenanın dönme hızı (°/sn; 0 = sabit) |
 | `GOAL_GROW` | false | `true` yapılırsa kaleler elemelerden sonra (`ELIM_GOAL_GROW` 0.25), uzatmada ve derby altın golünde genişler |
-| `FINAL_GOAL_FRAC` | 0.61 | Final düellosu kale ağzı (saha genişliğinin oranı) |
+| `FINAL_GOAL_FRAC` | 0.54 | Final düellosu kale ağzı (saha genişliğinin oranı) |
 | `FINAL_GOALS` | 2 | Final düellosunu kazanmak için gereken gol |
-| `FINAL_W` / `FINAL_H` | 860 / 930 | Final düellosu sahasının boyutu |
+| `FINAL_W` / `FINAL_H` | 820 / 1030 | Final düellosu sahasının boyutu (`FINAL_DY` 30: skor tablosunun altında kalsın diye biraz aşağıda) |
+| `CAPTAIN_SHOT_MULT` / `CAPTAIN_AIM_DEG` | 2 / 55 | Kaptan şutunun hız katı / rakip kaleye yönelme açısı |
 | `KEEPER_GAIN` / `KEEPER_READ` | 3 / 0.3 | Kalecinin tepki hızı / topun yolunu okuma oranı |
 | `OT_AT` | 45 | `GOAL_GROW` açıkken son elemeden kaç sn sonra uzatma başlar |
 | `DEFAULT_LIVES` | 1 | Takım başına can |

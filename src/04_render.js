@@ -47,7 +47,7 @@ const Renderer = {
       const last = tr[tr.length - 1];
       if (last) this.spins.set(b.id, (this.spins.get(b.id) || 0) + Math.hypot(b.x - last.x, b.y - last.y) / 16 * (b.vx >= 0 ? 1 : -1));
       tr.push({ x: b.x, y: b.y });
-      const maxLen = Math.round(12 + 10 * clamp01(((b.boost || 1) - 1) / (CONFIG.BALL_MAX_MULT - 1)));   // trail grows with speed
+      const maxLen = Math.round(12 + 10 * clamp01(((b.boost || 1) - 1) / (CONFIG.BALL_MAX_MULT - 1))) + (b.shot ? 10 : 0);   // trail grows with speed
       while (tr.length > maxLen) tr.shift();
     }
     for (const id of [...this.trails.keys()]) if (!alive.has(id)) this.trails.delete(id);
@@ -62,7 +62,7 @@ const Renderer = {
     }
     const k = FX.cam.k;
     if (k > 0.002) {
-      ctx.beginPath(); ctx.rect(0, 452, 1080, 950); ctx.clip();
+      ctx.beginPath(); ctx.rect(0, 448, 1080, 1170); ctx.clip();
       const z = 1 + 0.3 * k, C = { x: CONFIG.CX, y: CONFIG.CY };
       const Fx = C.x + (FX.cam.x - C.x) * 0.55 * k, Fy = C.y + (FX.cam.y - C.y) * 0.55 * k;
       ctx.translate(C.x, C.y); ctx.scale(z, z); ctx.translate(-Fx, -Fy);
@@ -80,7 +80,6 @@ const Renderer = {
       this.shape(g, vis, geo, 1, 1, geo.kind === 'poly' ? g.rot : 0);
       this.keepers(g, geo, 1);
     }
-    this.bumpers(g);
     this.powerups(g);
     this.players(g);
     this.balls(g, vis);
@@ -152,8 +151,15 @@ const Renderer = {
   },
 
   fieldLines(g, vis, geo, rot) {
-    const ctx = this.ctx, cx = CONFIG.CX, cy = CONFIG.CY;
-    ctx.strokeStyle = vis.line; ctx.lineWidth = 4; ctx.fillStyle = vis.line;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.strokeStyle = vis.line; ctx.lineWidth = 4; ctx.fillStyle = vis.line;   // always white
+    if (vis.lineShadow) { ctx.shadowColor = vis.lineShadow; ctx.shadowBlur = 4; }
+    this.fieldLinesPath(geo);
+    ctx.restore();
+  },
+  fieldLinesPath(geo) {
+    const ctx = this.ctx, cx = geo.cx, cy = geo.cy;
     if (geo.kind === 'poly') {
       ctx.beginPath(); ctx.arc(cx, cy, 92, 0, TAU); ctx.stroke();
       ctx.beginPath(); ctx.arc(cx, cy, 7, 0, TAU); ctx.fill();
@@ -340,22 +346,6 @@ const Renderer = {
       ctx.restore();
     }
   },
-  bumpers(g) {
-    const ctx = this.ctx;
-    for (const b of g.bumpers) {
-      const f = clamp01(1 - (g.t - b.flashT) / 0.25);
-      const r = b.r * (1 + 0.15 * f);
-      ctx.save();
-      const gr = ctx.createRadialGradient(b.x - 8, b.y - 10, 2, b.x, b.y, r);
-      gr.addColorStop(0, f > 0 ? '#ffffff' : '#ff8a80'); gr.addColorStop(0.45, '#e53935'); gr.addColorStop(1, '#7f0000');
-      if (f > 0) { ctx.shadowColor = '#ff5252'; ctx.shadowBlur = 40 * f; }
-      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, TAU); ctx.fillStyle = gr; ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.lineWidth = 5; ctx.strokeStyle = f > 0 ? '#ffffff' : '#ffcdd2'; ctx.stroke();
-      ctx.beginPath(); ctx.arc(b.x, b.y, r * 0.45, 0, TAU); ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 3; ctx.stroke();
-      ctx.restore();
-    }
-  },
   powerups(g) {
     const ctx = this.ctx;
     for (const p of g.powerups) {
@@ -389,6 +379,12 @@ const Renderer = {
       ctx.lineWidth = 4; ctx.strokeStyle = T.c2; ctx.stroke();
       ctx.fillStyle = T.c2; ctx.font = `800 15px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(T.code, p.x, p.y + 1);
+      if (p.captain) {                                   // captain: gold armband badge with a "C"
+        const bx = p.x + R * 0.72, by = p.y - R * 0.72;
+        ctx.beginPath(); ctx.arc(bx, by, 11, 0, TAU); ctx.fillStyle = '#FFD54F'; ctx.fill();
+        ctx.lineWidth = 2.5; ctx.strokeStyle = '#3a2a00'; ctx.stroke();
+        ctx.fillStyle = '#3a2a00'; ctx.font = `900 13px ${FONT_UI}`; ctx.fillText('C', bx, by + 1);
+      }
       ctx.restore();
     }
   },
@@ -415,7 +411,8 @@ const Renderer = {
       }
       ctx.save(); ctx.globalAlpha = a;
       ctx.translate(x, y); ctx.scale(sc, sc);
-      const heat = b.state === 'live' ? clamp01(((b.boost || 1) - 1.15) / (CONFIG.BALL_MAX_MULT - 1.15)) : 0;
+      let heat = b.state === 'live' ? clamp01(((b.boost || 1) - 1.15) / (CONFIG.BALL_MAX_MULT - 1.15)) : 0;
+      if (b.state === 'live' && b.shot) heat = 1;          // captain shot: full glow
       if (heat > 0) {                                   // speed glow in the last-touch colour
         const hg = ctx.createRadialGradient(0, 0, R * 0.8, 0, 0, R * (2.2 + 1.3 * heat));
         hg.addColorStop(0, rgbaFromAny(tcol, 0.55 * heat)); hg.addColorStop(1, rgbaFromAny(tcol, 0));
@@ -609,7 +606,8 @@ const HUD = {
     ctx.save(); ctx.translate(SX - 70, cy + 4); ctx.scale(sa, sa); outlinedText(ctx, String(A.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
     outlinedText(ctx, '–', SX, cy + 2, `80px ${FONT_BIG}`, 'rgba(255,255,255,0.7)', null, 0);
     ctx.save(); ctx.translate(SX + 70, cy + 4); ctx.scale(sb, sb); outlinedText(ctx, String(B.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
-    outlinedText(ctx, `FIRST TO ${CONFIG.FINAL_GOALS} WINS`, SX, cy + 78, `600 26px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
+    /* the longer final pitch reaches up to the scoreboard, so the rule line sits under the pitch */
+    outlinedText(ctx, `FIRST TO ${CONFIG.FINAL_GOALS} WINS`, SX, CONFIG.CY + CONFIG.FINAL_DY + CONFIG.FINAL_H / 2 + CONFIG.NET_DEPTH_RECT + 40, `600 26px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
     ctx.restore();
   },
 

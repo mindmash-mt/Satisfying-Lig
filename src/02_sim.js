@@ -47,11 +47,10 @@ class Game {
     this.onEvent = null;
     this.cx = CONFIG.CX; this.cy = CONFIG.CY;
     this.themeId = THEME_DEFS[o.theme] ? o.theme : 'classic';
-    if (this.isDerby && this.themeId === 'bumpers') this.themeId = 'classic';
     this.theme = THEME_DEFS[this.themeId];
     this.t = 0;
     this.ballId = 1; this.puId = 1;
-    this.balls = []; this.players = []; this.powerups = []; this.bumpers = [];
+    this.balls = []; this.players = []; this.powerups = [];
     this.stats = { goals: 0, saves: 0, ownGoals: 0, powerups: 0, escapes: 0 };
     this.otMult = 1; this.overtime = false; this.everOvertime = false;
     this.otStart = 0;            // overtime clock restarts at every elimination
@@ -93,15 +92,7 @@ class Game {
       this.netDepth = CONFIG.NET_DEPTH;
     }
 
-    if (this.theme.bumpers && !this.isDerby) {
-      const n = this.rng.int(3, 5), base = this.rng.range(0, TAU);
-      for (let i = 0; i < n; i++) {
-        this.bumpers.push({ ang: base + i * TAU / n + this.rng.range(-0.3, 0.3),
-          frac: this.rng.range(0.34, 0.56), r: CONFIG.BUMPER_R, flashT: -9, x: 0, y: 0 });
-      }
-    }
     this.geo = this.computeGeo();
-    this.placeBumpers(this.geo);
     this.initPlayers();
     this.updateKeepers(0);
     this.spawnBall(true);
@@ -138,10 +129,12 @@ class Game {
     for (let i = 0; i < verts.length; i++) { const a = verts[i], b = verts[(i + 1) % verts.length], L = Math.hypot(b.x - a.x, b.y - a.y); if (L >= 0.5) { per += L; n++; } }
     return buildGeo('poly', verts, sides, this.cx, this.cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH, CONFIG.GOAL_FRAC, n ? per / n : 0);
   }
+  /* centre line of the rectangular pitch: the final duel pitch is shifted down a little, the derby pitch is not */
+  rectCy() { return this.cy + (this.isDerby ? 0 : CONFIG.FINAL_DY); }
   rectGeo(W, H, teams) {
-    const x0 = this.cx - W / 2, x1 = this.cx + W / 2, y0 = this.cy - H / 2, y1 = this.cy + H / 2;
+    const cy = this.rectCy(), x0 = this.cx - W / 2, x1 = this.cx + W / 2, y0 = cy - H / 2, y1 = cy + H / 2;
     const verts = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
-    const g = buildGeo('rect', verts, [teams[0], -1, teams[1], -1], this.cx, this.cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH_RECT,
+    const g = buildGeo('rect', verts, [teams[0], -1, teams[1], -1], this.cx, cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH_RECT,
       this.isDerby ? CONFIG.DERBY_GOAL_FRAC : CONFIG.FINAL_GOAL_FRAC);
     g.W = W; g.H = H;
     return g;
@@ -156,28 +149,41 @@ class Game {
     }
     return this.polyGeo(va, R, this.rot, this.sides);
   }
-  placeBumpers(geo) {
-    for (const b of this.bumpers) {
-      b.x = this.cx + Math.cos(b.ang) * b.frac * geo.inR;
-      b.y = this.cy + Math.sin(b.ang) * b.frac * geo.inR;
-    }
-  }
   insidePoint(geo, x, y, margin) {   // nearest safe point inside the inscribed circle
-    const dx = x - this.cx, dy = y - this.cy, d = Math.hypot(dx, dy);
+    const gx = geo.cx, gy = geo.cy, dx = x - gx, dy = y - gy, d = Math.hypot(dx, dy);
     const lim = Math.max(0, geo.inR - margin);
     let maxOut = -Infinity;
     for (const s of geo.sides) { const o = (x - s.mx) * s.nx + (y - s.my) * s.ny; if (o > maxOut) maxOut = o; }
     if (maxOut <= -margin) return { x, y };
     if (d <= lim || d < 1e-6) return { x, y };
-    return { x: this.cx + dx * lim / d, y: this.cy + dy * lim / d };
+    return { x: gx + dx * lim / d, y: gy + dy * lim / d };
   }
   wallVel(x, y) { return [-this.omega * (y - this.cy), this.omega * (x - this.cx)]; }
 
   /* ---------- setup ---------- */
+  makePlayer(team, x, y, captain) {
+    const h = this.rng.range(0, TAU);
+    return { team, x, y, h, turn: 0, turnTarget: 0, turnT: 0, vx: Math.cos(h) * CONFIG.PLAYER_SPEED, vy: Math.sin(h) * CONFIG.PLAYER_SPEED,
+      alive: true, captain: !!captain };
+  }
+  /* final duel: where a team's second (non-captain) player stands — in its own half, on the other flank from x */
+  duelMateSpot(team, top, W, H, x) {
+    const side = team === top ? -1 : 1, flank = x > this.cx ? -1 : 1;
+    return { x: this.cx + flank * W * 0.24, y: this.rectCy() + side * H * 0.24 };
+  }
   initPlayers() {
-    const mk = (team, x, y) => ({ team, x, y, h: this.rng.range(0, TAU), turn: 0, turnTarget: 0, turnT: 0,
-      vx: 0, vy: 0, alive: true });
-    if (this.isDerby) {
+    const mk = (team, x, y, cap) => this.makePlayer(team, x, y, cap);
+    if (this.finalDuel) {
+      /* direct final (only 2 teams): captain + one team-mate each */
+      const [top, bottom] = this.rectTeams;
+      for (const t of [top, bottom]) {
+        const side = t === top ? -1 : 1, flank = t === top ? 1 : -1;
+        const cx = this.cx + flank * this.W * 0.2, cy = this.rectCy() + side * this.H * 0.18;
+        this.players.push(mk(t, cx, cy, true));
+        const m = this.duelMateSpot(t, top, this.W, this.H, cx);
+        this.players.push(mk(t, m.x, m.y, false));
+      }
+    } else if (this.isDerby) {
       this.players.push(mk(0, this.cx - 150, this.cy - 230), mk(0, this.cx + 150, this.cy - 110),
         mk(1, this.cx + 150, this.cy + 230), mk(1, this.cx - 150, this.cy + 110));
     } else {
@@ -185,7 +191,6 @@ class Game {
         this.players.push(mk(g.team, this.cx + (g.mx - this.cx) * 0.5, this.cy + (g.my - this.cy) * 0.5));
       }
     }
-    for (const p of this.players) { p.vx = Math.cos(p.h) * CONFIG.PLAYER_SPEED; p.vy = Math.sin(p.h) * CONFIG.PLAYER_SPEED; }
   }
   targetSpeed() {
     let s = CONFIG.BALL_SPEED * this.o.speedMult * this.theme.speed;
@@ -195,28 +200,43 @@ class Game {
   }
   /* every wall/post bounce makes that ball a little faster (capped); a new ball starts at base speed */
   wallBoost(b) {
+    this.endShot(b);
     if (this.t - b.wallT < 0.05) return;            // a corner double-bounce counts once
     b.wallT = this.t;
     b.boost = Math.min(CONFIG.BALL_MAX_MULT, b.boost * (1 + CONFIG.WALL_ACCEL));
     b.sp = this.targetSpeed() * b.boost;
+  }
+  /* captain shot: ball goes CAPTAIN_SHOT_MULT × faster; anything else it hits brings it back to its previous speed */
+  headingToRivalGoal(b, team) {
+    const g = this.geo.goals.find(gg => gg.team !== team && !gg.closed);
+    if (!g) return false;
+    const dx = g.mx - b.x, dy = g.my - b.y, d = Math.hypot(dx, dy), v = Math.hypot(b.vx, b.vy);
+    if (d < 1e-6 || v < 1e-6) return false;
+    return (dx * b.vx + dy * b.vy) / (d * v) > Math.cos(CONFIG.CAPTAIN_AIM_DEG * DEG);
+  }
+  ballSpeedTarget(b) { return this.targetSpeed() * b.boost * (b.shot ? CONFIG.CAPTAIN_SHOT_MULT : 1); }
+  endShot(b) {
+    if (!b.shot) return;
+    b.shot = false; b.shotTeam = -1;
+    b.sp = this.ballSpeedTarget(b);
   }
   maxBallsNow() {
     if (this.isDerby || this.finalDuel) return 1;
     return Math.min(CONFIG.MAX_BALLS, 1 + Math.floor(this.t / CONFIG.BALL_ADD_EVERY));
   }
   spawnBall(initial) {
-    let x = this.cx, y = this.cy;
+    const ox = this.geo.cx, oy = this.geo.cy;      // kick-off from the centre spot
+    let x = ox, y = oy;
     const BR = CONFIG.BALL_R;
     for (let k = 0; k < 10; k++) {
       let ok = true;
       for (const b of this.balls) if (b.state === 'live' && (b.x - x) ** 2 + (b.y - y) ** 2 < (BR * 2 + 8) ** 2) ok = false;
-      for (const b of this.bumpers) if ((b.x - x) ** 2 + (b.y - y) ** 2 < (b.r + BR + 8) ** 2) ok = false;
       if (ok) break;
-      x = this.cx + this.rng.range(-70, 70); y = this.cy + this.rng.range(-70, 70);
+      x = ox + this.rng.range(-70, 70); y = oy + this.rng.range(-70, 70);
     }
     const a = this.rng.range(0, TAU), sp = this.targetSpeed();
     const b = { id: this.ballId++, x, y, px: x, py: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, sp, boost: 1, wallT: -9,
-      lastTouch: -1, state: 'live', born: initial ? -10 : this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0 };
+      lastTouch: -1, state: 'live', born: initial ? -10 : this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0, shot: false, shotTeam: -1 };
     this.balls.push(b);
     this.spawnBlock = this.t + 0.35;
     this.emit('spawnBall', { x, y, initial: !!initial, id: b.id });
@@ -383,7 +403,6 @@ class Game {
         closestOnSeg(p.x, p.y, k.x - k.tx * k.halfLen, k.y - k.ty * k.halfLen, k.x + k.tx * k.halfLen, k.y + k.ty * k.halfLen);
         this.pushPlayer(p, _qx, _qy, R + CONFIG.KEEPER_THICK / 2, k.vx, k.vy);
       }
-      for (const b of this.bumpers) this.pushPlayer(p, b.x, b.y, R + b.r, 0, 0);
     }
     const P = this.players;
     for (let i = 0; i < P.length; i++) {
@@ -445,6 +464,13 @@ class Game {
     const fresh = this.t - b.hitP > 0.12;
     b.lastTouch = p.team; b.hitP = this.t;
     if (fresh) this.emit('player', { x: b.x - nx * CONFIG.BALL_R, y: b.y - ny * CONFIG.BALL_R, team: p.team });
+    if (this.finalDuel && !this.isDerby && !this.winnerSet && p.captain && this.headingToRivalGoal(b, p.team)) {
+      if (!b.shot || b.shotTeam !== p.team) {
+        b.shot = true; b.shotTeam = p.team;
+        b.sp = this.ballSpeedTarget(b);
+        this.emit('captainShot', { x: b.x, y: b.y, team: p.team, id: b.id });
+      }
+    } else this.endShot(b);
   }
   ballKeeper(b, T) {
     const k = T.k, rad = CONFIG.BALL_R + CONFIG.KEEPER_THICK / 2;
@@ -453,6 +479,7 @@ class Game {
     let dx = b.x - qx, dy = b.y - qy;
     const d2 = dx * dx + dy * dy;
     if (d2 >= rad * rad) return;
+    this.endShot(b);
     const outward = b.vx * k.nx + b.vy * k.ny;
     let d = Math.sqrt(d2);
     if (d < 1e-6) { dx = -k.nx; dy = -k.ny; d = 1; }
@@ -482,10 +509,10 @@ class Game {
     if (b.netT >= 0.5) b.state = 'dead';
   }
   updateBalls(dt) {
-    const sp = this.targetSpeed(), BR = CONFIG.BALL_R;
+    const BR = CONFIG.BALL_R;
     for (const b of this.balls) {
       if (b.state === 'live') {
-        b.sp += (sp * b.boost - b.sp) * Math.min(1, dt * 5);
+        b.sp += (this.ballSpeedTarget(b) - b.sp) * Math.min(1, dt * 5);
         b.px = b.x; b.py = b.y;
         b.x += b.vx * dt; b.y += b.vy * dt;
       } else if (b.state === 'net') this.updateNetBall(b, dt);
@@ -494,11 +521,6 @@ class Game {
     for (const b of live) {
       for (const p of this.players) if (p.alive) this.ballPlayer(b, p);
       for (const T of this.teams) if (T.k.active) this.ballKeeper(b, T);
-      for (const bu of this.bumpers) {
-        if (this.collideStatic(b, bu.x, bu.y, BR + bu.r, 0, 0, null, true)) {
-          bu.flashT = this.t; this.emit('bumper', { x: bu.x, y: bu.y });
-        }
-      }
     }
     for (let i = 0; i < live.length; i++) {
       const a = live[i];
@@ -511,6 +533,7 @@ class Game {
         const rel = (a.vx - c.vx) * nx + (a.vy - c.vy) * ny;
         if (rel > 0) {
           a.vx -= rel * nx; a.vy -= rel * ny; c.vx += rel * nx; c.vy += rel * ny;
+          this.endShot(a); this.endShot(c);
           this.emit('ballball', { x: (a.x + c.x) / 2, y: (a.y + c.y) / 2 });
         }
       }
@@ -542,7 +565,8 @@ class Game {
       if (maxOut > 1) {                       // safety net: escaped ball goes back to center
         this.stats.escapes++;
         if (this.debugEscape) this.debugEscape(b, maxOut);
-        b.x = b.px = this.cx; b.y = b.py = this.cy;
+        this.endShot(b);
+        b.x = b.px = geo.cx; b.y = b.py = geo.cy;
         const a = this.rng.range(0, TAU); b.vx = Math.cos(a) * b.sp; b.vy = Math.sin(a) * b.sp;
       }
     }
@@ -656,6 +680,23 @@ class Game {
     const addMove = (e, margin) => { const p = this.insidePoint(targetGeo, e.x, e.y, margin); moves.push({ e, x0: e.x, y0: e.y, x1: p.x, y1: p.y }); };
     for (const b of this.balls) if (b.state === 'live') addMove(b, CONFIG.BALL_R + 8);
     for (const p of this.players) if (p.alive && !this.teams[p.team].eliminated) addMove(p, CONFIG.PLAYER_R + 8);
+    if (M === 2) {
+      /* final duel: each team's arena player becomes its captain and a team-mate slides out of it into its own half */
+      const { top } = this.morph;
+      for (const t of [this.morph.top, this.morph.bottom]) {
+        let cap = this.players.find(p => p.alive && p.team === t);
+        if (!cap) {
+          const side = t === top ? -1 : 1;
+          cap = this.makePlayer(t, this.cx, this.rectCy() + side * CONFIG.FINAL_H * 0.18, true);
+          this.players.push(cap); addMove(cap, CONFIG.PLAYER_R + 8);
+        }
+        cap.captain = true;
+        const mv = moves.find(m => m.e === cap), m = this.duelMateSpot(t, top, CONFIG.FINAL_W, CONFIG.FINAL_H, mv ? mv.x1 : cap.x);
+        const mate = this.makePlayer(t, cap.x, cap.y, false);
+        this.players.push(mate);
+        moves.push({ e: mate, x0: cap.x, y0: cap.y, x1: m.x, y1: m.y });
+      }
+    }
     this.powerups = this.powerups.filter(p => {
       const q = this.insidePoint(targetGeo, p.x, p.y, CONFIG.PU_WALL_MARGIN);
       return Math.abs(q.x - p.x) < 0.5 && Math.abs(q.y - p.y) < 0.5;
@@ -676,7 +717,6 @@ class Game {
     }
     this.balls = this.balls.filter(b => b.state === 'live');
     this.geo = this.computeGeo();
-    this.placeBumpers(this.geo);
     for (const p of this.players) if (p.alive) { const q = this.insidePoint(this.geo, p.x, p.y, CONFIG.PLAYER_R + 6); p.x = q.x; p.y = q.y; }
     for (const b of this.balls) { const q = this.insidePoint(this.geo, b.x, b.y, CONFIG.BALL_R + 6); b.x = b.px = q.x; b.y = b.py = q.y; }
     if (m.kind === 'rect') {
@@ -730,14 +770,13 @@ class Game {
       let x, y;
       if (this.shape === 'rect') {
         x = this.cx + this.rng.range(-1, 1) * (this.W / 2 - M);
-        y = this.cy + this.rng.range(-1, 1) * (this.H / 2 - M);
+        y = geo.cy + this.rng.range(-1, 1) * (this.H / 2 - M);
       } else {
         const r = Math.sqrt(this.rng.next()) * Math.max(0, geo.inR - M), a = this.rng.range(0, TAU);
         x = this.cx + Math.cos(a) * r; y = this.cy + Math.sin(a) * r;
       }
       let ok = true;
       for (const p of this.powerups) if ((p.x - x) ** 2 + (p.y - y) ** 2 < 90 * 90) ok = false;
-      for (const b of this.bumpers) if ((b.x - x) ** 2 + (b.y - y) ** 2 < (b.r + CONFIG.PU_R + 14) ** 2) ok = false;
       if (ok) pos = { x, y };
     }
     if (!pos) return;
@@ -784,7 +823,7 @@ class Game {
           const px = -Math.sin(a), py = Math.cos(a);
           const nb = { id: this.ballId++, x: b.x + px * 17, y: b.y + py * 17, px: b.x, py: b.y,
             vx: Math.cos(a + 0.4) * sp, vy: Math.sin(a + 0.4) * sp, sp, boost: b.boost, wallT: -9, lastTouch: b.lastTouch, state: 'live',
-            born: this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0 };
+            born: this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0, shot: false, shotTeam: -1 };
           b.x -= px * 17; b.y -= py * 17;
           b.vx = Math.cos(a - 0.4) * sp; b.vy = Math.sin(a - 0.4) * sp;
           this.balls.push(nb);
