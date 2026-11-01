@@ -45,6 +45,7 @@ const League = {
     out.settings = Object.assign(this.defaultSettings(), d.settings || {});
     /* settings v2: single life by default — migrate older saved settings once */
     if (!d.settings || d.settings.sv !== 2) { out.settings.lives = CONFIG.DEFAULT_LIVES; out.settings.sv = 2; }
+    if (out.settings.theme !== 'auto' && !THEME_DEFS[out.settings.theme]) out.settings.theme = 'auto';   // removed themes (bumpers)
     return out;
   },
   load() {
@@ -421,8 +422,8 @@ const App = {
       }
     }
     let theme = s.theme;
-    if (theme === 'auto') theme = srng.pick(s.mode === 'derby' ? THEME_IDS.filter(x => x !== 'bumpers') : THEME_IDS);
-    if (s.mode === 'derby' && theme === 'bumpers') theme = 'classic';
+    if (theme === 'auto') theme = srng.pick(THEME_IDS);
+    else if (!THEME_DEFS[theme]) theme = 'classic';
     const title = s.mode === 'final' ? 'SEASON FINAL' : s.mode === 'derby' ? `WEEK ${d.week} · DERBY` : `WEEK ${d.week} · GROUP MATCH ${d.weekMatch}`;
     return { err, title, mode: s.mode, week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(), matchNo: d.matchNo, seed, theme, test: s.testMatch,
       opts: { mode: s.mode, teams: (teams || []).map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false } };
@@ -551,7 +552,7 @@ const Balance = {
         const seed = randomSeed() * 7 + i;
         const r = new RNG((seed ^ 0x51ED27) >>> 0);
         const teams = r.shuffle(teamsAll).slice(0, n).map(t => ({ ...t }));
-        let theme = s.theme === 'auto' ? r.pick(mode === 'derby' ? THEME_IDS.filter(x => x !== 'bumpers') : THEME_IDS) : s.theme;
+        let theme = s.theme === 'auto' ? r.pick(THEME_IDS) : s.theme;
         const g = new Game({ mode, teams, seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false });
         while (!g.over && g.t < 200) g.step(DT);
         res.push(g.getResult());

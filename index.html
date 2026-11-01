@@ -131,7 +131,7 @@
       <div id="manualList" class="checklist hidden"></div>
       <label>Seed<div class="row"><input type="number" id="seed" min="0"><button id="btnRandSeed">🎲 Rastgele seed</button></div></label>
       <label>Tema
-        <select id="theme"><option value="auto">Otomatik (seed ile)</option><option value="classic">⚽ Classic</option><option value="snow">❄️ Snow</option><option value="rain">🌧️ Rain</option><option value="night">🌙 Night</option><option value="bumpers">🔴 Bumpers</option></select>
+        <select id="theme"><option value="auto">Otomatik (seed ile)</option><option value="classic">⚽ Classic</option><option value="snow">❄️ Snow</option><option value="rain">🌧️ Rain</option><option value="night">🌙 Night</option></select>
       </label>
       <label>Top hızı çarpanı <b id="speedVal" style="color:var(--text)"></b><input type="range" id="speedMult" min="0.7" max="1.5" step="0.05"></label>
       <label class="chk"><input type="checkbox" id="testMatch"> Test maçı (sonuç tabloya yazılmaz)</label>
@@ -213,7 +213,7 @@ const CONFIG = {
   /* Tuned with the balance test. Single-ball mode: MAX_BALLS 1 (set >1 to bring back the ball schedule). */
   /* ball starts at BALL_SPEED and gets WALL_ACCEL faster on every wall/post bounce, up to BALL_MAX_MULT × */
   BALL_R: 16, BALL_SPEED: 600, WALL_ACCEL: 0.10, BALL_MAX_MULT: 2.4, MAX_BALLS: 1, BALL_ADD_EVERY: 3, GOAL_RESPAWN: 1.1,
-  POST_R: 10, GOAL_FRAC: 0.50, ELIM_GOAL_GROW: 0.25, FINAL_GOAL_FRAC: 0.61, DERBY_GOAL_FRAC: 0.50, NET_DEPTH: 50, NET_DEPTH_RECT: 34,
+  POST_R: 10, GOAL_FRAC: 0.50, ELIM_GOAL_GROW: 0.25, FINAL_GOAL_FRAC: 0.54, DERBY_GOAL_FRAC: 0.50, NET_DEPTH: 50, NET_DEPTH_RECT: 34,
   KEEPER_INSET: 28, KEEPER_LEN_FRAC: 0.30, KEEPER_THICK: 14, KEEPER_SPEED: 320, KEEPER_GAIN: 3, KEEPER_READ: 0.3,
   PLAYER_R: 24, PLAYER_SPEED: 260,
   ROT_SPEED_DEG: 0, ROT_GROWTH: 1.12,
@@ -221,10 +221,13 @@ const CONFIG = {
   OT_AT: 45, OT_RAMP: 10, OT_MULT: 1.6,
   ELIM_SLOW_GAME: 0.18, ELIM_FREEZE: 1.0, WIN_SLOW_GAME: 0.24, TS_SLOW: 0.3,
   FINAL_SLOWMO_GAME: 0.375, FINAL_SLOWMO_TS: 0.25, FINAL_SLOWMO_DIST: 120,
-  FINAL_W: 860, FINAL_H: 930, FINAL_GOALS: 2,   // final duel: first to FINAL_GOALS goals wins
+  FINAL_W: 820, FINAL_H: 1030, FINAL_GOALS: 2,   // final duel: first to FINAL_GOALS goals wins (narrower, longer pitch)
+  FINAL_DY: 30,   // the longer final pitch sits this much below the arena centre so it clears the scoreboard
+  /* final duel: 2 players per team, one is the captain. A captain touch that sends the ball toward the rival goal
+     (within CAPTAIN_AIM_DEG of the goal centre) makes it CAPTAIN_SHOT_MULT × faster until it hits anything else. */
+  CAPTAIN_SHOT_MULT: 2, CAPTAIN_AIM_DEG: 55,
   DERBY_W: 720, DERBY_H: 880, DERBY_TIME: 30,
   PU_R: 26, PU_LIFE: 8, PU_MIN: 6, PU_MAX: 10, PU_MAX_COUNT: 2, PU_WALL_MARGIN: 80,
-  BUMPER_R: 30,
   DEFAULT_LIVES: 1, DEFAULT_TEAM_COUNT: 6, DEFAULT_SPEED_MULT: 1.0,
   POINTS: [10, 7, 5, 4, 3, 2, 1, 0, 0, 0], DERBY_WIN_POINTS: 5, SEASON_LENGTH: 30,
   STORAGE_KEY: 'arenaLeague_v1',
@@ -276,9 +279,9 @@ const THEME_DEFS = {
   snow:    { id: 'snow',    icon: '❄️', name: 'Snow',    speed: 1.1, dev: 2 },
   rain:    { id: 'rain',    icon: '🌧️', name: 'Rain',    speed: 0.85, dev: 4 },
   night:   { id: 'night',   icon: '🌙', name: 'Night',   speed: 1.0, dev: 4 },
-  bumpers: { id: 'bumpers', icon: '🔴', name: 'Bumpers', speed: 1.0, dev: 4, bumpers: true },
 };
-const THEME_IDS = ['classic', 'snow', 'rain', 'night', 'bumpers'];
+/* no obstacles on the pitch: the old 'bumpers' theme is gone (a saved 'bumpers' choice falls back to Classic) */
+const THEME_IDS = ['classic', 'snow', 'rain', 'night'];
 
 /* =====================================================================
    RNG  (mulberry32 — seed based, deterministic)
@@ -447,11 +450,10 @@ class Game {
     this.onEvent = null;
     this.cx = CONFIG.CX; this.cy = CONFIG.CY;
     this.themeId = THEME_DEFS[o.theme] ? o.theme : 'classic';
-    if (this.isDerby && this.themeId === 'bumpers') this.themeId = 'classic';
     this.theme = THEME_DEFS[this.themeId];
     this.t = 0;
     this.ballId = 1; this.puId = 1;
-    this.balls = []; this.players = []; this.powerups = []; this.bumpers = [];
+    this.balls = []; this.players = []; this.powerups = [];
     this.stats = { goals: 0, saves: 0, ownGoals: 0, powerups: 0, escapes: 0 };
     this.otMult = 1; this.overtime = false; this.everOvertime = false;
     this.otStart = 0;            // overtime clock restarts at every elimination
@@ -493,15 +495,7 @@ class Game {
       this.netDepth = CONFIG.NET_DEPTH;
     }
 
-    if (this.theme.bumpers && !this.isDerby) {
-      const n = this.rng.int(3, 5), base = this.rng.range(0, TAU);
-      for (let i = 0; i < n; i++) {
-        this.bumpers.push({ ang: base + i * TAU / n + this.rng.range(-0.3, 0.3),
-          frac: this.rng.range(0.34, 0.56), r: CONFIG.BUMPER_R, flashT: -9, x: 0, y: 0 });
-      }
-    }
     this.geo = this.computeGeo();
-    this.placeBumpers(this.geo);
     this.initPlayers();
     this.updateKeepers(0);
     this.spawnBall(true);
@@ -538,10 +532,12 @@ class Game {
     for (let i = 0; i < verts.length; i++) { const a = verts[i], b = verts[(i + 1) % verts.length], L = Math.hypot(b.x - a.x, b.y - a.y); if (L >= 0.5) { per += L; n++; } }
     return buildGeo('poly', verts, sides, this.cx, this.cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH, CONFIG.GOAL_FRAC, n ? per / n : 0);
   }
+  /* centre line of the rectangular pitch: the final duel pitch is shifted down a little, the derby pitch is not */
+  rectCy() { return this.cy + (this.isDerby ? 0 : CONFIG.FINAL_DY); }
   rectGeo(W, H, teams) {
-    const x0 = this.cx - W / 2, x1 = this.cx + W / 2, y0 = this.cy - H / 2, y1 = this.cy + H / 2;
+    const cy = this.rectCy(), x0 = this.cx - W / 2, x1 = this.cx + W / 2, y0 = cy - H / 2, y1 = cy + H / 2;
     const verts = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
-    const g = buildGeo('rect', verts, [teams[0], -1, teams[1], -1], this.cx, this.cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH_RECT,
+    const g = buildGeo('rect', verts, [teams[0], -1, teams[1], -1], this.cx, cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH_RECT,
       this.isDerby ? CONFIG.DERBY_GOAL_FRAC : CONFIG.FINAL_GOAL_FRAC);
     g.W = W; g.H = H;
     return g;
@@ -556,28 +552,41 @@ class Game {
     }
     return this.polyGeo(va, R, this.rot, this.sides);
   }
-  placeBumpers(geo) {
-    for (const b of this.bumpers) {
-      b.x = this.cx + Math.cos(b.ang) * b.frac * geo.inR;
-      b.y = this.cy + Math.sin(b.ang) * b.frac * geo.inR;
-    }
-  }
   insidePoint(geo, x, y, margin) {   // nearest safe point inside the inscribed circle
-    const dx = x - this.cx, dy = y - this.cy, d = Math.hypot(dx, dy);
+    const gx = geo.cx, gy = geo.cy, dx = x - gx, dy = y - gy, d = Math.hypot(dx, dy);
     const lim = Math.max(0, geo.inR - margin);
     let maxOut = -Infinity;
     for (const s of geo.sides) { const o = (x - s.mx) * s.nx + (y - s.my) * s.ny; if (o > maxOut) maxOut = o; }
     if (maxOut <= -margin) return { x, y };
     if (d <= lim || d < 1e-6) return { x, y };
-    return { x: this.cx + dx * lim / d, y: this.cy + dy * lim / d };
+    return { x: gx + dx * lim / d, y: gy + dy * lim / d };
   }
   wallVel(x, y) { return [-this.omega * (y - this.cy), this.omega * (x - this.cx)]; }
 
   /* ---------- setup ---------- */
+  makePlayer(team, x, y, captain) {
+    const h = this.rng.range(0, TAU);
+    return { team, x, y, h, turn: 0, turnTarget: 0, turnT: 0, vx: Math.cos(h) * CONFIG.PLAYER_SPEED, vy: Math.sin(h) * CONFIG.PLAYER_SPEED,
+      alive: true, captain: !!captain };
+  }
+  /* final duel: where a team's second (non-captain) player stands — in its own half, on the other flank from x */
+  duelMateSpot(team, top, W, H, x) {
+    const side = team === top ? -1 : 1, flank = x > this.cx ? -1 : 1;
+    return { x: this.cx + flank * W * 0.24, y: this.rectCy() + side * H * 0.24 };
+  }
   initPlayers() {
-    const mk = (team, x, y) => ({ team, x, y, h: this.rng.range(0, TAU), turn: 0, turnTarget: 0, turnT: 0,
-      vx: 0, vy: 0, alive: true });
-    if (this.isDerby) {
+    const mk = (team, x, y, cap) => this.makePlayer(team, x, y, cap);
+    if (this.finalDuel) {
+      /* direct final (only 2 teams): captain + one team-mate each */
+      const [top, bottom] = this.rectTeams;
+      for (const t of [top, bottom]) {
+        const side = t === top ? -1 : 1, flank = t === top ? 1 : -1;
+        const cx = this.cx + flank * this.W * 0.2, cy = this.rectCy() + side * this.H * 0.18;
+        this.players.push(mk(t, cx, cy, true));
+        const m = this.duelMateSpot(t, top, this.W, this.H, cx);
+        this.players.push(mk(t, m.x, m.y, false));
+      }
+    } else if (this.isDerby) {
       this.players.push(mk(0, this.cx - 150, this.cy - 230), mk(0, this.cx + 150, this.cy - 110),
         mk(1, this.cx + 150, this.cy + 230), mk(1, this.cx - 150, this.cy + 110));
     } else {
@@ -585,7 +594,6 @@ class Game {
         this.players.push(mk(g.team, this.cx + (g.mx - this.cx) * 0.5, this.cy + (g.my - this.cy) * 0.5));
       }
     }
-    for (const p of this.players) { p.vx = Math.cos(p.h) * CONFIG.PLAYER_SPEED; p.vy = Math.sin(p.h) * CONFIG.PLAYER_SPEED; }
   }
   targetSpeed() {
     let s = CONFIG.BALL_SPEED * this.o.speedMult * this.theme.speed;
@@ -595,28 +603,43 @@ class Game {
   }
   /* every wall/post bounce makes that ball a little faster (capped); a new ball starts at base speed */
   wallBoost(b) {
+    this.endShot(b);
     if (this.t - b.wallT < 0.05) return;            // a corner double-bounce counts once
     b.wallT = this.t;
     b.boost = Math.min(CONFIG.BALL_MAX_MULT, b.boost * (1 + CONFIG.WALL_ACCEL));
     b.sp = this.targetSpeed() * b.boost;
+  }
+  /* captain shot: ball goes CAPTAIN_SHOT_MULT × faster; anything else it hits brings it back to its previous speed */
+  headingToRivalGoal(b, team) {
+    const g = this.geo.goals.find(gg => gg.team !== team && !gg.closed);
+    if (!g) return false;
+    const dx = g.mx - b.x, dy = g.my - b.y, d = Math.hypot(dx, dy), v = Math.hypot(b.vx, b.vy);
+    if (d < 1e-6 || v < 1e-6) return false;
+    return (dx * b.vx + dy * b.vy) / (d * v) > Math.cos(CONFIG.CAPTAIN_AIM_DEG * DEG);
+  }
+  ballSpeedTarget(b) { return this.targetSpeed() * b.boost * (b.shot ? CONFIG.CAPTAIN_SHOT_MULT : 1); }
+  endShot(b) {
+    if (!b.shot) return;
+    b.shot = false; b.shotTeam = -1;
+    b.sp = this.ballSpeedTarget(b);
   }
   maxBallsNow() {
     if (this.isDerby || this.finalDuel) return 1;
     return Math.min(CONFIG.MAX_BALLS, 1 + Math.floor(this.t / CONFIG.BALL_ADD_EVERY));
   }
   spawnBall(initial) {
-    let x = this.cx, y = this.cy;
+    const ox = this.geo.cx, oy = this.geo.cy;      // kick-off from the centre spot
+    let x = ox, y = oy;
     const BR = CONFIG.BALL_R;
     for (let k = 0; k < 10; k++) {
       let ok = true;
       for (const b of this.balls) if (b.state === 'live' && (b.x - x) ** 2 + (b.y - y) ** 2 < (BR * 2 + 8) ** 2) ok = false;
-      for (const b of this.bumpers) if ((b.x - x) ** 2 + (b.y - y) ** 2 < (b.r + BR + 8) ** 2) ok = false;
       if (ok) break;
-      x = this.cx + this.rng.range(-70, 70); y = this.cy + this.rng.range(-70, 70);
+      x = ox + this.rng.range(-70, 70); y = oy + this.rng.range(-70, 70);
     }
     const a = this.rng.range(0, TAU), sp = this.targetSpeed();
     const b = { id: this.ballId++, x, y, px: x, py: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, sp, boost: 1, wallT: -9,
-      lastTouch: -1, state: 'live', born: initial ? -10 : this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0 };
+      lastTouch: -1, state: 'live', born: initial ? -10 : this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0, shot: false, shotTeam: -1 };
     this.balls.push(b);
     this.spawnBlock = this.t + 0.35;
     this.emit('spawnBall', { x, y, initial: !!initial, id: b.id });
@@ -783,7 +806,6 @@ class Game {
         closestOnSeg(p.x, p.y, k.x - k.tx * k.halfLen, k.y - k.ty * k.halfLen, k.x + k.tx * k.halfLen, k.y + k.ty * k.halfLen);
         this.pushPlayer(p, _qx, _qy, R + CONFIG.KEEPER_THICK / 2, k.vx, k.vy);
       }
-      for (const b of this.bumpers) this.pushPlayer(p, b.x, b.y, R + b.r, 0, 0);
     }
     const P = this.players;
     for (let i = 0; i < P.length; i++) {
@@ -845,6 +867,13 @@ class Game {
     const fresh = this.t - b.hitP > 0.12;
     b.lastTouch = p.team; b.hitP = this.t;
     if (fresh) this.emit('player', { x: b.x - nx * CONFIG.BALL_R, y: b.y - ny * CONFIG.BALL_R, team: p.team });
+    if (this.finalDuel && !this.isDerby && !this.winnerSet && p.captain && this.headingToRivalGoal(b, p.team)) {
+      if (!b.shot || b.shotTeam !== p.team) {
+        b.shot = true; b.shotTeam = p.team;
+        b.sp = this.ballSpeedTarget(b);
+        this.emit('captainShot', { x: b.x, y: b.y, team: p.team, id: b.id });
+      }
+    } else this.endShot(b);
   }
   ballKeeper(b, T) {
     const k = T.k, rad = CONFIG.BALL_R + CONFIG.KEEPER_THICK / 2;
@@ -853,6 +882,7 @@ class Game {
     let dx = b.x - qx, dy = b.y - qy;
     const d2 = dx * dx + dy * dy;
     if (d2 >= rad * rad) return;
+    this.endShot(b);
     const outward = b.vx * k.nx + b.vy * k.ny;
     let d = Math.sqrt(d2);
     if (d < 1e-6) { dx = -k.nx; dy = -k.ny; d = 1; }
@@ -882,10 +912,10 @@ class Game {
     if (b.netT >= 0.5) b.state = 'dead';
   }
   updateBalls(dt) {
-    const sp = this.targetSpeed(), BR = CONFIG.BALL_R;
+    const BR = CONFIG.BALL_R;
     for (const b of this.balls) {
       if (b.state === 'live') {
-        b.sp += (sp * b.boost - b.sp) * Math.min(1, dt * 5);
+        b.sp += (this.ballSpeedTarget(b) - b.sp) * Math.min(1, dt * 5);
         b.px = b.x; b.py = b.y;
         b.x += b.vx * dt; b.y += b.vy * dt;
       } else if (b.state === 'net') this.updateNetBall(b, dt);
@@ -894,11 +924,6 @@ class Game {
     for (const b of live) {
       for (const p of this.players) if (p.alive) this.ballPlayer(b, p);
       for (const T of this.teams) if (T.k.active) this.ballKeeper(b, T);
-      for (const bu of this.bumpers) {
-        if (this.collideStatic(b, bu.x, bu.y, BR + bu.r, 0, 0, null, true)) {
-          bu.flashT = this.t; this.emit('bumper', { x: bu.x, y: bu.y });
-        }
-      }
     }
     for (let i = 0; i < live.length; i++) {
       const a = live[i];
@@ -911,6 +936,7 @@ class Game {
         const rel = (a.vx - c.vx) * nx + (a.vy - c.vy) * ny;
         if (rel > 0) {
           a.vx -= rel * nx; a.vy -= rel * ny; c.vx += rel * nx; c.vy += rel * ny;
+          this.endShot(a); this.endShot(c);
           this.emit('ballball', { x: (a.x + c.x) / 2, y: (a.y + c.y) / 2 });
         }
       }
@@ -942,7 +968,8 @@ class Game {
       if (maxOut > 1) {                       // safety net: escaped ball goes back to center
         this.stats.escapes++;
         if (this.debugEscape) this.debugEscape(b, maxOut);
-        b.x = b.px = this.cx; b.y = b.py = this.cy;
+        this.endShot(b);
+        b.x = b.px = geo.cx; b.y = b.py = geo.cy;
         const a = this.rng.range(0, TAU); b.vx = Math.cos(a) * b.sp; b.vy = Math.sin(a) * b.sp;
       }
     }
@@ -1056,6 +1083,23 @@ class Game {
     const addMove = (e, margin) => { const p = this.insidePoint(targetGeo, e.x, e.y, margin); moves.push({ e, x0: e.x, y0: e.y, x1: p.x, y1: p.y }); };
     for (const b of this.balls) if (b.state === 'live') addMove(b, CONFIG.BALL_R + 8);
     for (const p of this.players) if (p.alive && !this.teams[p.team].eliminated) addMove(p, CONFIG.PLAYER_R + 8);
+    if (M === 2) {
+      /* final duel: each team's arena player becomes its captain and a team-mate slides out of it into its own half */
+      const { top } = this.morph;
+      for (const t of [this.morph.top, this.morph.bottom]) {
+        let cap = this.players.find(p => p.alive && p.team === t);
+        if (!cap) {
+          const side = t === top ? -1 : 1;
+          cap = this.makePlayer(t, this.cx, this.rectCy() + side * CONFIG.FINAL_H * 0.18, true);
+          this.players.push(cap); addMove(cap, CONFIG.PLAYER_R + 8);
+        }
+        cap.captain = true;
+        const mv = moves.find(m => m.e === cap), m = this.duelMateSpot(t, top, CONFIG.FINAL_W, CONFIG.FINAL_H, mv ? mv.x1 : cap.x);
+        const mate = this.makePlayer(t, cap.x, cap.y, false);
+        this.players.push(mate);
+        moves.push({ e: mate, x0: cap.x, y0: cap.y, x1: m.x, y1: m.y });
+      }
+    }
     this.powerups = this.powerups.filter(p => {
       const q = this.insidePoint(targetGeo, p.x, p.y, CONFIG.PU_WALL_MARGIN);
       return Math.abs(q.x - p.x) < 0.5 && Math.abs(q.y - p.y) < 0.5;
@@ -1076,7 +1120,6 @@ class Game {
     }
     this.balls = this.balls.filter(b => b.state === 'live');
     this.geo = this.computeGeo();
-    this.placeBumpers(this.geo);
     for (const p of this.players) if (p.alive) { const q = this.insidePoint(this.geo, p.x, p.y, CONFIG.PLAYER_R + 6); p.x = q.x; p.y = q.y; }
     for (const b of this.balls) { const q = this.insidePoint(this.geo, b.x, b.y, CONFIG.BALL_R + 6); b.x = b.px = q.x; b.y = b.py = q.y; }
     if (m.kind === 'rect') {
@@ -1130,14 +1173,13 @@ class Game {
       let x, y;
       if (this.shape === 'rect') {
         x = this.cx + this.rng.range(-1, 1) * (this.W / 2 - M);
-        y = this.cy + this.rng.range(-1, 1) * (this.H / 2 - M);
+        y = geo.cy + this.rng.range(-1, 1) * (this.H / 2 - M);
       } else {
         const r = Math.sqrt(this.rng.next()) * Math.max(0, geo.inR - M), a = this.rng.range(0, TAU);
         x = this.cx + Math.cos(a) * r; y = this.cy + Math.sin(a) * r;
       }
       let ok = true;
       for (const p of this.powerups) if ((p.x - x) ** 2 + (p.y - y) ** 2 < 90 * 90) ok = false;
-      for (const b of this.bumpers) if ((b.x - x) ** 2 + (b.y - y) ** 2 < (b.r + CONFIG.PU_R + 14) ** 2) ok = false;
       if (ok) pos = { x, y };
     }
     if (!pos) return;
@@ -1184,7 +1226,7 @@ class Game {
           const px = -Math.sin(a), py = Math.cos(a);
           const nb = { id: this.ballId++, x: b.x + px * 17, y: b.y + py * 17, px: b.x, py: b.y,
             vx: Math.cos(a + 0.4) * sp, vy: Math.sin(a + 0.4) * sp, sp, boost: b.boost, wallT: -9, lastTouch: b.lastTouch, state: 'live',
-            born: this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0 };
+            born: this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0, shot: false, shotTeam: -1 };
           b.x -= px * 17; b.y -= py * 17;
           b.vx = Math.cos(a - 0.4) * sp; b.vy = Math.sin(a - 0.4) * sp;
           this.balls.push(nb);
@@ -1216,17 +1258,17 @@ class Game {
 /* =====================================================================
    THEMES  (visual palettes; gameplay modifiers are in THEME_DEFS)
    ===================================================================== */
+/* pitch lines are always white in every theme; on the light snow floor they get a soft blue shadow so they still read */
+const LINE_WHITE = 'rgba(255,255,255,0.85)';
 const THEMES = {
-  classic: { bg1: '#03110a', bg2: '#0b3019', bg3: '#14532d', f1: '#1f7d3d', f2: '#1a6f35', line: 'rgba(255,255,255,0.78)',
+  classic: { bg1: '#03110a', bg2: '#0b3019', bg3: '#14532d', f1: '#1f7d3d', f2: '#1a6f35', line: LINE_WHITE,
     wall: '#ffffff', wallGlow: 'rgba(255,255,255,0.13)', net: 'rgba(255,255,255,0.38)' },
-  snow:    { bg1: '#7fa9cf', bg2: '#d7e9f8', bg3: '#ffffff', f1: '#eef6fd', f2: '#e0edf8', line: 'rgba(60,110,170,0.55)',
-    wall: '#2d5b8c', wallGlow: 'rgba(45,91,140,0.16)', net: 'rgba(40,80,130,0.45)' },
-  rain:    { bg1: '#02060b', bg2: '#0c1925', bg3: '#1b3348', f1: '#163b2b', f2: '#123222', line: 'rgba(210,230,255,0.55)',
+  snow:    { bg1: '#7fa9cf', bg2: '#d7e9f8', bg3: '#ffffff', f1: '#eef6fd', f2: '#e0edf8', line: LINE_WHITE,
+    wall: '#2d5b8c', wallGlow: 'rgba(45,91,140,0.16)', net: 'rgba(40,80,130,0.45)', lineShadow: 'rgba(30,70,120,0.75)' },
+  rain:    { bg1: '#02060b', bg2: '#0c1925', bg3: '#1b3348', f1: '#163b2b', f2: '#123222', line: LINE_WHITE,
     wall: '#cfdae4', wallGlow: 'rgba(190,215,255,0.12)', net: 'rgba(210,230,255,0.33)' },
-  night:   { bg1: '#000000', bg2: '#04060c', bg3: '#0a1630', f1: '#0b1d13', f2: '#09180f', line: 'rgba(140,255,190,0.32)',
+  night:   { bg1: '#000000', bg2: '#04060c', bg3: '#0a1630', f1: '#0b1d13', f2: '#09180f', line: LINE_WHITE,
     wall: '#b8ffd6', wallGlow: 'rgba(110,255,170,0.22)', net: 'rgba(170,255,210,0.30)' },
-  bumpers: { bg1: '#04101c', bg2: '#0b2b33', bg3: '#7a1020', f1: '#1f7d3d', f2: '#1a6f35', line: 'rgba(255,255,255,0.78)',
-    wall: '#ffffff', wallGlow: 'rgba(255,255,255,0.13)', net: 'rgba(255,255,255,0.38)' },
 };
 const FONT_BIG = '"Bebas Neue", Impact, "Arial Narrow", sans-serif';
 const FONT_UI = 'Inter, system-ui, sans-serif';
@@ -1303,7 +1345,7 @@ const FX = {
       case 'ballball': this.sparks(d.x, d.y, 0, 0, 3, '#ffffff'); AudioSys.ballball(); break;
       case 'player': { const T = this.team(d.team); this.ring(d.x, d.y, T.c1, 34); AudioSys.tup(1); break; }
       case 'keeperHit': AudioSys.tup(0.7); break;
-      case 'bumper': this.ring(d.x, d.y, '#ff5252', 70); AudioSys.boing(); break;
+      case 'captainShot': { const T = this.team(d.team); this.ring(d.x, d.y, '#FFD54F', 70); this.burst(d.x, d.y, T.c1, 12); this.shake(0.12, 6); AudioSys.shot(); break; }
       case 'save': {
         const T = this.team(d.team);
         this.burst(d.x, d.y, '#ffffff', 10); this.ring(d.x, d.y, T.c1, 60);
@@ -1460,12 +1502,10 @@ const AudioSys = {
     if (!this.ready() || !this.limit('save', 2, 0.1)) return;
     this.tone('sine', 120, 0.24, 0.55, { f2: 50 }); this.noise(0.12, 0.35, { type: 'lowpass', f: 700 }); this.tone('triangle', 190, 0.08, 0.2);
   },
-  boing() {
-    if (!this.ready() || !this.limit('boing', 2, 0.06)) return;
-    const o = this.tone('sine', 190, 0.32, 0.35, { f2: 560, glide: 0.12 });
-    const c = this.ctx, lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = 22; lg.gain.value = 40;
-    lfo.connect(lg); lg.connect(o.frequency); lfo.start(); lfo.stop(c.currentTime + 0.35);
-    this.tone('triangle', 380, 0.18, 0.08, { f2: 900 });
+  /* captain shot: quick rising zap + a short thump */
+  shot() {
+    if (!this.ready() || !this.limit('shot', 2, 0.08)) return;
+    this.tone('sawtooth', 260, 0.16, 0.16, { f2: 1250, lp: 2600 }); this.tone('sine', 140, 0.12, 0.4, { f2: 60 });
   },
   pop(k) { if (!this.ready() || !this.limit('pop', 2, 0.08)) return; this.tone('sine', 520, 0.08, 0.13 * k, { f2: 980 }); },
   whistle(dur, gain, delay) {
@@ -1560,7 +1600,7 @@ const Renderer = {
       const last = tr[tr.length - 1];
       if (last) this.spins.set(b.id, (this.spins.get(b.id) || 0) + Math.hypot(b.x - last.x, b.y - last.y) / 16 * (b.vx >= 0 ? 1 : -1));
       tr.push({ x: b.x, y: b.y });
-      const maxLen = Math.round(12 + 10 * clamp01(((b.boost || 1) - 1) / (CONFIG.BALL_MAX_MULT - 1)));   // trail grows with speed
+      const maxLen = Math.round(12 + 10 * clamp01(((b.boost || 1) - 1) / (CONFIG.BALL_MAX_MULT - 1))) + (b.shot ? 10 : 0);   // trail grows with speed
       while (tr.length > maxLen) tr.shift();
     }
     for (const id of [...this.trails.keys()]) if (!alive.has(id)) this.trails.delete(id);
@@ -1575,7 +1615,7 @@ const Renderer = {
     }
     const k = FX.cam.k;
     if (k > 0.002) {
-      ctx.beginPath(); ctx.rect(0, 452, 1080, 950); ctx.clip();
+      ctx.beginPath(); ctx.rect(0, 448, 1080, 1170); ctx.clip();
       const z = 1 + 0.3 * k, C = { x: CONFIG.CX, y: CONFIG.CY };
       const Fx = C.x + (FX.cam.x - C.x) * 0.55 * k, Fy = C.y + (FX.cam.y - C.y) * 0.55 * k;
       ctx.translate(C.x, C.y); ctx.scale(z, z); ctx.translate(-Fx, -Fy);
@@ -1593,7 +1633,6 @@ const Renderer = {
       this.shape(g, vis, geo, 1, 1, geo.kind === 'poly' ? g.rot : 0);
       this.keepers(g, geo, 1);
     }
-    this.bumpers(g);
     this.powerups(g);
     this.players(g);
     this.balls(g, vis);
@@ -1665,8 +1704,15 @@ const Renderer = {
   },
 
   fieldLines(g, vis, geo, rot) {
-    const ctx = this.ctx, cx = CONFIG.CX, cy = CONFIG.CY;
-    ctx.strokeStyle = vis.line; ctx.lineWidth = 4; ctx.fillStyle = vis.line;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.strokeStyle = vis.line; ctx.lineWidth = 4; ctx.fillStyle = vis.line;   // always white
+    if (vis.lineShadow) { ctx.shadowColor = vis.lineShadow; ctx.shadowBlur = 4; }
+    this.fieldLinesPath(geo);
+    ctx.restore();
+  },
+  fieldLinesPath(geo) {
+    const ctx = this.ctx, cx = geo.cx, cy = geo.cy;
     if (geo.kind === 'poly') {
       ctx.beginPath(); ctx.arc(cx, cy, 92, 0, TAU); ctx.stroke();
       ctx.beginPath(); ctx.arc(cx, cy, 7, 0, TAU); ctx.fill();
@@ -1853,22 +1899,6 @@ const Renderer = {
       ctx.restore();
     }
   },
-  bumpers(g) {
-    const ctx = this.ctx;
-    for (const b of g.bumpers) {
-      const f = clamp01(1 - (g.t - b.flashT) / 0.25);
-      const r = b.r * (1 + 0.15 * f);
-      ctx.save();
-      const gr = ctx.createRadialGradient(b.x - 8, b.y - 10, 2, b.x, b.y, r);
-      gr.addColorStop(0, f > 0 ? '#ffffff' : '#ff8a80'); gr.addColorStop(0.45, '#e53935'); gr.addColorStop(1, '#7f0000');
-      if (f > 0) { ctx.shadowColor = '#ff5252'; ctx.shadowBlur = 40 * f; }
-      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, TAU); ctx.fillStyle = gr; ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.lineWidth = 5; ctx.strokeStyle = f > 0 ? '#ffffff' : '#ffcdd2'; ctx.stroke();
-      ctx.beginPath(); ctx.arc(b.x, b.y, r * 0.45, 0, TAU); ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 3; ctx.stroke();
-      ctx.restore();
-    }
-  },
   powerups(g) {
     const ctx = this.ctx;
     for (const p of g.powerups) {
@@ -1902,6 +1932,12 @@ const Renderer = {
       ctx.lineWidth = 4; ctx.strokeStyle = T.c2; ctx.stroke();
       ctx.fillStyle = T.c2; ctx.font = `800 15px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(T.code, p.x, p.y + 1);
+      if (p.captain) {                                   // captain: gold armband badge with a "C"
+        const bx = p.x + R * 0.72, by = p.y - R * 0.72;
+        ctx.beginPath(); ctx.arc(bx, by, 11, 0, TAU); ctx.fillStyle = '#FFD54F'; ctx.fill();
+        ctx.lineWidth = 2.5; ctx.strokeStyle = '#3a2a00'; ctx.stroke();
+        ctx.fillStyle = '#3a2a00'; ctx.font = `900 13px ${FONT_UI}`; ctx.fillText('C', bx, by + 1);
+      }
       ctx.restore();
     }
   },
@@ -1928,7 +1964,8 @@ const Renderer = {
       }
       ctx.save(); ctx.globalAlpha = a;
       ctx.translate(x, y); ctx.scale(sc, sc);
-      const heat = b.state === 'live' ? clamp01(((b.boost || 1) - 1.15) / (CONFIG.BALL_MAX_MULT - 1.15)) : 0;
+      let heat = b.state === 'live' ? clamp01(((b.boost || 1) - 1.15) / (CONFIG.BALL_MAX_MULT - 1.15)) : 0;
+      if (b.state === 'live' && b.shot) heat = 1;          // captain shot: full glow
       if (heat > 0) {                                   // speed glow in the last-touch colour
         const hg = ctx.createRadialGradient(0, 0, R * 0.8, 0, 0, R * (2.2 + 1.3 * heat));
         hg.addColorStop(0, rgbaFromAny(tcol, 0.55 * heat)); hg.addColorStop(1, rgbaFromAny(tcol, 0));
@@ -2122,7 +2159,8 @@ const HUD = {
     ctx.save(); ctx.translate(SX - 70, cy + 4); ctx.scale(sa, sa); outlinedText(ctx, String(A.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
     outlinedText(ctx, '–', SX, cy + 2, `80px ${FONT_BIG}`, 'rgba(255,255,255,0.7)', null, 0);
     ctx.save(); ctx.translate(SX + 70, cy + 4); ctx.scale(sb, sb); outlinedText(ctx, String(B.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
-    outlinedText(ctx, `FIRST TO ${CONFIG.FINAL_GOALS} WINS`, SX, cy + 78, `600 26px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
+    /* the longer final pitch reaches up to the scoreboard, so the rule line sits under the pitch */
+    outlinedText(ctx, `FIRST TO ${CONFIG.FINAL_GOALS} WINS`, SX, CONFIG.CY + CONFIG.FINAL_DY + CONFIG.FINAL_H / 2 + CONFIG.NET_DEPTH_RECT + 40, `600 26px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
     ctx.restore();
   },
 
@@ -2324,6 +2362,7 @@ const League = {
     out.settings = Object.assign(this.defaultSettings(), d.settings || {});
     /* settings v2: single life by default — migrate older saved settings once */
     if (!d.settings || d.settings.sv !== 2) { out.settings.lives = CONFIG.DEFAULT_LIVES; out.settings.sv = 2; }
+    if (out.settings.theme !== 'auto' && !THEME_DEFS[out.settings.theme]) out.settings.theme = 'auto';   // removed themes (bumpers)
     return out;
   },
   load() {
@@ -2700,8 +2739,8 @@ const App = {
       }
     }
     let theme = s.theme;
-    if (theme === 'auto') theme = srng.pick(s.mode === 'derby' ? THEME_IDS.filter(x => x !== 'bumpers') : THEME_IDS);
-    if (s.mode === 'derby' && theme === 'bumpers') theme = 'classic';
+    if (theme === 'auto') theme = srng.pick(THEME_IDS);
+    else if (!THEME_DEFS[theme]) theme = 'classic';
     const title = s.mode === 'final' ? 'SEASON FINAL' : s.mode === 'derby' ? `WEEK ${d.week} · DERBY` : `WEEK ${d.week} · GROUP MATCH ${d.weekMatch}`;
     return { err, title, mode: s.mode, week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(), matchNo: d.matchNo, seed, theme, test: s.testMatch,
       opts: { mode: s.mode, teams: (teams || []).map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false } };
@@ -2830,7 +2869,7 @@ const Balance = {
         const seed = randomSeed() * 7 + i;
         const r = new RNG((seed ^ 0x51ED27) >>> 0);
         const teams = r.shuffle(teamsAll).slice(0, n).map(t => ({ ...t }));
-        let theme = s.theme === 'auto' ? r.pick(mode === 'derby' ? THEME_IDS.filter(x => x !== 'bumpers') : THEME_IDS) : s.theme;
+        let theme = s.theme === 'auto' ? r.pick(THEME_IDS) : s.theme;
         const g = new Game({ mode, teams, seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false });
         while (!g.over && g.t < 200) g.step(DT);
         res.push(g.getResult());

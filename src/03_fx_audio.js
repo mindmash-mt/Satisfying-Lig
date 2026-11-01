@@ -1,17 +1,17 @@
 /* =====================================================================
    THEMES  (visual palettes; gameplay modifiers are in THEME_DEFS)
    ===================================================================== */
+/* pitch lines are always white in every theme; on the light snow floor they get a soft blue shadow so they still read */
+const LINE_WHITE = 'rgba(255,255,255,0.85)';
 const THEMES = {
-  classic: { bg1: '#03110a', bg2: '#0b3019', bg3: '#14532d', f1: '#1f7d3d', f2: '#1a6f35', line: 'rgba(255,255,255,0.78)',
+  classic: { bg1: '#03110a', bg2: '#0b3019', bg3: '#14532d', f1: '#1f7d3d', f2: '#1a6f35', line: LINE_WHITE,
     wall: '#ffffff', wallGlow: 'rgba(255,255,255,0.13)', net: 'rgba(255,255,255,0.38)' },
-  snow:    { bg1: '#7fa9cf', bg2: '#d7e9f8', bg3: '#ffffff', f1: '#eef6fd', f2: '#e0edf8', line: 'rgba(60,110,170,0.55)',
-    wall: '#2d5b8c', wallGlow: 'rgba(45,91,140,0.16)', net: 'rgba(40,80,130,0.45)' },
-  rain:    { bg1: '#02060b', bg2: '#0c1925', bg3: '#1b3348', f1: '#163b2b', f2: '#123222', line: 'rgba(210,230,255,0.55)',
+  snow:    { bg1: '#7fa9cf', bg2: '#d7e9f8', bg3: '#ffffff', f1: '#eef6fd', f2: '#e0edf8', line: LINE_WHITE,
+    wall: '#2d5b8c', wallGlow: 'rgba(45,91,140,0.16)', net: 'rgba(40,80,130,0.45)', lineShadow: 'rgba(30,70,120,0.75)' },
+  rain:    { bg1: '#02060b', bg2: '#0c1925', bg3: '#1b3348', f1: '#163b2b', f2: '#123222', line: LINE_WHITE,
     wall: '#cfdae4', wallGlow: 'rgba(190,215,255,0.12)', net: 'rgba(210,230,255,0.33)' },
-  night:   { bg1: '#000000', bg2: '#04060c', bg3: '#0a1630', f1: '#0b1d13', f2: '#09180f', line: 'rgba(140,255,190,0.32)',
+  night:   { bg1: '#000000', bg2: '#04060c', bg3: '#0a1630', f1: '#0b1d13', f2: '#09180f', line: LINE_WHITE,
     wall: '#b8ffd6', wallGlow: 'rgba(110,255,170,0.22)', net: 'rgba(170,255,210,0.30)' },
-  bumpers: { bg1: '#04101c', bg2: '#0b2b33', bg3: '#7a1020', f1: '#1f7d3d', f2: '#1a6f35', line: 'rgba(255,255,255,0.78)',
-    wall: '#ffffff', wallGlow: 'rgba(255,255,255,0.13)', net: 'rgba(255,255,255,0.38)' },
 };
 const FONT_BIG = '"Bebas Neue", Impact, "Arial Narrow", sans-serif';
 const FONT_UI = 'Inter, system-ui, sans-serif';
@@ -88,7 +88,7 @@ const FX = {
       case 'ballball': this.sparks(d.x, d.y, 0, 0, 3, '#ffffff'); AudioSys.ballball(); break;
       case 'player': { const T = this.team(d.team); this.ring(d.x, d.y, T.c1, 34); AudioSys.tup(1); break; }
       case 'keeperHit': AudioSys.tup(0.7); break;
-      case 'bumper': this.ring(d.x, d.y, '#ff5252', 70); AudioSys.boing(); break;
+      case 'captainShot': { const T = this.team(d.team); this.ring(d.x, d.y, '#FFD54F', 70); this.burst(d.x, d.y, T.c1, 12); this.shake(0.12, 6); AudioSys.shot(); break; }
       case 'save': {
         const T = this.team(d.team);
         this.burst(d.x, d.y, '#ffffff', 10); this.ring(d.x, d.y, T.c1, 60);
@@ -245,12 +245,10 @@ const AudioSys = {
     if (!this.ready() || !this.limit('save', 2, 0.1)) return;
     this.tone('sine', 120, 0.24, 0.55, { f2: 50 }); this.noise(0.12, 0.35, { type: 'lowpass', f: 700 }); this.tone('triangle', 190, 0.08, 0.2);
   },
-  boing() {
-    if (!this.ready() || !this.limit('boing', 2, 0.06)) return;
-    const o = this.tone('sine', 190, 0.32, 0.35, { f2: 560, glide: 0.12 });
-    const c = this.ctx, lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = 22; lg.gain.value = 40;
-    lfo.connect(lg); lg.connect(o.frequency); lfo.start(); lfo.stop(c.currentTime + 0.35);
-    this.tone('triangle', 380, 0.18, 0.08, { f2: 900 });
+  /* captain shot: quick rising zap + a short thump */
+  shot() {
+    if (!this.ready() || !this.limit('shot', 2, 0.08)) return;
+    this.tone('sawtooth', 260, 0.16, 0.16, { f2: 1250, lp: 2600 }); this.tone('sine', 140, 0.12, 0.4, { f2: 60 });
   },
   pop(k) { if (!this.ready() || !this.limit('pop', 2, 0.08)) return; this.tone('sine', 520, 0.08, 0.13 * k, { f2: 980 }); },
   whistle(dur, gain, delay) {
