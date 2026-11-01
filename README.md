@@ -6,7 +6,7 @@ Instagram Reels, TikTok ve YouTube Shorts için **"satisfying" futbol simülasyo
 
 - Kurulum yok: `index.html` dosyasını Chrome'da açmanız yeterli.
 - Dikey 1080×1920 (9:16) video, 60 FPS, sesli kayıt.
-- Aynı seed + aynı takımlar + aynı ayarlar = birebir aynı maç.
+- Her maç, kurulurken üretilen rastgele bir **seed** (32 bit) ile oynanır; seed arayüzde ve dosya adlarında görünmez. Aynı seed + aynı takımlar + aynı ayarlar = birebir aynı maç; bu yüzden oynanan her maçın seed'i yalnızca maç geçmişinde (`league.json`) saklanır, sıradaki maçın seed'i hiçbir yere yazılmaz.
 - Videodaki tüm yazılar İngilizce (global kitle), kontrol paneli Türkçe.
 
 ---
@@ -22,7 +22,7 @@ Instagram Reels, TikTok ve YouTube Shorts için **"satisfying" futbol simülasyo
 
 ### Video formatı
 
-Chrome destekliyorsa kayıt doğrudan **MP4**, değilse **WebM** (VP9 + Opus, 12 Mbps) olarak iner. Dosya adı örneği: `arena_week3_match2_seed48213.webm`.
+Chrome destekliyorsa kayıt doğrudan **MP4**, değilse **WebM** (VP9 + Opus, 12 Mbps) olarak iner. Dosya adı örneği: `arena_week3_match2.webm`.
 
 WebM dosyasını Instagram'a uygun MP4'e çevirmek için:
 
@@ -62,7 +62,7 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 
 
 ### Temalar
-Otomatik (seed ile) veya elle seçilir: **Classic**, **Snow** (top %10 hızlı), **Rain** (top %15 yavaş), **Night** (karanlık, ışık saçan top ve kaleler). Eski **Bumpers** teması (sahadaki tamponlar) kaldırıldı; kayıtlı ayarda seçiliyse Otomatik'e döner.
+Otomatik (rastgele) veya elle seçilir: **Classic**, **Snow** (top %10 hızlı), **Rain** (top %15 yavaş), **Night** (karanlık, ışık saçan top ve kaleler). Eski **Bumpers** teması (sahadaki tamponlar) kaldırıldı; kayıtlı ayarda seçiliyse Otomatik'e döner.
 
 ---
 
@@ -136,7 +136,7 @@ Aktif lig, Claude Code'da tanımlı zamanlanmış bir görevle her gün İstanbu
 | Bölüm | İçerik |
 |---|---|
 | Maç | Başlat, Kaydet ve Başlat, Duraklat/Devam, Sıfırla, durum ve `● REC` göstergesi |
-| Ayarlar | Mod, takım sayısı (4–10), can (1–5), takım seçimi (otomatik/manuel), seed + rastgele seed, tema, top hızı çarpanı, test maçı, simülasyon hızı (1x/2x/4x, sadece önizleme), ses |
+| Ayarlar | Mod, takım sayısı (4–10), can (1–5), takım seçimi (otomatik/manuel), tema, top hızı çarpanı, test maçı, simülasyon hızı (1x/2x/4x, sadece önizleme), ses |
 | Açıklama metni | Maç sonunda otomatik dolan, kopyalanabilir paylaşım metni |
 | Lig | Hafta bilgisi, haftanın grupları, Yeni hafta, dışa/içe aktar, takımları düzenle, ligi sıfırla, puan ayarları, tam lig tablosu |
 | Denge testi | Mevcut ayarlarla 100 maçı çizimsiz simüle eder (lig tablosunu etkilemez) |
@@ -214,7 +214,7 @@ node tools/balance.js derby
 CFG='{"BALL_SPEED":650,"WALL_ACCEL":0.08}' node tools/balance.js   # ayar denemek için
 ```
 
-Harici kütüphane kullanılmaz (vanilla JavaScript + Canvas 2D + Web Audio). Fizik motoru, sonuçların seed ile tekrarlanabilmesi için uygulamaya özel yazılmıştır: sabit zaman adımı (240 Hz), oyun mantığı ve görsel efektler için ayrı seed'li rastgele sayı üreteçleri. Yazı tipleri (Bebas Neue, Inter) Google Fonts'tan yüklenir; internet yoksa sistem yazı tiplerine düşer.
+Harici kütüphane kullanılmaz (vanilla JavaScript + Canvas 2D + Web Audio). Fizik motoru, bir maçın kayıtlı seed'i ile birebir tekrarlanabilmesi (hata ayıklama, yeniden render) için uygulamaya özel yazılmıştır: sabit zaman adımı (240 Hz), oyun mantığı ve görsel efektler için ayrı seed'li rastgele sayı üreteçleri. Yazı tipleri (Bebas Neue, Inter) Google Fonts'tan yüklenir; internet yoksa sistem yazı tiplerine düşer.
 
 ---
 

@@ -14,7 +14,7 @@ const League = {
     };
   },
   defaultSettings() {
-    return { mode: 'arena', teamCount: CONFIG.DEFAULT_TEAM_COUNT, selMode: 'auto', manual: [], seed: randomSeed(),
+    return { mode: 'arena', teamCount: CONFIG.DEFAULT_TEAM_COUNT, selMode: 'auto', manual: [],
       theme: 'auto', lives: CONFIG.DEFAULT_LIVES, speedMult: CONFIG.DEFAULT_SPEED_MULT, powerups: false,
       simSpeed: 1, volume: 0.8, muted: false, testMatch: false, sv: 2 };
   },
@@ -53,6 +53,7 @@ const League = {
     out.history = Array.isArray(d.history) ? d.history : [];
     out.champions = Array.isArray(d.champions) ? d.champions : [];
     out.settings = Object.assign(this.defaultSettings(), d.settings || {});
+    delete out.settings.seed;                 // the seed is chosen per match and never stored ahead of it
     if (out.settings.mode === 'final') out.settings.mode = 'arena';   // Season Final was removed: the table leader is the champion
     /* settings v2: single life by default — migrate older saved settings once */
     if (!d.settings || d.settings.sv !== 2) { out.settings.lives = CONFIG.DEFAULT_LIVES; out.settings.sv = 2; }
@@ -124,7 +125,11 @@ const League = {
   },
 };
 function validColor(c, def) { return /^#[0-9a-fA-F]{6}$/.test(String(c || '')) ? String(c).toUpperCase() : def; }
-function randomSeed() { return 1 + Math.floor(Math.random() * 99999); }
+/* every match gets its own random 32-bit seed (never shown, never stored ahead of the match; played matches keep theirs in the history) */
+function randomSeed() {
+  try { const a = new Uint32Array(1); crypto.getRandomValues(a); if (a[0]) return a[0]; } catch (e) { /* no crypto: fall back below */ }
+  return 1 + Math.floor(Math.random() * 4294967295);
+}
 function downloadBlob(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name;
@@ -183,7 +188,7 @@ const UI = {
   init() {
     const s = League.data.settings;
     $('mode').value = s.mode; $('teamCount').value = s.teamCount; $('selMode').value = s.selMode;
-    $('seed').value = s.seed; $('theme').value = s.theme; $('lives').value = s.lives;
+    $('theme').value = s.theme; $('lives').value = s.lives;
     $('speedMult').value = s.speedMult; $('simSpeed').value = String(s.simSpeed);
     $('volume').value = s.volume; $('testMatch').checked = s.testMatch;
     $('pointsInput').value = League.data.points.join(','); $('seasonLen').value = League.data.seasonLength;
@@ -193,7 +198,6 @@ const UI = {
       s.mode = $('mode').value;
       s.teamCount = clamp(Math.round(+$('teamCount').value || 6), 4, 10);
       s.selMode = $('selMode').value;
-      s.seed = Math.max(0, Math.floor(+$('seed').value || 0));
       s.theme = $('theme').value;
       s.lives = clamp(Math.round(+$('lives').value || 3), 1, 5);
       s.speedMult = clamp(+$('speedMult').value || 1, 0.7, 1.5);
@@ -202,13 +206,12 @@ const UI = {
       League.save(); this.refresh();
       if (!App.running || App.end) App.prepare();
     };
-    ['mode', 'teamCount', 'selMode', 'seed', 'theme', 'lives', 'speedMult', 'testMatch'].forEach(id => $(id).addEventListener('change', read));
+    ['mode', 'teamCount', 'selMode', 'theme', 'lives', 'speedMult', 'testMatch'].forEach(id => $(id).addEventListener('change', read));
     $('speedMult').addEventListener('input', () => { $('speedVal').textContent = '×' + (+$('speedMult').value).toFixed(2); });
     $('simSpeed').addEventListener('change', () => { s.simSpeed = +$('simSpeed').value || 1; League.save(); });
     $('volume').addEventListener('input', () => { s.volume = +$('volume').value; AudioSys.vol = s.volume; AudioSys.apply(); });
     $('volume').addEventListener('change', () => League.save());
     $('btnMute').addEventListener('click', () => { s.muted = !s.muted; AudioSys.muted = s.muted; AudioSys.apply(); League.save(); this.refresh(); });
-    $('btnRandSeed').addEventListener('click', () => { $('seed').value = randomSeed(); read(); });
     $('btnStart').addEventListener('click', () => App.start(false));
     $('btnRecord').addEventListener('click', () => App.start(true));
     $('btnPause').addEventListener('click', () => App.togglePause());
@@ -264,7 +267,7 @@ const UI = {
   init_values() {
     const s = League.data.settings;
     $('mode').value = s.mode; $('teamCount').value = s.teamCount; $('selMode').value = s.selMode;
-    $('seed').value = s.seed; $('theme').value = s.theme; $('lives').value = s.lives; $('speedMult').value = s.speedMult;
+    $('theme').value = s.theme; $('lives').value = s.lives; $('speedMult').value = s.speedMult;
     $('testMatch').checked = s.testMatch;
     $('pointsInput').value = League.data.points.join(','); $('seasonLen').value = League.data.seasonLength; $('derbyPts').value = League.data.derbyWinPoints;
   },
@@ -430,7 +433,7 @@ const App = {
   },
   buildSetup() {
     const d = League.data, s = d.settings;
-    const seed = (s.seed >>> 0);
+    const seed = randomSeed();                 // a fresh hidden seed for every match setup
     const srng = new RNG((seed ^ 0x5BD1E995) >>> 0);
     let teams, err = null;
     {
@@ -506,7 +509,7 @@ const App = {
     if (record) {
       if (!Recorder.supported()) { alert('Bu tarayıcı MediaRecorder/captureStream desteklemiyor. Güncel Chrome kullanın.'); return; }
       const s = this.setup;
-      Recorder.start(s.mode === 'arena' ? `arena_week${s.week}_match${s.weekMatch}_seed${s.seed}` : `${s.mode}_week${s.week}_seed${s.seed}`);
+      Recorder.start(s.mode === 'arena' ? `arena_week${s.week}_match${s.weekMatch}` : `${s.mode}_week${s.week}`);
     }
     this.running = true;
     lastNow = performance.now();
@@ -569,7 +572,6 @@ const App = {
         d.weekMatch++;
         if (d.weekMatch > s.perWeek) { d.week++; d.weekMatch = 1; setTimeout(() => UI.toast(`📅 Hafta ${d.week} başladı.`), 300); }
       }
-      d.settings.seed = randomSeed(); $('seed').value = d.settings.seed;
       League.save();
       /* last group match of the season: the table leader is the champion, the last teams will be relegated */
       if (s.mode === 'arena' && d.week > d.seasonLength) {
@@ -626,7 +628,7 @@ const Balance = {
     const stepChunk = () => {
       const until = performance.now() + 30;
       while (i < N && performance.now() < until) {
-        const seed = randomSeed() * 7 + i;
+        const seed = randomSeed();
         const r = new RNG((seed ^ 0x51ED27) >>> 0);
         const teams = r.shuffle(teamsAll).slice(0, n).map(t => ({ ...t }));
         let theme = s.theme === 'auto' ? r.pick(THEME_IDS) : s.theme;

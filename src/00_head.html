@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   FOOTBALL ARENA LEAGUE — kullanım:
-  1) Maç başlatma: Sağdaki panelden mod/ayarları seçin, "▶ Başlat" (veya Boşluk tuşu). Aynı seed + ayarlar = birebir aynı maç.
+  1) Maç başlatma: Sağdaki panelden mod/ayarları seçin, "▶ Başlat" (veya Boşluk tuşu). Her maç rastgele bir seed ile kurulur (görünmez; oynanan maçların seed'i maç geçmişinde saklanır).
   2) Kayıt alma: "● Kaydet ve Başlat" maçı sıfırdan 1x hızda oynatır, bitiş ekranından sonra video dosyasını otomatik indirir (sekme açık/görünür kalmalı).
   3) Hafta: Başlıkta "WEEK 3 · GROUP MATCH 2" yazar. Haftanın son grup maçı kaydedilince hafta kendiliğinden ilerler; "📅 Yeni hafta" ile elle de geçilir.
   4) Tabloyu yedekleme: "⬇ Tabloyu dışa aktar" JSON indirir; "⬆ Tabloyu içe aktar" ile geri yüklenir. Veriler localStorage'da (arenaLeague_v1) da tutulur.
@@ -126,12 +126,11 @@
         <label>Can sayısı (1–5)<input type="number" id="lives" min="1" max="5"></label>
       </div>
       <label id="rowSel">Takım seçimi
-        <select id="selMode"><option value="auto">Otomatik (en az oynayanlar, seed'li kura)</option><option value="manual">Manuel</option></select>
+        <select id="selMode"><option value="auto">Otomatik (en az oynayanlar, rastgele kura)</option><option value="manual">Manuel</option></select>
       </label>
       <div id="manualList" class="checklist hidden"></div>
-      <label>Seed<div class="row"><input type="number" id="seed" min="0"><button id="btnRandSeed">🎲 Rastgele seed</button></div></label>
       <label>Tema
-        <select id="theme"><option value="auto">Otomatik (seed ile)</option><option value="classic">⚽ Classic</option><option value="snow">❄️ Snow</option><option value="rain">🌧️ Rain</option><option value="night">🌙 Night</option></select>
+        <select id="theme"><option value="auto">Otomatik (rastgele)</option><option value="classic">⚽ Classic</option><option value="snow">❄️ Snow</option><option value="rain">🌧️ Rain</option><option value="night">🌙 Night</option></select>
       </label>
       <label>Top hızı çarpanı <b id="speedVal" style="color:var(--text)"></b><input type="range" id="speedMult" min="0.7" max="1.5" step="0.05"></label>
       <label class="chk"><input type="checkbox" id="testMatch"> Test maçı (sonuç tabloya yazılmaz)</label>
@@ -176,9 +175,9 @@
       <details>
         <summary>❓ Yardım</summary>
         <ul>
-          <li><b>Başlat</b> (veya Boşluk): seçili seed ve ayarlarla maçı oynatır. Aynı seed + takımlar + ayarlar = birebir aynı maç.</li>
+          <li><b>Başlat</b> (veya Boşluk): seçili ayarlarla yeni bir rastgele maç oynatır.</li>
           <li><b>Kaydet ve Başlat</b>: maçı sıfırdan 1x gerçek zamanlı oynatır; bitiş ekranından sonra video otomatik iner. Kayıt sırasında sekmeyi arka plana atmayın (tarayıcı çizimi yavaşlatır).</li>
-          <li>Kayıtlı (test olmayan) her arena maçından sonra grup maçı numarası artar ve yeni rastgele seed atanır. Haftada her takım bir kez oynar; haftanın son grup maçından sonra hafta kendiliğinden ilerler (<b>Yeni hafta</b> ile elle de geçilebilir).</li>
+          <li>Kayıtlı (test olmayan) her arena maçından sonra grup maçı numarası artar ve maç geçmişine o maçın (görünmeyen) seed'i kaydedilir. Haftada her takım bir kez oynar; haftanın son grup maçından sonra hafta kendiliğinden ilerler (<b>Yeni hafta</b> ile elle de geçilebilir).</li>
           <li>Sezonun son haftası oynanınca final maçı yoktur: tabloda <b>1. olan şampiyon</b> olur. Panelde <b>Yeni sezonu başlat</b> ile sezon arşivlenir; tablonun son 3 takımı ligden çıkar, yedek kuyruğundaki 3 kulüp onların yerine gelir (çıkanlar kuyruğun sonuna geçer).</li>
         </ul>
         <p>WebM dosyasını Instagram'a uygun MP4'e çevirmek için:</p>

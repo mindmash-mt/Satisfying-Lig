@@ -77,11 +77,11 @@ function standingsMd(d) {
   L.push('', 'O: oynanan · P: puan · 1.: birincilik · AG: atılan gol · YG: yenilen gol · AV: averaj', '');
   const last = d.history.slice(-9).reverse();
   if (last.length) {
-    L.push('## Son maçlar', '', '| Maç | Hafta · grup | Sıralama (gol) | Tema | Süre | Seed | Tarih |', '|---:|---|---|---|---:|---:|---|');
+    L.push('## Son maçlar', '', '| Maç | Hafta · grup | Sıralama (gol) | Tema | Süre | Tarih |', '|---:|---|---|---|---:|---|');
     for (const h of last) {
       const order = h.result.slice().sort((a, b) => a.place - b.place).map(r => `${r.place}. ${code(r.id)} (${r.gf})`).join(' · ');
       const when = h.mode === 'derby' ? `H${h.week} · derby` : `H${h.week} · ${h.weekMatch}`;
-      L.push(`| ${h.matchNo} | ${when} | ${order} | ${h.theme} | ${Math.round(h.duration)} sn | ${h.seed} | ${istanbul(new Date(h.date)).date} |`);
+      L.push(`| ${h.matchNo} | ${when} | ${order} | ${h.theme} | ${Math.round(h.duration)} sn | ${istanbul(new Date(h.date)).date} |`);
     }
     L.push('');
   }
@@ -138,7 +138,7 @@ function standingsMd(d) {
     writeLeague(d);
     const size = fs.statSync(mp4).size;
     log(`✅ ${r.title} · kazanan ${r.winner} · ${r.seconds.toFixed(1)} sn video · ${(size / 1048576).toFixed(1)} MB · ${((Date.now() - t0) / 1000).toFixed(0)} sn'de üretildi`);
-    videos.push({ file: path.relative(ROOT, mp4), title: r.title, winner: r.winner, subtitle: r.subtitle, seconds: +r.seconds.toFixed(1), seed: r.seed, theme: r.theme, standings: r.standings, caption: r.caption });
+    videos.push({ file: path.relative(ROOT, mp4), title: r.title, winner: r.winner, subtitle: r.subtitle, seconds: +r.seconds.toFixed(1), theme: r.theme, standings: r.standings, caption: r.caption });
     return d;
   };
 
