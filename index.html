@@ -229,7 +229,7 @@ const CONFIG = {
   DERBY_W: 720, DERBY_H: 880, DERBY_TIME: 30,
   PU_R: 26, PU_LIFE: 8, PU_MIN: 6, PU_MAX: 10, PU_MAX_COUNT: 2, PU_WALL_MARGIN: 80,
   DEFAULT_LIVES: 1, DEFAULT_TEAM_COUNT: 6, DEFAULT_SPEED_MULT: 1.0,
-  POINTS: [10, 7, 5, 4, 3, 2, 1, 0, 0, 0], DERBY_WIN_POINTS: 5, SEASON_LENGTH: 30,
+  POINTS: [4, 3, 2, 1, 0, 0, 0, 0, 0, 0], DERBY_WIN_POINTS: 5, SEASON_LENGTH: 30,
   STORAGE_KEY: 'arenaLeague_v1',
   END_DURATION: 8.6,   // winner card → match standings → league table (held until the video ends)
   HARD_TIME_LIMIT: 300,
@@ -1366,10 +1366,10 @@ const FX = {
       }
       case 'eliminate': {
         const T = this.team(d.team);
-        /* the only on-screen text during play (above the pitch): the goal that did it ("ARSENAL GOAL"), and under it,
-           behind a green arrow, who went out, in which place and how many points */
+        /* the only on-screen text during play (above the pitch): the goal that did it ("+ ARSENAL GOAL", green plus),
+           and under it who went out, in which place and how many points */
         const pts = App.pointsForPlace(d.place), S = !d.own && d.scorer >= 0 ? this.team(d.scorer) : null;
-        const goal = S ? { text: `${upTR(S.name)} GOAL`, c1: S.c1, c2: S.c2 } : { text: d.own ? 'OWN GOAL' : 'GOAL', c1: T.c1, c2: T.c2 };
+        const goal = S ? { text: `${upTR(S.name)} GOAL`, c1: S.c1, c2: S.c2, plus: true } : { text: d.own ? 'OWN GOAL' : 'GOAL', c1: T.c1, c2: T.c2 };
         this.announce({ kind: 'elim', text: `❌ ${upTR(T.name)} · ${ordinal(d.place)}${pts === null ? '' : ` · +${pts} PTS`}`, color: T.c1, goal, dur: 2.2 });
         this.shake(0.3, 10); AudioSys.eliminate(); break;
       }
@@ -2184,14 +2184,18 @@ const HUD = {
     ctx.restore();
   },
 
-  /* green downward arrow (goal → eliminated team), centred on (x, y), s = height */
-  greenArrow(ctx, x, y, s) {
-    const hw = s * 0.5, sw = s * 0.2, hh = s * 0.45;
+  /* green plus next to the scoring team's name, centred on (x, y), s = size */
+  greenPlus(ctx, x, y, s) {
+    const t = s * 0.3;
     ctx.save(); ctx.translate(x, y);
+    const h = s / 2, u = t / 2;
     ctx.beginPath();
-    ctx.moveTo(-sw, -s / 2); ctx.lineTo(sw, -s / 2); ctx.lineTo(sw, s / 2 - hh); ctx.lineTo(hw, s / 2 - hh);
-    ctx.lineTo(0, s / 2); ctx.lineTo(-hw, s / 2 - hh); ctx.lineTo(-sw, s / 2 - hh); ctx.closePath();
-    ctx.shadowColor = 'rgba(34,197,94,0.7)'; ctx.shadowBlur = 12;
+    ctx.moveTo(-u, -h); ctx.lineTo(u, -h); ctx.lineTo(u, -u); ctx.lineTo(h, -u); ctx.lineTo(h, u); ctx.lineTo(u, u);
+    ctx.lineTo(u, h); ctx.lineTo(-u, h); ctx.lineTo(-u, u); ctx.lineTo(-h, u); ctx.lineTo(-h, -u); ctx.lineTo(-u, -u); ctx.closePath();
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10;
+    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.stroke();
+    ctx.shadowColor = 'rgba(34,197,94,0.8)'; ctx.shadowBlur = 14;
     ctx.fillStyle = '#22C55E'; ctx.fill();
     ctx.restore();
   },
@@ -2216,23 +2220,25 @@ const HUD = {
       ctx.shadowBlur = 0;
       outlinedText(ctx, a.text, 0, 4, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
     } else if (a.kind === 'elim' && a.goal) {
-      /* line 1: "ARSENAL GOAL" in the scoring team's colours; line 2: green arrow + the eliminated-team pill */
+      /* line 1: green plus + "ARSENAL GOAL" in the scoring team's colours; line 2: the eliminated-team pill */
       const G = a.goal;
       let gs = 64; ctx.font = `${gs}px ${FONT_BIG}`;
-      while (ctx.measureText(G.text).width > 820 && gs > 36) { gs -= 2; ctx.font = `${gs}px ${FONT_BIG}`; }
+      while (ctx.measureText(G.text).width > 760 && gs > 36) { gs -= 2; ctx.font = `${gs}px ${FONT_BIG}`; }
+      const gw = ctx.measureText(G.text).width, ps = G.plus ? gs * 0.58 : 0, gap = G.plus ? 16 : 0;
+      const gx = (ps + gap) / 2, gy = -74;           // text shifted right so plus + text stay centred
+      if (G.plus) this.greenPlus(ctx, gx - gw / 2 - gap - ps / 2, gy - 2, ps);
       const edge = luminance(G.c1) > 0.8 ? G.c2 : G.c1;
       ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 16;
-      outlinedText(ctx, G.text, 0, -74, `${gs}px ${FONT_BIG}`, '#ffffff', edge, 12);
+      outlinedText(ctx, G.text, gx, gy, `${gs}px ${FONT_BIG}`, '#ffffff', edge, 12);
       ctx.shadowBlur = 0;
-      outlinedText(ctx, G.text, 0, -74, `${gs}px ${FONT_BIG}`, '#ffffff', null, 0);
+      outlinedText(ctx, G.text, gx, gy, `${gs}px ${FONT_BIG}`, '#ffffff', null, 0);
       let fs = 56; ctx.font = `${fs}px ${FONT_BIG}`;
-      while (ctx.measureText(a.text).width > 700 && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
-      const tw = ctx.measureText(a.text).width, aw = fs * 0.62, w = tw + aw + 86, h = fs + 22, cy = -2;
+      while (ctx.measureText(a.text).width > 760 && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
+      const w = ctx.measureText(a.text).width + 70, h = fs + 22, cy = -2;
       roundRect(ctx, -w / 2, cy - h / 2, w, h, h / 2);
       ctx.fillStyle = 'rgba(10,10,20,0.85)'; ctx.fill();
       ctx.lineWidth = 5; ctx.strokeStyle = a.color; ctx.stroke();
-      this.greenArrow(ctx, -w / 2 + 34 + aw / 2, cy, aw);
-      outlinedText(ctx, a.text, -w / 2 + 34 + aw + 18 + tw / 2, cy + 3, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
+      outlinedText(ctx, a.text, 0, cy + 3, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
     } else {
       const elim = a.kind === 'elim';
       let fs = elim ? 76 : 56; ctx.font = `${fs}px ${FONT_BIG}`;
@@ -2444,6 +2450,8 @@ const League = {
     out.seasonLength = Math.max(1, +d.seasonLength || CONFIG.SEASON_LENGTH);
     out.points = Array.isArray(d.points) && d.points.length ? d.points.map(x => +x || 0) : CONFIG.POINTS.slice();
     while (out.points.length < 10) out.points.push(0);
+    /* the old default scoring (10-7-5-4-3-2-1) becomes the new default (4-3-2-1); custom scoring is kept */
+    if (out.points.join(',') === '10,7,5,4,3,2,1,0,0,0') out.points = CONFIG.POINTS.slice();
     out.teamsVersion = 3;
     out.history = Array.isArray(d.history) ? d.history : [];
     out.champions = Array.isArray(d.champions) ? d.champions : [];

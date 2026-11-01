@@ -611,14 +611,18 @@ const HUD = {
     ctx.restore();
   },
 
-  /* green downward arrow (goal → eliminated team), centred on (x, y), s = height */
-  greenArrow(ctx, x, y, s) {
-    const hw = s * 0.5, sw = s * 0.2, hh = s * 0.45;
+  /* green plus next to the scoring team's name, centred on (x, y), s = size */
+  greenPlus(ctx, x, y, s) {
+    const t = s * 0.3;
     ctx.save(); ctx.translate(x, y);
+    const h = s / 2, u = t / 2;
     ctx.beginPath();
-    ctx.moveTo(-sw, -s / 2); ctx.lineTo(sw, -s / 2); ctx.lineTo(sw, s / 2 - hh); ctx.lineTo(hw, s / 2 - hh);
-    ctx.lineTo(0, s / 2); ctx.lineTo(-hw, s / 2 - hh); ctx.lineTo(-sw, s / 2 - hh); ctx.closePath();
-    ctx.shadowColor = 'rgba(34,197,94,0.7)'; ctx.shadowBlur = 12;
+    ctx.moveTo(-u, -h); ctx.lineTo(u, -h); ctx.lineTo(u, -u); ctx.lineTo(h, -u); ctx.lineTo(h, u); ctx.lineTo(u, u);
+    ctx.lineTo(u, h); ctx.lineTo(-u, h); ctx.lineTo(-u, u); ctx.lineTo(-h, u); ctx.lineTo(-h, -u); ctx.lineTo(-u, -u); ctx.closePath();
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10;
+    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.stroke();
+    ctx.shadowColor = 'rgba(34,197,94,0.8)'; ctx.shadowBlur = 14;
     ctx.fillStyle = '#22C55E'; ctx.fill();
     ctx.restore();
   },
@@ -643,23 +647,25 @@ const HUD = {
       ctx.shadowBlur = 0;
       outlinedText(ctx, a.text, 0, 4, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
     } else if (a.kind === 'elim' && a.goal) {
-      /* line 1: "ARSENAL GOAL" in the scoring team's colours; line 2: green arrow + the eliminated-team pill */
+      /* line 1: green plus + "ARSENAL GOAL" in the scoring team's colours; line 2: the eliminated-team pill */
       const G = a.goal;
       let gs = 64; ctx.font = `${gs}px ${FONT_BIG}`;
-      while (ctx.measureText(G.text).width > 820 && gs > 36) { gs -= 2; ctx.font = `${gs}px ${FONT_BIG}`; }
+      while (ctx.measureText(G.text).width > 760 && gs > 36) { gs -= 2; ctx.font = `${gs}px ${FONT_BIG}`; }
+      const gw = ctx.measureText(G.text).width, ps = G.plus ? gs * 0.58 : 0, gap = G.plus ? 16 : 0;
+      const gx = (ps + gap) / 2, gy = -74;           // text shifted right so plus + text stay centred
+      if (G.plus) this.greenPlus(ctx, gx - gw / 2 - gap - ps / 2, gy - 2, ps);
       const edge = luminance(G.c1) > 0.8 ? G.c2 : G.c1;
       ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 16;
-      outlinedText(ctx, G.text, 0, -74, `${gs}px ${FONT_BIG}`, '#ffffff', edge, 12);
+      outlinedText(ctx, G.text, gx, gy, `${gs}px ${FONT_BIG}`, '#ffffff', edge, 12);
       ctx.shadowBlur = 0;
-      outlinedText(ctx, G.text, 0, -74, `${gs}px ${FONT_BIG}`, '#ffffff', null, 0);
+      outlinedText(ctx, G.text, gx, gy, `${gs}px ${FONT_BIG}`, '#ffffff', null, 0);
       let fs = 56; ctx.font = `${fs}px ${FONT_BIG}`;
-      while (ctx.measureText(a.text).width > 700 && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
-      const tw = ctx.measureText(a.text).width, aw = fs * 0.62, w = tw + aw + 86, h = fs + 22, cy = -2;
+      while (ctx.measureText(a.text).width > 760 && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
+      const w = ctx.measureText(a.text).width + 70, h = fs + 22, cy = -2;
       roundRect(ctx, -w / 2, cy - h / 2, w, h, h / 2);
       ctx.fillStyle = 'rgba(10,10,20,0.85)'; ctx.fill();
       ctx.lineWidth = 5; ctx.strokeStyle = a.color; ctx.stroke();
-      this.greenArrow(ctx, -w / 2 + 34 + aw / 2, cy, aw);
-      outlinedText(ctx, a.text, -w / 2 + 34 + aw + 18 + tw / 2, cy + 3, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
+      outlinedText(ctx, a.text, 0, cy + 3, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
     } else {
       const elim = a.kind === 'elim';
       let fs = elim ? 76 : 56; ctx.font = `${fs}px ${FONT_BIG}`;

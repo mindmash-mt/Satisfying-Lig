@@ -45,7 +45,7 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 - **Gol** yiyen takım elenir:
   - Kalesi takım renginde parlayan bir duvarla **kapanır** (kapanan kale duvar gibi davranır).
   - Kalesinin arkasında **adı yazmaya devam eder**, önünde **sırası ve aldığı puan** belirir (ör. `6TH · +2 PTS`).
-  - Ekranın üstünde iki satır belirir: önce golü atan takım (`ARSENAL GOAL`, kendi kalesine atılan golde `OWN GOAL`), altında yeşil bir okla elenen takım, sırası ve aldığı puan (`❌ CHELSEA · 6TH · +2 PTS`).
+  - Ekranın üstünde iki satır belirir: önce yeşil bir artıyla golü atan takım (`+ ARSENAL GOAL`; kendi kalesine atılan golde artısız `OWN GOAL`), altında elenen takım, sırası ve aldığı puan (`❌ CHELSEA · 6TH · +2 PTS`).
   - Arena küçülmez; kaleler maç boyunca hiç genişlemez.
 - **Final düellosu:** İki takım kalınca arena dar ve uzun, dikey bir futbol sahasına dönüşür (kaleler arenadakinden biraz kısa) ve skor 0–0'dan başlar. **İlk 2 golü atan kazanır** (`FINAL_GOALS`).
   - Final düellosunda **her takımın 2 oyuncusu** vardır: arenadaki oyuncu **kaptan** olur (sarı **C** rozeti), yanından bir takım arkadaşı kayarak kendi yarı sahasına geçer.
@@ -82,9 +82,9 @@ Ad, 3 harfli kod ve renkler panelden **✏️ Takımları düzenle** ile değiş
 ### Puanlama
 | Sıra | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Puan | 10 | 7 | 5 | 4 | 3 | 2 | 1 | 0 | 0 | 0 |
+| Puan | 4 | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 
-Puanlar panelden değiştirilebilir. Tablo sıralaması: **Puan → Averaj → Atılan gol → Birincilik**. Tablo sütunları: O, P, 1st, AG, YG, AV.
+İlk 4 puan alır, gerisi 0 puan alır (6 takımlı maçta 5. ve 6. sıra `+0 PTS`). Puanlar panelden değiştirilebilir; eski varsayılan 10-7-5-4-3-2-1 ile kaydedilmiş bir lig açılışta yeni varsayılana geçer. Tablo sıralaması: **Puan → Averaj → Atılan gol → Birincilik**. Tablo sütunları: O, P, 1st, AG, YG, AV.
 
 ### Kalıcılık ve yedekleme
 - Lig verisi tarayıcının `localStorage`'ında `arenaLeague_v1` anahtarıyla saklanır. Depolama kullanılamazsa uygulama bellekte çalışır ve panelde uyarı gösterir.
