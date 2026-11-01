@@ -533,7 +533,7 @@ function drawHeart(ctx, x, y, s, fill, stroke) {
 }
 
 /* =====================================================================
-   HUD  (title, derby / final-duel scoreboard, big texts, seed)
+   HUD  (title, derby / final-duel scoreboard, big texts)
    ===================================================================== */
 const HUD = {
   draw(ctx, g, app, vis) {
@@ -566,9 +566,6 @@ const HUD = {
       if (this.duelA > 0.02) { ctx.save(); ctx.globalAlpha = this.duelA; this.duelScore(ctx, g, SX); ctx.restore(); }
       this.announcement(ctx, 394);
     }
-    ctx.save(); ctx.globalAlpha = 0.42;
-    outlinedText(ctx, `seed ${g.o.seed >>> 0}`, SX, g.isDerby ? 1572 : 1532, `500 22px ${FONT_UI}`, '#ffffff', null, 0);
-    ctx.restore();
   },
 
   scoreboard(ctx, g, SX) {
@@ -638,7 +635,7 @@ const HUD = {
     } else {
       const elim = a.kind === 'elim';
       let fs = elim ? 76 : 56; ctx.font = `${fs}px ${FONT_BIG}`;
-      while (ctx.measureText(a.text).width > (elim ? 860 : 820) && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
+      while (ctx.measureText(a.text).width > (elim ? 800 : 820) && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
       const w = ctx.measureText(a.text).width + 70, h = fs + 26;
       roundRect(ctx, -w / 2, -h / 2, w, h, h / 2);
       ctx.fillStyle = 'rgba(10,10,20,0.85)'; ctx.fill();

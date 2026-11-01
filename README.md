@@ -108,11 +108,11 @@ Varsayılan ayarlarla (6 takım, 1 can) 100 maçlık testlerde:
 
 | Mod | Ortalama süre |
 |---|---|
-| Arena, 6 takım | ~43 sn |
-| Arena, 4 takım | ~31 sn |
-| Arena, 8 takım | ~59 sn |
+| Arena, 6 takım | ~46 sn |
+| Arena, 4 takım | ~34 sn |
+| Arena, 8 takım | ~62 sn |
 | Derby | ~31 sn |
-| Season Final (4 takım) | ~29 sn |
+| Season Final (4 takım) | ~35 sn |
 
 Önemli ayarlar `src/01_core.js` dosyasının başındaki `CONFIG` nesnesinde:
 
@@ -127,6 +127,7 @@ Varsayılan ayarlarla (6 takım, 1 can) 100 maçlık testlerde:
 | `ELIM_GOAL_GROW` | 0.25 | Her elemede açık kalelerin büyümesi |
 | `FINAL_GOAL_FRAC` | 0.75 | Final düellosu kale ağzı |
 | `FINAL_GOALS` | 2 | Final düellosunu kazanmak için gereken gol |
+| `FINAL_W` / `FINAL_H` | 860 / 930 | Final düellosu sahasının boyutu |
 | `KEEPER_GAIN` / `KEEPER_READ` | 3 / 0.3 | Kalecinin tepki hızı / topun yolunu okuma oranı |
 | `OT_AT` | 45 | Son elemeden kaç sn sonra uzatma başlar |
 | `DEFAULT_LIVES` | 1 | Takım başına can |

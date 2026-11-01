@@ -17,7 +17,7 @@ const CONFIG = {
   OT_AT: 45, OT_RAMP: 10, OT_MULT: 1.6,
   ELIM_SLOW_GAME: 0.18, ELIM_FREEZE: 1.0, WIN_SLOW_GAME: 0.24, TS_SLOW: 0.3,
   FINAL_SLOWMO_GAME: 0.375, FINAL_SLOWMO_TS: 0.25, FINAL_SLOWMO_DIST: 120,
-  FINAL_W: 700, FINAL_H: 860, FINAL_GOALS: 2,   // final duel: first to FINAL_GOALS goals wins
+  FINAL_W: 860, FINAL_H: 930, FINAL_GOALS: 2,   // final duel: first to FINAL_GOALS goals wins
   DERBY_W: 720, DERBY_H: 880, DERBY_TIME: 30,
   PU_R: 26, PU_LIFE: 8, PU_MIN: 6, PU_MAX: 10, PU_MAX_COUNT: 2, PU_WALL_MARGIN: 80,
   BUMPER_R: 30,
@@ -50,8 +50,9 @@ const DEFAULT_TEAMS = [
   { name: 'Beşiktaş',           code: 'BJK', c1: '#111111', c2: '#FFFFFF' },
   { name: 'Galatasaray',        code: 'GAL', c1: '#A90432', c2: '#FDB912' },
 ];
-/* Turkish-aware uppercase (i → İ) for names and 3-letter codes */
-const upTR = (s) => String(s).toLocaleUpperCase('tr-TR');
+/* uppercase for names and 3-letter codes: Turkish rules (i → İ) only for Turkish-looking names, so
+   "Beşiktaş" → "BEŞİKTAŞ" but "Manchester United" → "MANCHESTER UNITED" */
+const upTR = (s) => { s = String(s); return /[çğışöüÇĞİŞÖÜ]/.test(s) ? s.toLocaleUpperCase('tr-TR') : s.toUpperCase(); };
 const CODE_STRIP = /[^A-Z0-9ÇĞİÖŞÜ]/g;
 
 /* Power-up definitions (logic lives in Game.applyPowerup) */
