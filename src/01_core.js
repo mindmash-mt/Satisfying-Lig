@@ -28,8 +28,8 @@ const CONFIG = {
   DEFAULT_LIVES: 1, DEFAULT_TEAM_COUNT: 6, DEFAULT_SPEED_MULT: 1.0,
   POINTS: [4, 3, 2, 1, 0, 0, 0, 0, 0, 0], DERBY_WIN_POINTS: 5, SEASON_LENGTH: 30,
   STORAGE_KEY: 'arenaLeague_v1',
-  /* before the match: full league table → today's results / fixtures → match. After it: one animated league table (held until the video ends) */
-  INTRO_TABLE: 3.0, INTRO_MATCHES: 3.4, INTRO_DURATION: 6.4,
+  /* before the match: today's group matches (results / fixtures) → match. After it: one animated league table (held until the video ends) */
+  INTRO_DURATION: 3.4,
   END_DURATION: 7.0, END_CARD: 2.1,   // END_CARD: champion card, only after the Season Final
   HARD_TIME_LIMIT: 300,
 };

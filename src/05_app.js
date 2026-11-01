@@ -431,12 +431,9 @@ const App = {
     return { err, title, mode: s.mode, week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(), matchNo: d.matchNo, seed, theme, test: s.testMatch,
       opts: { mode: s.mode, teams: (teams || []).map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false } };
   },
-  /* what the video shows before the match: the full table, then today's matches (played ones with their results, the rest as fixtures) */
+  /* what the video shows before the match: today's matches (played ones with their results, the rest as fixtures) */
   buildIntro() {
     const s = this.setup, d = League.data;
-    const cur = new Set(s.opts.teams.map(t => t.id));
-    const rows = League.ranking().map((x, i) => ({ id: x.t.id, name: x.t.name, c1: x.t.c1, c2: x.t.c2, today: cur.has(x.t.id),
-      oldRank: i, newRank: i, oldPts: x.r.pts, newPts: x.r.pts, played: x.r.played, dPlayed: 0, oldGd: x.r.gf - x.r.ga, newGd: x.r.gf - x.r.ga, place: null, delta: null }));
     const tm = (id) => d.teams.find(t => t.id === id);
     const tObj = (t, extra) => Object.assign({ id: t.id, name: t.name, c1: t.c1, c2: t.c2 }, extra || {});
     const matches = [];
@@ -452,7 +449,7 @@ const App = {
         else matches.push({ label, status: 'later', teams: (plan.groups[j - 1] || []).map(tm).filter(Boolean).map(t => tObj(t)) });
       }
     } else matches.push({ label: s.mode === 'final' ? 'SEASON FINAL' : 'DERBY', status: 'now', teams: s.opts.teams.map(t => tObj(t)) });
-    return { title: s.title, sub: s.mode === 'arena' ? `WEEK ${s.week}` : s.title, rows, matches };
+    return { title: s.title, sub: s.mode === 'arena' ? `WEEK ${s.week}` : s.title, matches };
   },
   prepare() {
     if (Recorder.active) return false;
