@@ -82,9 +82,9 @@ Ad, 3 harfli kod ve renkler panelden **✏️ Takımları düzenle** ile değiş
 ### Puanlama
 | Sıra | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Puan | 10 | 7 | 5 | 4 | 3 | 2 | 1 | 0 | 0 | 0 |
+| Puan | 4 | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 
-Puanlar panelden değiştirilebilir. Tablo sıralaması: **Puan → Averaj → Atılan gol → Birincilik**. Tablo sütunları: O, P, 1st, AG, YG, AV.
+İlk 4 puan alır, gerisi 0 puan alır (6 takımlı maçta 5. ve 6. sıra `+0 PTS`). Puanlar panelden değiştirilebilir; eski varsayılan 10-7-5-4-3-2-1 ile kaydedilmiş bir lig açılışta yeni varsayılana geçer. Tablo sıralaması: **Puan → Averaj → Atılan gol → Birincilik**. Tablo sütunları: O, P, 1st, AG, YG, AV.
 
 ### Kalıcılık ve yedekleme
 - Lig verisi tarayıcının `localStorage`'ında `arenaLeague_v1` anahtarıyla saklanır. Depolama kullanılamazsa uygulama bellekte çalışır ve panelde uyarı gösterir.

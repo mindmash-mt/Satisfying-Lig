@@ -39,6 +39,8 @@ const League = {
     out.seasonLength = Math.max(1, +d.seasonLength || CONFIG.SEASON_LENGTH);
     out.points = Array.isArray(d.points) && d.points.length ? d.points.map(x => +x || 0) : CONFIG.POINTS.slice();
     while (out.points.length < 10) out.points.push(0);
+    /* the old default scoring (10-7-5-4-3-2-1) becomes the new default (4-3-2-1); custom scoring is kept */
+    if (out.points.join(',') === '10,7,5,4,3,2,1,0,0,0') out.points = CONFIG.POINTS.slice();
     out.teamsVersion = 3;
     out.history = Array.isArray(d.history) ? d.history : [];
     out.champions = Array.isArray(d.champions) ? d.champions : [];
