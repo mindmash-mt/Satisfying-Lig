@@ -45,7 +45,7 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 - **Gol** yiyen takım elenir:
   - Kalesi takım renginde parlayan bir duvarla **kapanır** (kapanan kale duvar gibi davranır).
   - Kalesinin arkasında **adı yazmaya devam eder**, önünde **sırası ve aldığı puan** belirir (ör. `6TH · +2 PTS`).
-  - Ekranın üstünde büyük harflerle `❌ CHELSEA · 6TH · +2 PTS` yazar (takım, sıra ve aldığı puan).
+  - Ekranın üstünde iki satır belirir: önce golü atan takım (`ARSENAL GOAL`, kendi kalesine atılan golde `OWN GOAL`), altında yeşil bir okla elenen takım, sırası ve aldığı puan (`❌ CHELSEA · 6TH · +2 PTS`).
   - Arena küçülmez; kaleler maç boyunca hiç genişlemez.
 - **Final düellosu:** İki takım kalınca arena dar ve uzun, dikey bir futbol sahasına dönüşür (kaleler arenadakinden biraz kısa) ve skor 0–0'dan başlar. **İlk 2 golü atan kazanır** (`FINAL_GOALS`).
   - Final düellosunda **her takımın 2 oyuncusu** vardır: arenadaki oyuncu **kaptan** olur (sarı **C** rozeti), yanından bir takım arkadaşı kayarak kendi yarı sahasına geçer.
@@ -91,34 +91,31 @@ Puanlar panelden değiştirilebilir. Tablo sıralaması: **Puan → Averaj → A
 - **⬇ Tabloyu dışa aktar** / **⬆ Tabloyu içe aktar**: takımlar, tablo, hafta, maç geçmişi (seed, mod, tema, takımlar, sonuç) tek bir JSON dosyasında.
 - **Test maçı** kutusu işaretliyse sonuç tabloya yazılmaz.
 - Sezon uzunluğu varsayılan 30 haftadır; sezon bitince panel **Season Final** modunu önerir.
-- Tarayıcıdaki lig, repodaki aktif ve test liglerinden ayrıdır. Repodaki bir ligi tarayıcıda görmek için `data/<lig>/league.json` dosyasını **⬆ Tabloyu içe aktar** ile yükleyin (bkz. [Otomatik günlük maç günü](#otomatik-günlük-maç-günü)).
+- Tarayıcıdaki lig, repodaki aktif ligden ayrıdır; tarayıcıda yapılan denemeler aktif lige yansımaz. Aktif ligi tarayıcıda görmek için `data/active/league.json` dosyasını **⬆ Tabloyu içe aktar** ile yükleyin (bkz. [Otomatik günlük maç günü](#otomatik-günlük-maç-günü)).
 
 ---
 
 ## Otomatik günlük maç günü
 
-Videolar tarayıcıyı açmadan da üretilebilir: `tools/daily.js` uygulamayı ekransız Chrome'da çalıştırır, haftanın kalan grup maçlarını oynatır ve her maç için ayrı bir **MP4** (1080×1920, 60 FPS, H.264 + AAC) üretir. Maç gerçek zamanlı oynatılıp ekrandan kaydedilmez; her kare tek tek çizilip kodlanır, sesler de dosyaya sentezlenir. Bu yüzden video, makinenin hızından bağımsız olarak akıcıdır. 1 dakikalık bir maç yaklaşık 2 dakikada hazırlanır.
+Aktif ligin videoları tarayıcıyı açmadan üretilir: `tools/daily.js` uygulamayı ekransız Chrome'da çalıştırır, haftanın kalan grup maçlarını oynatır ve her maç için ayrı bir **MP4** (1080×1920, 60 FPS, H.264 + AAC) üretir. Maç gerçek zamanlı oynatılıp ekrandan kaydedilmez; her kare tek tek çizilip kodlanır, sesler de dosyaya sentezlenir. Bu yüzden video, makinenin hızından bağımsız olarak akıcıdır. 1 dakikalık bir maç yaklaşık 2 dakikada hazırlanır.
 
 ```bash
-node tools/daily.js active            # aktif lig: haftanın kalan maçları (normalde 3 video)
-node tools/daily.js test --max 1      # test ligi: sadece 1 maç
+node tools/daily.js active                  # haftanın kalan maçları (normalde 3 video) — her sabah görev çalıştırır
+node tools/daily.js --dry-run --max 1       # deneme: 1 video üretir, lig verisine dokunmaz
 ```
 
-### İki lig
+### Aktif lig
 
-| Lig | Klasör | Kullanım |
-|---|---|---|
-| **Aktif lig** | `data/active/` | Sosyal medyada paylaşılan lig. Her gün otomatik olarak bir hafta (3 grup maçı) oynanır. Elle çalıştırmayın. |
-| **Test ligi** | `data/test/` | Geliştirme ve deneme için. Silinip sıfırlanabilir. |
+Sosyal medyada paylaşılan lig `data/active/` klasöründedir. Her gün otomatik olarak bir hafta (3 grup maçı) oynanır. `node tools/daily.js active` komutunu elle çalıştırmayın; lig bir hafta ilerler. Denemeler tarayıcıda (lig tablosuna yazılmaz) ya da `--dry-run` ile yapılır.
 
-Her lig klasöründe:
+Klasörde:
 - `league.json`: lig verisi. Biçimi paneldeki **⬇ Tabloyu dışa aktar** dosyasıyla aynıdır; **⬆ Tabloyu içe aktar** ile tarayıcıya yüklenebilir.
 - `STANDINGS.md`: GitHub'da doğrudan okunabilen lig tablosu ve son maçlar.
 - `seasons/season-N.json`: biten sezonların arşivi (son tablo, şampiyon, maç geçmişi).
 
 Sezonun son haftası (varsayılan 30. hafta) oynandığında aynı çalıştırmada **Season Final** videosu da üretilir. Ardından sezon arşivlenir ve yeni sezon 1. haftadan başlar.
 
-Videolar ve açıklama metinleri `out/<lig>/<tarih>/` klasörüne yazılır (repoya eklenmez): `*.mp4`, `captions.txt`, `summary.json`.
+Videolar ve açıklama metinleri `out/active/<tarih>/` klasörüne yazılır (`--dry-run` ile `out/dry-run/<tarih>/`) (repoya eklenmez): `*.mp4`, `captions.txt`, `summary.json`.
 
 ### Zamanlanmış görev
 
@@ -191,7 +188,6 @@ tools/
   daily.js          Günlük maç günü: maçları oynatır, MP4 üretir, lig verisini günceller
 data/
   active/           Aktif lig (league.json, STANDINGS.md, seasons/)
-  test/             Test ligi
 ```
 
 ### Geliştirme
