@@ -91,6 +91,38 @@ Puanlar panelden değiştirilebilir. Tablo sıralaması: **Puan → Averaj → A
 - **⬇ Tabloyu dışa aktar** / **⬆ Tabloyu içe aktar**: takımlar, tablo, hafta, maç geçmişi (seed, mod, tema, takımlar, sonuç) tek bir JSON dosyasında.
 - **Test maçı** kutusu işaretliyse sonuç tabloya yazılmaz.
 - Sezon uzunluğu varsayılan 30 haftadır; sezon bitince panel **Season Final** modunu önerir.
+- Tarayıcıdaki lig, repodaki aktif ve test liglerinden ayrıdır. Repodaki bir ligi tarayıcıda görmek için `data/<lig>/league.json` dosyasını **⬆ Tabloyu içe aktar** ile yükleyin (bkz. [Otomatik günlük maç günü](#otomatik-günlük-maç-günü)).
+
+---
+
+## Otomatik günlük maç günü
+
+Videolar tarayıcıyı açmadan da üretilebilir: `tools/daily.js` uygulamayı ekransız Chrome'da çalıştırır, haftanın kalan grup maçlarını oynatır ve her maç için ayrı bir **MP4** (1080×1920, 60 FPS, H.264 + AAC) üretir. Maç gerçek zamanlı oynatılıp ekrandan kaydedilmez; her kare tek tek çizilip kodlanır, sesler de dosyaya sentezlenir. Bu yüzden video, makinenin hızından bağımsız olarak akıcıdır. 1 dakikalık bir maç yaklaşık 2 dakikada hazırlanır.
+
+```bash
+node tools/daily.js active            # aktif lig: haftanın kalan maçları (normalde 3 video)
+node tools/daily.js test --max 1      # test ligi: sadece 1 maç
+```
+
+### İki lig
+
+| Lig | Klasör | Kullanım |
+|---|---|---|
+| **Aktif lig** | `data/active/` | Sosyal medyada paylaşılan lig. Her gün otomatik olarak bir hafta (3 grup maçı) oynanır. Elle çalıştırmayın. |
+| **Test ligi** | `data/test/` | Geliştirme ve deneme için. Silinip sıfırlanabilir. |
+
+Her lig klasöründe:
+- `league.json`: lig verisi. Biçimi paneldeki **⬇ Tabloyu dışa aktar** dosyasıyla aynıdır; **⬆ Tabloyu içe aktar** ile tarayıcıya yüklenebilir.
+- `STANDINGS.md`: GitHub'da doğrudan okunabilen lig tablosu ve son maçlar.
+- `seasons/season-N.json`: biten sezonların arşivi (son tablo, şampiyon, maç geçmişi).
+
+Sezonun son haftası (varsayılan 30. hafta) oynandığında aynı çalıştırmada **Season Final** videosu da üretilir. Ardından sezon arşivlenir ve yeni sezon 1. haftadan başlar.
+
+Videolar ve açıklama metinleri `out/<lig>/<tarih>/` klasörüne yazılır (repoya eklenmez): `*.mp4`, `captions.txt`, `summary.json`.
+
+### Zamanlanmış görev
+
+Aktif lig, Claude Code'da tanımlı zamanlanmış bir görevle her gün İstanbul saatiyle 04:00'e kadar oynatılır. Görev her sabah yeni bir oturum açar, `main` dalında `node tools/daily.js active` çalıştırır, videoları ve açıklama metinlerini Claude uygulamasına bildirimle gönderir, `data/active/` değişikliklerini `main`'e kaydeder.
 
 ---
 
@@ -153,8 +185,13 @@ src/
   03_fx_audio.js    Temalar, görsel efektler, Web Audio ile sentezlenen sesler
   04_render.js      Canvas çizimi, HUD ve bitiş ekranı
   05_app.js         Lig, kayıt, kontrol paneli, denge testi, ana döngü
+  06_offline.js     Ekransız video üretimi (kare kare çizim, WebCodecs H.264, OfflineAudioContext)
 tools/
   balance.js        Terminalden denge testi (Node.js)
+  daily.js          Günlük maç günü: maçları oynatır, MP4 üretir, lig verisini günceller
+data/
+  active/           Aktif lig (league.json, STANDINGS.md, seasons/)
+  test/             Test ligi
 ```
 
 ### Geliştirme

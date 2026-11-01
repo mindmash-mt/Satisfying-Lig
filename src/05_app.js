@@ -603,6 +603,7 @@ const Balance = {
    ===================================================================== */
 let lastNow = performance.now(), acc = 0;
 function frame(now) {
+  if (Offline.active) { lastNow = now; requestAnimationFrame(frame); return; }   // headless render drives the game itself
   let rdt = (now - lastNow) / 1000; lastNow = now;
   if (rdt > 0.1) rdt = 0.1; if (rdt < 0) rdt = 0;
   const g = App.game;
