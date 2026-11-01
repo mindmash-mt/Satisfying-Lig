@@ -1,7 +1,7 @@
 /* =====================================================================
    ARENA  (geometry builders — pure functions of state, no RNG)
    ===================================================================== */
-function buildGeo(kind, verts, sideTeams, cx, cy, goalInfo, netDepth, goalFrac) {
+function buildGeo(kind, verts, sideTeams, cx, cy, goalInfo, netDepth, goalFrac, baseLen) {
   const N = verts.length;
   const sides = [], walls = [], posts = [], goals = [];
   let inR = Infinity;
@@ -21,7 +21,7 @@ function buildGeo(kind, verts, sideTeams, cx, cy, goalInfo, netDepth, goalFrac) 
     sides.push(side);
     if (team == null || team < 0) { walls.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, nx, ny }); continue; }
     const gi = goalInfo(team);
-    const baseHw = L * goalFrac * 0.5;
+    const baseHw = Math.min((baseLen || L) * goalFrac * 0.5, L * 0.46);
     const hw = Math.min(baseHw * gi.mult, L * 0.46);
     const p1x = mx - tx * hw, p1y = my - ty * hw, p2x = mx + tx * hw, p2y = my + ty * hw;
     walls.push({ ax: a.x, ay: a.y, bx: p1x, by: p1y, nx, ny }, { ax: p2x, ay: p2y, bx: b.x, by: b.y, nx, ny });
@@ -127,9 +127,16 @@ class Game {
     const wallPU = t < T.fx.wall && !T.eliminated;
     return { mult, closed: T.eliminated || wallPU, locked: T.eliminated, wallPU };
   }
+  /* regular polygon stretched vertically (centred on cy) to fill the 9:16 frame; goals share the mean side length */
   polyGeo(va, R, rot, sides) {
-    const verts = va.map(a => ({ x: this.cx + R * Math.cos(a + rot), y: this.cy + R * Math.sin(a + rot) }));
-    return buildGeo('poly', verts, sides, this.cx, this.cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH, CONFIG.GOAL_FRAC);
+    const raw = va.map(a => ({ x: R * Math.cos(a + rot), y: R * Math.sin(a + rot) }));
+    let y0 = Infinity, y1 = -Infinity;
+    for (const v of raw) { if (v.y < y0) y0 = v.y; if (v.y > y1) y1 = v.y; }
+    const sy = Math.max(1, 2 * CONFIG.ARENA_HALF_H / Math.max(1, y1 - y0)), ym = (y0 + y1) / 2;
+    const verts = raw.map(v => ({ x: this.cx + v.x, y: this.cy + (v.y - ym) * sy }));
+    let per = 0, n = 0;
+    for (let i = 0; i < verts.length; i++) { const a = verts[i], b = verts[(i + 1) % verts.length], L = Math.hypot(b.x - a.x, b.y - a.y); if (L >= 0.5) { per += L; n++; } }
+    return buildGeo('poly', verts, sides, this.cx, this.cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH, CONFIG.GOAL_FRAC, n ? per / n : 0);
   }
   rectGeo(W, H, teams) {
     const x0 = this.cx - W / 2, x1 = this.cx + W / 2, y0 = this.cy - H / 2, y1 = this.cy + H / 2;

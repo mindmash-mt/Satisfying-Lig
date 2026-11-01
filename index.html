@@ -205,8 +205,10 @@
    CONFIG
    ===================================================================== */
 const CONFIG = {
-  W: 1080, H: 1920, CX: 510, CY: 915,
+  W: 1080, H: 1920, CX: 510, CY: 975,
   R0: 450,
+  /* arena is a fixed (non-rotating) polygon stretched vertically so its corners sit ARENA_HALF_H above/below centre */
+  ARENA_HALF_H: 465,
   STEP_HZ: 240,
   /* Tuned with the balance test. Single-ball mode: MAX_BALLS 1 (set >1 to bring back the ball schedule). */
   /* ball starts at BALL_SPEED and gets WALL_ACCEL faster on every wall/post bounce, up to BALL_MAX_MULT × */
@@ -214,7 +216,7 @@ const CONFIG = {
   POST_R: 10, GOAL_FRAC: 0.50, ELIM_GOAL_GROW: 0.25, FINAL_GOAL_FRAC: 0.75, DERBY_GOAL_FRAC: 0.50, NET_DEPTH: 50, NET_DEPTH_RECT: 34,
   KEEPER_INSET: 28, KEEPER_LEN_FRAC: 0.30, KEEPER_THICK: 14, KEEPER_SPEED: 320, KEEPER_GAIN: 3, KEEPER_READ: 0.3,
   PLAYER_R: 24, PLAYER_SPEED: 260,
-  ROT_SPEED_DEG: 7, ROT_GROWTH: 1.12,
+  ROT_SPEED_DEG: 0, ROT_GROWTH: 1.12,
   OT_AT: 45, OT_RAMP: 10, OT_MULT: 1.6,
   ELIM_SLOW_GAME: 0.18, ELIM_FREEZE: 1.0, WIN_SLOW_GAME: 0.24, TS_SLOW: 0.3,
   FINAL_SLOWMO_GAME: 0.375, FINAL_SLOWMO_TS: 0.25, FINAL_SLOWMO_DIST: 120,
@@ -397,7 +399,7 @@ function planGroups(ids, sizes, cooc, rng, restarts = 60) {
 /* =====================================================================
    ARENA  (geometry builders — pure functions of state, no RNG)
    ===================================================================== */
-function buildGeo(kind, verts, sideTeams, cx, cy, goalInfo, netDepth, goalFrac) {
+function buildGeo(kind, verts, sideTeams, cx, cy, goalInfo, netDepth, goalFrac, baseLen) {
   const N = verts.length;
   const sides = [], walls = [], posts = [], goals = [];
   let inR = Infinity;
@@ -417,7 +419,7 @@ function buildGeo(kind, verts, sideTeams, cx, cy, goalInfo, netDepth, goalFrac) 
     sides.push(side);
     if (team == null || team < 0) { walls.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, nx, ny }); continue; }
     const gi = goalInfo(team);
-    const baseHw = L * goalFrac * 0.5;
+    const baseHw = Math.min((baseLen || L) * goalFrac * 0.5, L * 0.46);
     const hw = Math.min(baseHw * gi.mult, L * 0.46);
     const p1x = mx - tx * hw, p1y = my - ty * hw, p2x = mx + tx * hw, p2y = my + ty * hw;
     walls.push({ ax: a.x, ay: a.y, bx: p1x, by: p1y, nx, ny }, { ax: p2x, ay: p2y, bx: b.x, by: b.y, nx, ny });
@@ -523,9 +525,16 @@ class Game {
     const wallPU = t < T.fx.wall && !T.eliminated;
     return { mult, closed: T.eliminated || wallPU, locked: T.eliminated, wallPU };
   }
+  /* regular polygon stretched vertically (centred on cy) to fill the 9:16 frame; goals share the mean side length */
   polyGeo(va, R, rot, sides) {
-    const verts = va.map(a => ({ x: this.cx + R * Math.cos(a + rot), y: this.cy + R * Math.sin(a + rot) }));
-    return buildGeo('poly', verts, sides, this.cx, this.cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH, CONFIG.GOAL_FRAC);
+    const raw = va.map(a => ({ x: R * Math.cos(a + rot), y: R * Math.sin(a + rot) }));
+    let y0 = Infinity, y1 = -Infinity;
+    for (const v of raw) { if (v.y < y0) y0 = v.y; if (v.y > y1) y1 = v.y; }
+    const sy = Math.max(1, 2 * CONFIG.ARENA_HALF_H / Math.max(1, y1 - y0)), ym = (y0 + y1) / 2;
+    const verts = raw.map(v => ({ x: this.cx + v.x, y: this.cy + (v.y - ym) * sy }));
+    let per = 0, n = 0;
+    for (let i = 0; i < verts.length; i++) { const a = verts[i], b = verts[(i + 1) % verts.length], L = Math.hypot(b.x - a.x, b.y - a.y); if (L >= 0.5) { per += L; n++; } }
+    return buildGeo('poly', verts, sides, this.cx, this.cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH, CONFIG.GOAL_FRAC, n ? per / n : 0);
   }
   rectGeo(W, H, teams) {
     const x0 = this.cx - W / 2, x1 = this.cx + W / 2, y0 = this.cy - H / 2, y1 = this.cy + H / 2;
@@ -2060,10 +2069,16 @@ const HUD = {
       outlinedText(ctx, 'Who wins? Comment below 👇', SX, 316, `600 30px ${FONT_UI}`, '#ffffff', 'rgba(0,0,0,0.55)', 6);
       ctx.restore();
     }
-    if (g.isDerby) { this.scoreboard(ctx, g, SX); this.announcement(ctx, 1462); }
-    else { this.announcement(ctx, 394); if (g.finalDuel && !g.morph) this.duelScore(ctx, g, SX); }
+    if (g.isDerby) { this.scoreboard(ctx, g, SX); this.announcement(ctx, 1512); }
+    else {
+      /* final duel score shares the lane above the pitch with the elimination text and fades out while one shows */
+      const want = g.finalDuel && !g.morph && !FX.ann ? 1 : 0;
+      this.duelA = (this.duelA || 0) + (want - (this.duelA || 0)) * 0.18;
+      if (this.duelA > 0.02) { ctx.save(); ctx.globalAlpha = this.duelA; this.duelScore(ctx, g, SX); ctx.restore(); }
+      this.announcement(ctx, 394);
+    }
     ctx.save(); ctx.globalAlpha = 0.42;
-    outlinedText(ctx, `seed ${g.o.seed >>> 0}`, SX, g.finalDuel && !g.isDerby ? 1556 : 1532, `500 22px ${FONT_UI}`, '#ffffff', null, 0);
+    outlinedText(ctx, `seed ${g.o.seed >>> 0}`, SX, g.isDerby ? 1572 : 1532, `500 22px ${FONT_UI}`, '#ffffff', null, 0);
     ctx.restore();
   },
 
@@ -2090,12 +2105,12 @@ const HUD = {
     ctx.restore();
   },
 
-  /* final duel score (first to CONFIG.FINAL_GOALS) in the band under the pitch: top team on the left */
+  /* final duel score (first to CONFIG.FINAL_GOALS) above the pitch: top-goal team on the left */
   duelScore(ctx, g, SX) {
     const [ia, ib] = g.rectTeams || [], A = g.teams[ia], B = g.teams[ib];
     if (!A || !B) return;
     ctx.save();
-    const cy = 1436;
+    const cy = 380;
     roundRect(ctx, SX - 360, cy - 52, 720, 104, 30);
     ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.stroke();
@@ -2108,7 +2123,7 @@ const HUD = {
     ctx.save(); ctx.translate(SX - 70, cy + 4); ctx.scale(sa, sa); outlinedText(ctx, String(A.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
     outlinedText(ctx, '–', SX, cy + 2, `80px ${FONT_BIG}`, 'rgba(255,255,255,0.7)', null, 0);
     ctx.save(); ctx.translate(SX + 70, cy + 4); ctx.scale(sb, sb); outlinedText(ctx, String(B.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
-    outlinedText(ctx, `FIRST TO ${CONFIG.FINAL_GOALS} WINS`, SX, cy + 74, `600 26px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
+    outlinedText(ctx, `FIRST TO ${CONFIG.FINAL_GOALS} WINS`, SX, cy + 78, `600 26px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
     ctx.restore();
   },
 
