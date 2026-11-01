@@ -480,6 +480,7 @@ class Game {
     const d2 = dx * dx + dy * dy;
     if (d2 >= rad * rad) return;
     this.endShot(b);
+    b.lastTouch = T.i;                 // keepers count as the last touch too (goal credit / own goal)
     const outward = b.vx * k.nx + b.vy * k.ny;
     let d = Math.sqrt(d2);
     if (d < 1e-6) { dx = -k.nx; dy = -k.ny; d = 1; }
@@ -600,8 +601,9 @@ class Game {
     const ev = { team: g.team, scorer, own, x: b.x, y: b.y, along, nx: g.nx, ny: g.ny, ballId: b.id };
     if (this.isDerby) {
       const other = 1 - g.team;
-      this.teams[other].score++; this.teams[other].gf++;
+      this.teams[other].score++;                    // the match score still counts own goals…
       if (own) this.stats.ownGoals++;
+      else if (scorer >= 0) this.teams[scorer].gf++;  // …but a team's goal tally only counts its own goals
       this.emit('goal', ev);
       if (this.goldenGoal) this.finish(other);
       return;

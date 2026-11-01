@@ -480,7 +480,7 @@ const App = {
       return { id: t.id, name: t.name, c1: t.c1, c2: t.c2, today: today.has(t.id),
         oldRank: oldRank.get(t.id), newRank: newRank.get(t.id),
         oldPts: League.rowOf(before, t.id).pts, newPts: League.rowOf(after, t.id).pts,
-        played: League.rowOf(after, t.id).played, delta: tm ? League.pointsFor(res, tm) : 0 };
+        played: League.rowOf(after, t.id).played, gf: League.rowOf(after, t.id).gf, delta: tm ? League.pointsFor(res, tm) : 0 };
     });
     const leaderBefore = rkB[0] && rkB[0].r.played ? rkB[0].t.id : null;
     const leaderAfter = rkA[0].t;
@@ -490,7 +490,12 @@ const App = {
       const L = g.teams.find(t => t.place === 2);
       subtitle = L && g.finalDuel ? `Final: ${W.code} ${W.score} – ${L.score} ${L.code}` : `${W.gf} goals · ${W.saves} saves`;
     }
-    this.end = { winner: { name: W.name, code: W.code, c1: W.c1, c2: W.c2 }, rows, champion: s.mode === 'final', subtitle };
+    /* this match's full result: every team's place, goals scored (own goals excluded) and points earned */
+    const standings = res.teams.slice().sort((a, b) => a.place - b.place).map(tm => {
+      const T = g.teams[tm.slot];
+      return { name: T.name, code: T.code, c1: T.c1, c2: T.c2, place: tm.place, gf: tm.gf, pts: s.mode === 'final' ? null : League.pointsFor(res, tm) };
+    });
+    this.end = { winner: { name: W.name, code: W.code, c1: W.c1, c2: W.c2 }, rows, standings, champion: s.mode === 'final', subtitle };
     this.endT = 0;
     FX.startEndConfetti([W.c1, W.c2, '#FFD54F', '#ffffff']);
     /* persist */
