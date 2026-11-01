@@ -144,7 +144,7 @@ const Renderer = {
         ctx.lineWidth = 4; ctx.strokeStyle = T.c1; ctx.stroke();
       }
       if (!T.eliminated) this.goalIcons(g, gl, T);
-      if (!g.isDerby) this.nameTag(gl, T, geo.netDepth, g.o.lives > 1 && !T.eliminated && !g.finalDuel ? T.lives : 0);
+      if (!g.isDerby) { this.nameTag(gl, T, geo.netDepth, g.o.lives > 1 && !T.eliminated && !g.finalDuel ? T.lives : 0); this.goalTally(g, gl, T, geo.netDepth); }
       if (gl.locked) this.resultTag(g, gl, T);
     }
     ctx.restore();
@@ -270,6 +270,41 @@ const Renderer = {
       x += w + gap;
     }
     if (hearts) for (let h = 0; h < hearts; h++) drawHeart(ctx, x + 10 + h * (hs + 3) + hs / 2, 2, hs, '#ff3d57', 'rgba(0,0,0,0.6)');
+    ctx.restore();
+  },
+  /* one mini football per goal this team has scored in the match, lined up behind its name; each pops in when the goal is scored */
+  goalTally(g, gl, T, D) {
+    const n = T.gfT.length;
+    if (!n) return;
+    const ctx = this.ctx, maxW = Math.min(gl.L * 0.92, 470);
+    let r = 14;
+    while (r > 7 && Math.floor(maxW / (2 * r + 4)) * 2 < n) r--;
+    const step = 2 * r + 4, perRow = Math.max(1, Math.floor(maxW / step));
+    ctx.save();
+    for (let i = 0; i < n; i++) {
+      const row = Math.floor(i / perRow), inRow = Math.min(perRow, n - row * perRow), col = i - row * perRow;
+      const off = (col - (inRow - 1) / 2) * step;
+      const x = gl.mx + gl.nx * (D + 6 + r + row * step) + gl.tx * off, y = gl.my + gl.ny * (D + 6 + r + row * step) + gl.ty * off;
+      const age = g.t - T.gfT[i], sc = easeOutBack(age / 0.45, 2.6);
+      if (sc <= 0.01) continue;
+      ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc);
+      if (age < 0.6) {                                  // pop ring in the team colour
+        const q = age / 0.6;
+        ctx.strokeStyle = rgbaFromAny(T.c1, 0.8 * (1 - q)); ctx.lineWidth = 3 * (1 - q) + 1;
+        ctx.beginPath(); ctx.arc(0, 0, r + 3 + q * r * 1.6, 0, TAU); ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(1.5, 2.5, r, r * 0.85, 0, 0, TAU); ctx.fill();
+      const gr = ctx.createRadialGradient(-r * 0.3, -r * 0.35, 1, 0, 0, r);
+      gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, '#cfd3d8');
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fillStyle = gr; ctx.fill();
+      ctx.save(); ctx.clip();
+      ctx.fillStyle = '#23262b';
+      pentagon(ctx, 0, 0, r * 0.4);
+      for (let k = 0; k < 5; k++) { const an = k * TAU / 5 - Math.PI / 2; pentagon(ctx, Math.cos(an) * r * 0.95, Math.sin(an) * r * 0.95, r * 0.31); }
+      ctx.restore();
+      ctx.lineWidth = 2; ctx.strokeStyle = T.c1; ctx.stroke();
+      ctx.restore();
+    }
     ctx.restore();
   },
   /* small result tag just in front of an eliminated team's closed goal: "4TH · +4 PTS" */
