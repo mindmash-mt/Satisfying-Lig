@@ -129,11 +129,97 @@
       "c2": "#FDB912"
     }
   ],
+  "reserve": [
+    {
+      "id": "t19",
+      "name": "Napoli",
+      "code": "NAP",
+      "c1": "#12A0D7",
+      "c2": "#FFFFFF"
+    },
+    {
+      "id": "t20",
+      "name": "Roma",
+      "code": "ROM",
+      "c1": "#8E1F2F",
+      "c2": "#F0BC42"
+    },
+    {
+      "id": "t21",
+      "name": "Atalanta",
+      "code": "ATA",
+      "c1": "#1E71B8",
+      "c2": "#111111"
+    },
+    {
+      "id": "t22",
+      "name": "Tottenham",
+      "code": "TOT",
+      "c1": "#FFFFFF",
+      "c2": "#132257"
+    },
+    {
+      "id": "t23",
+      "name": "Aston Villa",
+      "code": "AVL",
+      "c1": "#670E36",
+      "c2": "#95BFE5"
+    },
+    {
+      "id": "t24",
+      "name": "Benfica",
+      "code": "BEN",
+      "c1": "#E30613",
+      "c2": "#FFFFFF"
+    },
+    {
+      "id": "t25",
+      "name": "Porto",
+      "code": "POR",
+      "c1": "#003893",
+      "c2": "#FFFFFF"
+    },
+    {
+      "id": "t26",
+      "name": "Ajax",
+      "code": "AJX",
+      "c1": "#D2122E",
+      "c2": "#FFFFFF"
+    },
+    {
+      "id": "t27",
+      "name": "Sevilla",
+      "code": "SEV",
+      "c1": "#FFFFFF",
+      "c2": "#D40000"
+    },
+    {
+      "id": "t28",
+      "name": "Marseille",
+      "code": "MAR",
+      "c1": "#2FAEE0",
+      "c2": "#FFFFFF"
+    },
+    {
+      "id": "t29",
+      "name": "Sporting CP",
+      "code": "SCP",
+      "c1": "#00804A",
+      "c2": "#FFFFFF"
+    },
+    {
+      "id": "t30",
+      "name": "Trabzonspor",
+      "code": "TRB",
+      "c1": "#7B1E3A",
+      "c2": "#00A3E0"
+    }
+  ],
   "table": {},
   "week": 1,
   "weekMatch": 1,
   "matchNo": 1,
-  "seasonLength": 30,
+  "seasonLength": 17,
   "points": [
     4,
     3,

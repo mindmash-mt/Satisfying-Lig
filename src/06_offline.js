@@ -42,7 +42,7 @@ const Offline = {
       if (k >= 200) acc = 0;
       n++;
     }
-    return n + Math.ceil((CONFIG.INTRO_DURATION + endDuration(opts.mode) + 0.3) / rdt) + 1;
+    return n + Math.ceil((CONFIG.INTRO_DURATION + CONFIG.END_DURATION + 0.3) / rdt) + 1;
   },
 
   async blobB64(blob) {
@@ -108,7 +108,7 @@ const Offline = {
       if (encErr) throw encErr;
       while (enc.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 0));
       if (pendBytes > 4e6) await flush();
-      if (App.end && App.endT >= endDuration(s.mode) + 0.3) break;
+      if (App.end && App.endT >= CONFIG.END_DURATION + 0.3) break;
       if (i > total + fps * 5) throw new Error('Video beklenenden uzun sürdü.');
     }
     await enc.flush(); enc.close();
@@ -130,20 +130,5 @@ const Offline = {
       caption: $('caption').value,
       base: s.mode === 'arena' ? `s${d.season || 1}_week${String(s.week).padStart(2, '0')}_match${s.weekMatch}_seed${s.seed}` : `s${d.season || 1}_${s.mode}_seed${s.seed}`,
     };
-  },
-
-  /* season over (Season Final played): archive this season and start the next one */
-  newSeason() {
-    const d = League.data;
-    const archive = { season: d.season || 1, endedAt: new Date().toISOString(),
-      champion: d.champions[d.champions.length - 1] || null,
-      table: League.ranking().map((x, i) => ({ rank: i + 1, id: x.t.id, name: x.t.name, code: x.t.code, ...x.r })),
-      history: d.history };
-    if (archive.champion) archive.champion.season = archive.season;   // same object as in d.champions
-    d.season = (d.season || 1) + 1;
-    d.table = {}; d.week = 1; d.weekMatch = 1; d.history = []; d.weekPlan = null;
-    d.settings.mode = 'arena';
-    League.save();
-    return archive;
-  },
+  }
 };

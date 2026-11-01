@@ -42,8 +42,8 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 - **Oyuncular** sahada rastgele dolaşır, topa çarptıklarında topun son dokunan takımı olurlar.
 - **Goller:** Gol, topa en son dokunan takımın hanesine yazılır (oyuncu **veya kaleci**). Kendi kalesine atılan goller hiçbir takımın gol sayısına eklenmez (final düellosu ve derby skorunu ise yine değiştirir). Atılan goller lig tablosunda (`AG`/GF) birikir.
 - **Gol sayacı:** Her takımın kalesinin arkasında, takım adının dışında, o maçta attığı her gol için bir mini futbol topu belirir (gol anında büyüyerek çıkar, takım renginde halka yayar). Çok gol atılırsa toplar küçülür ve ikinci sıraya geçer. Elenen takımın topları da kalır; sayı bitiş ekranındaki `⚽` gol sütunuyla aynıdır (kendi kalesine atılan goller sayılmaz).
-- **Maç öncesi (~3,4 sn, `INTRO_DURATION`):** **`TODAY'S MATCHES`** ekranı: o gün (hafta) oynanmış grup maçları sonuçlarıyla (`FULL TIME`, her takımın sırası ve `+puan`), sıradaki maç (`PLAYING NOW`, hangi takımların oynayacağı) ve oynanacak maçlar (`LATER TODAY`) fikstür olarak listelenir. Ardından maç ekranı açılır. Derby ve Season Final'de yalnızca o maç görünür.
-- **Maç sonu (~7 sn, `END_DURATION`):** tek ekranda **güncel tüm puan durumu**. Önce her takımın o maçtaki sırası (`1ST`, `2ND`…) ve aldığı puan çıkar: puan alanlar yeşil `+4`, alamayanlar kırmızı `+0`. Sonra puanlar sayarak güncellenir ve takımlar yeni sıralarına kayar (▲/▼). Video bu tabloda biter. Eski kazanan kartı, maç sonucu ve ilk 8 tablosu kaldırıldı. Tek istisna Season Final'dir: şampiyon kartı kısa süre gösterilir, puan verilmez.
+- **Maç öncesi (~3,4 sn, `INTRO_DURATION`):** **`TODAY'S MATCHES`** ekranı: o gün (hafta) oynanmış grup maçları sonuçlarıyla (`FULL TIME`, her takımın sırası ve `+puan`), sıradaki maç (`PLAYING NOW`, hangi takımların oynayacağı) ve oynanacak maçlar (`LATER TODAY`) fikstür olarak listelenir. Ardından maç ekranı açılır. Derby'de yalnızca o maç görünür.
+- **Maç sonu (~7 sn, `END_DURATION`):** tek ekranda **güncel tüm puan durumu**. Önce her takımın o maçtaki sırası (`1ST`, `2ND`…) ve aldığı puan çıkar: puan alanlar yeşil `+4`, alamayanlar kırmızı `+0`. Sonra puanlar sayarak güncellenir ve takımlar yeni sıralarına kayar (▲/▼). Video bu tabloda biter. Eski kazanan kartı, maç sonucu ve ilk 8 tablosu kaldırıldı. Sezonun son maçında şampiyon altın, ligden çıkacak son 3 takım kırmızı çerçeveyle işaretlenir ve başlıkta şampiyon yazar.
 - **Tablo sütunları:** sıra, takım, `P` (oynanan), `GD` (averaj), maçtaki sıra + puan, `PTS`.
 - **Gol** yiyen takım elenir:
   - Kalesi takım renginde parlayan bir duvarla **kapanır** (kapanan kale duvar gibi davranır).
@@ -60,8 +60,6 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 ### Derby
 İki takım, klasik saha, takım başına 1 kaleci + 2 oyuncu. 30 sn sonunda çok gol atan kazanır; berabere biterse ilk gol kazanır. Galibe +5 puan.
 
-### Season Final
-Lig tablosunun ilk 4 takımı arena modunda şampiyonluk maçı oynar. Puan verilmez, şampiyon kaydedilir.
 
 ### Temalar
 Otomatik (seed ile) veya elle seçilir: **Classic**, **Snow** (top %10 hızlı), **Rain** (top %15 yavaş), **Night** (karanlık, ışık saçan top ve kaleler). Eski **Bumpers** teması (sahadaki tamponlar) kaldırıldı; kayıtlı ayarda seçiliyse Otomatik'e döner.
@@ -80,7 +78,7 @@ Ad, 3 harfli kod ve renkler panelden **✏️ Takımları düzenle** ile değiş
 ### Haftalar ve adil gruplar
 - 18 takım, maç başına 6 takım → **haftada 3 grup maçı**. Her takım haftada bir kez oynar.
 - Başlıkta `WEEK 3 · GROUP MATCH 2` yazar. Haftanın son grup maçı kaydedilince hafta kendiliğinden ilerler (**📅 Yeni hafta** ile elle de geçilir).
-- Haftanın grupları, geçmişte **birbiriyle en az aynı grupta bulunmuş** takımları bir araya getirecek şekilde dağıtılır. 30 haftalık bir sezonda her takım ikilisi 8–10 kez aynı grupta bulunur (rastgele dağıtımda bu aralık 1–15'tir). Panel, haftanın gruplarını ve en az/en çok karşılaşma sayısını gösterir.
+- Haftanın grupları, geçmişte **birbiriyle en az aynı grupta bulunmuş** takımları bir araya getirecek şekilde dağıtılır. 17 haftalık bir sezonda her takım ikilisi 4–6 kez aynı grupta bulunur (rastgele dağıtımda bu aralık çok daha geniştir). Panel, haftanın gruplarını ve en az/en çok karşılaşma sayısını gösterir.
 
 ### Puanlama
 | Sıra | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
@@ -89,11 +87,18 @@ Ad, 3 harfli kod ve renkler panelden **✏️ Takımları düzenle** ile değiş
 
 İlk 4 puan alır, gerisi 0 puan alır (6 takımlı maçta 5. ve 6. sıra `+0 PTS`). Puanlar panelden değiştirilebilir; eski varsayılan 10-7-5-4-3-2-1 ile kaydedilmiş bir lig açılışta yeni varsayılana geçer. Tablo sıralaması: **Puan → Averaj → Atılan gol → Birincilik**. Tablo sütunları: O, P, 1st, AG, YG, AV.
 
+### Sezon sonu: şampiyon ve takım değişimi
+Sezonun son haftası (varsayılan 17) oynanınca **final maçı yoktur**: tabloda **1. olan takım şampiyon** olur ve kaydedilir. Ardından:
+- Tablonun **son 3 takımı** (`RELEGATE_COUNT`) ertesi sezon ligde yer almaz.
+- Yerlerine **yedek kuyruğundaki ilk 3 kulüp** gelir. Kuyruk sırayla: Napoli, Roma, Atalanta, Tottenham, Aston Villa, Benfica, Porto, Ajax, Sevilla, Marseille, Sporting CP, Trabzonspor. Ligden çıkan takımlar kuyruğun sonuna eklenir; yani sıra gelince geri dönebilirler.
+- Tablo, hafta ve maç geçmişi sıfırlanır; yeni sezon 1. haftadan başlar. Biten sezon `data/active/seasons/season-N.json` dosyasına (şampiyon, çıkanlar, gelenler, son tablo, maç geçmişi) arşivlenir.
+- Sezonun son maçının açıklama metninde şampiyon, ligden çıkanlar ve gelenler yazılır. Tarayıcıda panel aynı bilgiyi gösterir ve **Yeni sezonu başlat** düğmesi geçişi yapar; günlük otomasyon (`tools/daily.js`) bunu kendiliğinden yapar.
+
 ### Kalıcılık ve yedekleme
 - Lig verisi tarayıcının `localStorage`'ında `arenaLeague_v1` anahtarıyla saklanır. Depolama kullanılamazsa uygulama bellekte çalışır ve panelde uyarı gösterir.
 - **⬇ Tabloyu dışa aktar** / **⬆ Tabloyu içe aktar**: takımlar, tablo, hafta, maç geçmişi (seed, mod, tema, takımlar, sonuç) tek bir JSON dosyasında.
 - **Test maçı** kutusu işaretliyse sonuç tabloya yazılmaz.
-- Sezon uzunluğu varsayılan 30 haftadır; sezon bitince panel **Season Final** modunu önerir.
+- Sezon uzunluğu varsayılan 17 haftadır; sezon bitince panel şampiyonu ve ligden çıkacak takımları gösterir, **Yeni sezonu başlat** düğmesi sezonu arşivleyip yenisini açar.
 - Tarayıcıdaki lig, repodaki aktif ligden ayrıdır; tarayıcıda yapılan denemeler aktif lige yansımaz. Aktif ligi tarayıcıda görmek için `data/active/league.json` dosyasını **⬆ Tabloyu içe aktar** ile yükleyin (bkz. [Otomatik günlük maç günü](#otomatik-günlük-maç-günü)).
 
 ---
@@ -116,7 +121,7 @@ Klasörde:
 - `STANDINGS.md`: GitHub'da doğrudan okunabilen lig tablosu ve son maçlar.
 - `seasons/season-N.json`: biten sezonların arşivi (son tablo, şampiyon, maç geçmişi).
 
-Sezonun son haftası (varsayılan 30. hafta) oynandığında aynı çalıştırmada **Season Final** videosu da üretilir. Ardından sezon arşivlenir ve yeni sezon 1. haftadan başlar.
+Sezonun son haftası (varsayılan 17. hafta) oynandığında final maçı yoktur; **tabloda 1. olan şampiyon** olur (son maçın videosunda ve açıklama metninde duyurulur). Aynı çalıştırmada sezon arşivlenir, son 3 takım ligden çıkar, yedek kuyruğundaki 3 kulüp gelir ve yeni sezon 1. haftadan başlar (bkz. [Sezon sonu](#sezon-sonu-şampiyon-ve-takım-değişimi)).
 
 Videolar ve açıklama metinleri `out/active/<tarih>/` klasörüne yazılır (`--dry-run` ile `out/dry-run/<tarih>/`) (repoya eklenmez): `*.mp4`, `captions.txt`, `summary.json`.
 
@@ -150,7 +155,6 @@ Varsayılan ayarlarla (6 takım, 1 can) 100 maçlık testlerde:
 | Arena, 8 takım | ~94 sn |
 | Arena, 10 takım | ~140 sn (bazı maçlar 300 sn sınırına ulaşır) |
 | Derby | ~31 sn |
-| Season Final (4 takım) | ~35 sn |
 
 Önemli ayarlar `src/01_core.js` dosyasının başındaki `CONFIG` nesnesinde:
 
@@ -181,7 +185,7 @@ build.sh            src/ parçalarını index.html'de birleştirir
 src/
   00_head.html      HTML iskeleti, panel ve stiller
   01_core.js        CONFIG, takımlar, seed'li RNG, matematik, adil grup dağıtıcı
-  02_sim.js         Fizik ve oyun mantığı (arena, top, kaleci, oyuncu, eleme, final, derby)
+  02_sim.js         Fizik ve oyun mantığı (arena, top, kaleci, oyuncu, eleme, final düellosu, derby)
   03_fx_audio.js    Temalar, görsel efektler, Web Audio ile sentezlenen sesler
   04_render.js      Canvas çizimi, HUD ve bitiş ekranı
   05_app.js         Lig, kayıt, kontrol paneli, denge testi, ana döngü

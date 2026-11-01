@@ -1,6 +1,6 @@
 # Satisfying Lig — Aktif lig
 
-Sezon **1** · sıradaki: **Hafta 1 / 30**, grup maçı 1 · bu sezon oynanan maç: **0**
+Sezon **1** · sıradaki: **Hafta 1 / 17**, grup maçı 1 · bu sezon oynanan maç: **0**
 
 _Son güncelleme: 2026-11-01 15:59 (İstanbul)_
 

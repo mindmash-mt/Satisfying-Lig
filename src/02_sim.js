@@ -41,7 +41,7 @@ function buildGeo(kind, verts, sideTeams, cx, cy, goalInfo, netDepth, goalFrac, 
 class Game {
   constructor(o) {
     this.o = o;
-    this.mode = o.mode;                    // 'arena' | 'derby' | 'final'
+    this.mode = o.mode;                    // 'arena' | 'derby'
     this.isDerby = o.mode === 'derby';
     this.rng = new RNG(o.seed >>> 0);
     this.onEvent = null;

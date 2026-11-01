@@ -15,7 +15,7 @@ const { CONFIG, DEFAULT_TEAMS, Game, RNG, DT, THEME_IDS } = m.exports;
 if (process.env.CFG) Object.assign(CONFIG, JSON.parse(process.env.CFG));
 
 const [mode = 'arena', nArg = '6', livesArg = '1', countArg = '100'] = process.argv.slice(2);
-const n = mode === 'derby' ? 2 : mode === 'final' ? 4 : +nArg, lives = +livesArg, N = +countArg;
+const n = mode === 'derby' ? 2 : +nArg, lives = +livesArg, N = +countArg;
 const teamsAll = DEFAULT_TEAMS.map((t, i) => ({ id: 't' + (i + 1), ...t }));
 const run = (opts) => { const g = new Game(opts); while (!g.over) g.step(DT); return g.getResult(); };
 

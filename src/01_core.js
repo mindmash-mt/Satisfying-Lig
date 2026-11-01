@@ -26,16 +26,15 @@ const CONFIG = {
   DERBY_W: 720, DERBY_H: 880, DERBY_TIME: 30,
   PU_R: 26, PU_LIFE: 8, PU_MIN: 6, PU_MAX: 10, PU_MAX_COUNT: 2, PU_WALL_MARGIN: 80,
   DEFAULT_LIVES: 1, DEFAULT_TEAM_COUNT: 6, DEFAULT_SPEED_MULT: 1.0,
-  POINTS: [4, 3, 2, 1, 0, 0, 0, 0, 0, 0], DERBY_WIN_POINTS: 5, SEASON_LENGTH: 30,
+  POINTS: [4, 3, 2, 1, 0, 0, 0, 0, 0, 0], DERBY_WIN_POINTS: 5, SEASON_LENGTH: 17,
   STORAGE_KEY: 'arenaLeague_v1',
   /* before the match: today's group matches (results / fixtures) → match. After it: one animated league table (held until the video ends) */
   INTRO_DURATION: 3.4,
-  END_DURATION: 7.0, END_CARD: 2.1,   // END_CARD: champion card, only after the Season Final
+  END_DURATION: 7.0,
+  RELEGATE_COUNT: 3,   // at the end of a season the last N teams leave the league and the next N from the reserve queue join
   HARD_TIME_LIMIT: 300,
 };
 const DT = 1 / CONFIG.STEP_HZ;
-/* seconds the end screen lasts (the Season Final adds a short champion card in front of the table) */
-function endDuration(mode) { return CONFIG.END_DURATION + (mode === 'final' ? CONFIG.END_CARD - 0.2 : 0); }
 
 /* Dünyanın önde gelen 18 kulübü (sadece ad + kulüp renkleri; logo/arma kullanılmaz) */
 const DEFAULT_TEAMS = [
@@ -57,6 +56,22 @@ const DEFAULT_TEAMS = [
   { name: 'Fenerbahçe',         code: 'FEN', c1: '#FFED00', c2: '#002D72' },
   { name: 'Beşiktaş',           code: 'BJK', c1: '#111111', c2: '#FFFFFF' },
   { name: 'Galatasaray',        code: 'GAL', c1: '#A90432', c2: '#FDB912' },
+];
+/* clubs waiting to come in: when a season ends the last RELEGATE_COUNT teams leave (and join the back of this queue),
+   the first RELEGATE_COUNT clubs of the queue take their place */
+const RESERVE_TEAMS = [
+  { name: 'Napoli',        code: 'NAP', c1: '#12A0D7', c2: '#FFFFFF' },
+  { name: 'Roma',          code: 'ROM', c1: '#8E1F2F', c2: '#F0BC42' },
+  { name: 'Atalanta',      code: 'ATA', c1: '#1E71B8', c2: '#111111' },
+  { name: 'Tottenham',     code: 'TOT', c1: '#FFFFFF', c2: '#132257' },
+  { name: 'Aston Villa',   code: 'AVL', c1: '#670E36', c2: '#95BFE5' },
+  { name: 'Benfica',       code: 'BEN', c1: '#E30613', c2: '#FFFFFF' },
+  { name: 'Porto',         code: 'POR', c1: '#003893', c2: '#FFFFFF' },
+  { name: 'Ajax',          code: 'AJX', c1: '#D2122E', c2: '#FFFFFF' },
+  { name: 'Sevilla',       code: 'SEV', c1: '#FFFFFF', c2: '#D40000' },
+  { name: 'Marseille',     code: 'MAR', c1: '#2FAEE0', c2: '#FFFFFF' },
+  { name: 'Sporting CP',   code: 'SCP', c1: '#00804A', c2: '#FFFFFF' },
+  { name: 'Trabzonspor',   code: 'TRB', c1: '#7B1E3A', c2: '#00A3E0' },
 ];
 /* uppercase for names and 3-letter codes: Turkish rules (i → İ) only for Turkish-looking names, so
    "Beşiktaş" → "BEŞİKTAŞ" but "Manchester United" → "MANCHESTER UNITED" */
