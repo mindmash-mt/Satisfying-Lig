@@ -5,7 +5,7 @@ const League = {
   data: null, storageOK: true,
   fresh() {
     return {
-      version: 1, teamsVersion: 2,
+      version: 1, teamsVersion: 3,
       teams: DEFAULT_TEAMS.map((t, i) => ({ id: 't' + (i + 1), name: t.name, code: t.code, c1: t.c1, c2: t.c2 })),
       table: {}, week: 1, weekMatch: 1, matchNo: 1, seasonLength: CONFIG.SEASON_LENGTH,
       points: CONFIG.POINTS.slice(), derbyWinPoints: CONFIG.DERBY_WIN_POINTS,
@@ -39,7 +39,7 @@ const League = {
     out.seasonLength = Math.max(1, +d.seasonLength || CONFIG.SEASON_LENGTH);
     out.points = Array.isArray(d.points) && d.points.length ? d.points.map(x => +x || 0) : CONFIG.POINTS.slice();
     while (out.points.length < 10) out.points.push(0);
-    out.teamsVersion = 2;
+    out.teamsVersion = 3;
     out.history = Array.isArray(d.history) ? d.history : [];
     out.champions = Array.isArray(d.champions) ? d.champions : [];
     out.settings = Object.assign(this.defaultSettings(), d.settings || {});
@@ -55,10 +55,10 @@ const League = {
       localStorage.setItem('__arena_probe', '1'); localStorage.removeItem('__arena_probe');
     } catch (e) { this.storageOK = false; }
     this.data = this.normalize(d);
-    /* teams v2 = 2026-27 Süper Lig clubs: a saved league built on the old fictional teams starts a fresh season */
-    if (d && d.teamsVersion !== 2) {
+    /* teams v3 = top European clubs + Turkey's big three: a saved league built on older default teams starts a fresh season */
+    if (d && d.teamsVersion !== 3) {
       const f = this.fresh();
-      Object.assign(this.data, { teams: f.teams, table: {}, week: 1, weekMatch: 1, matchNo: 1, history: [], champions: [], teamsVersion: 2 });
+      Object.assign(this.data, { teams: f.teams, table: {}, week: 1, weekMatch: 1, matchNo: 1, history: [], champions: [], teamsVersion: 3 });
       this.data.settings.manual = [];
       this.migrated = true;
     }
@@ -630,7 +630,7 @@ async function boot() {
   UI.init();
   League.save();
   UI.storageWarn(!League.storageOK);
-  if (League.migrated) setTimeout(() => UI.toast('⚽ Takımlar 2026-27 Süper Lig kulüpleriyle değiştirildi — lig tablosu sıfırdan başladı.'), 600);
+  if (League.migrated) setTimeout(() => UI.toast('⚽ Takımlar dünyanın önde gelen kulüpleriyle değiştirildi — lig tablosu sıfırdan başladı.'), 600);
   fitCanvas(); window.addEventListener('resize', fitCanvas);
   try {
     await Promise.race([

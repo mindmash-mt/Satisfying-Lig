@@ -26,26 +26,26 @@ const CONFIG = {
 };
 const DT = 1 / CONFIG.STEP_HZ;
 
-/* 2026-27 Trendyol Süper Lig — 18 kulüp (sadece ad + kulüp renkleri; logo/arma kullanılmaz) */
+/* Dünyanın önde gelen 18 kulübü (sadece ad + kulüp renkleri; logo/arma kullanılmaz) */
 const DEFAULT_TEAMS = [
-  { name: 'Galatasaray',    code: 'GAL', c1: '#A90432', c2: '#FDB912' },
-  { name: 'Fenerbahçe',     code: 'FEN', c1: '#FFED00', c2: '#002D72' },
-  { name: 'Beşiktaş',       code: 'BJK', c1: '#111111', c2: '#FFFFFF' },
-  { name: 'Trabzonspor',    code: 'TRA', c1: '#8A1538', c2: '#5BC2E7' },
-  { name: 'Başakşehir',     code: 'BAŞ', c1: '#F26522', c2: '#142A57' },
-  { name: 'Samsunspor',     code: 'SAM', c1: '#E30613', c2: '#FFFFFF' },
-  { name: 'Göztepe',        code: 'GÖZ', c1: '#F7D417', c2: '#D71920' },
-  { name: 'Eyüpspor',       code: 'EYÜ', c1: '#5B2C83', c2: '#FFD100' },
-  { name: 'Kasımpaşa',      code: 'KAS', c1: '#0B2C5E', c2: '#FFFFFF' },
-  { name: 'Çaykur Rizespor',code: 'RİZ', c1: '#009A44', c2: '#00A0E3' },
-  { name: 'Konyaspor',      code: 'KON', c1: '#FFFFFF', c2: '#007A33' },
-  { name: 'Alanyaspor',     code: 'ALA', c1: '#F58220', c2: '#00843D' },
-  { name: 'Gaziantep FK',   code: 'GFK', c1: '#1A1A1A', c2: '#E30613' },
-  { name: 'Gençlerbirliği', code: 'GEN', c1: '#E2001A', c2: '#111111' },
-  { name: 'Kocaelispor',    code: 'KOC', c1: '#00A651', c2: '#111111' },
-  { name: 'Erzurumspor',    code: 'ERZ', c1: '#005BAC', c2: '#FFFFFF' },
-  { name: 'Amedspor',       code: 'AMD', c1: '#00923F', c2: '#D7141A' },
-  { name: 'Çorum FK',       code: 'ÇOR', c1: '#9E0B1E', c2: '#FFFFFF' },
+  { name: 'Real Madrid',        code: 'RMA', c1: '#FFFFFF', c2: '#FEBE10' },
+  { name: 'Barcelona',          code: 'BAR', c1: '#A50044', c2: '#004D98' },
+  { name: 'Atlético Madrid',    code: 'ATM', c1: '#CB3524', c2: '#272E61' },
+  { name: 'Manchester City',    code: 'MCI', c1: '#6CABDD', c2: '#1C2C5B' },
+  { name: 'Liverpool',          code: 'LIV', c1: '#C8102E', c2: '#00B2A9' },
+  { name: 'Arsenal',            code: 'ARS', c1: '#EF0107', c2: '#FFFFFF' },
+  { name: 'Chelsea',            code: 'CHE', c1: '#034694', c2: '#FFFFFF' },
+  { name: 'Manchester United',  code: 'MUN', c1: '#DA291C', c2: '#FBE122' },
+  { name: 'Bayern München',     code: 'BAY', c1: '#DC052D', c2: '#0066B2' },
+  { name: 'Borussia Dortmund',  code: 'BVB', c1: '#FDE100', c2: '#000000' },
+  { name: 'Bayer Leverkusen',   code: 'B04', c1: '#E32221', c2: '#000000' },
+  { name: 'Paris Saint-Germain',code: 'PSG', c1: '#004170', c2: '#DA291C' },
+  { name: 'Inter',              code: 'INT', c1: '#0068A8', c2: '#000000' },
+  { name: 'AC Milan',           code: 'MIL', c1: '#FB090B', c2: '#000000' },
+  { name: 'Juventus',           code: 'JUV', c1: '#111111', c2: '#FFFFFF' },
+  { name: 'Fenerbahçe',         code: 'FEN', c1: '#FFED00', c2: '#002D72' },
+  { name: 'Beşiktaş',           code: 'BJK', c1: '#111111', c2: '#FFFFFF' },
+  { name: 'Galatasaray',        code: 'GAL', c1: '#A90432', c2: '#FDB912' },
 ];
 /* Turkish-aware uppercase (i → İ) for names and 3-letter codes */
 const upTR = (s) => String(s).toLocaleUpperCase('tr-TR');
