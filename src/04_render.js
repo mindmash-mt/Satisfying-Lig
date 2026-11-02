@@ -145,7 +145,7 @@ const Renderer = {
         ctx.lineWidth = 4; ctx.strokeStyle = T.c1; ctx.stroke();
       }
       if (!T.eliminated) this.goalIcons(g, gl, T);
-      if (!g.isDerby) { this.nameTag(gl, T, geo.netDepth, g.o.lives > 1 && !T.eliminated && !g.finalDuel ? T.lives : 0); this.goalTally(g, gl, T, geo.netDepth); }
+      this.nameTag(gl, T, geo.netDepth, g.o.lives > 1 && !T.eliminated && !g.finalDuel ? T.lives : 0); this.goalTally(g, gl, T, geo.netDepth);
       if (gl.locked) this.resultTag(g, gl, T);
     }
     ctx.restore();
@@ -563,7 +563,7 @@ function drawHeart(ctx, x, y, s, fill, stroke) {
 }
 
 /* =====================================================================
-   HUD  (title, derby / final-duel scoreboard, big texts)
+   HUD  (title, final-duel scoreboard, big texts)
    ===================================================================== */
 const HUD = {
   draw(ctx, g, app, vis) {
@@ -588,37 +588,11 @@ const HUD = {
       outlinedText(ctx, 'Who wins? Comment below 👇', SX, 316, `600 30px ${FONT_UI}`, '#ffffff', 'rgba(0,0,0,0.55)', 6);
       ctx.restore();
     }
-    if (g.isDerby) { this.scoreboard(ctx, g, SX); this.announcement(ctx, 1512); }
-    else {
-      /* final duel score shares the lane above the pitch with the elimination text and fades out while one shows */
-      const want = g.finalDuel && !g.morph && !FX.ann ? 1 : 0;
-      this.duelA = (this.duelA || 0) + (want - (this.duelA || 0)) * 0.18;
-      if (this.duelA > 0.02) { ctx.save(); ctx.globalAlpha = this.duelA; this.duelScore(ctx, g, SX); ctx.restore(); }
-      this.announcement(ctx, 394);
-    }
-  },
-
-  scoreboard(ctx, g, SX) {
-    const A = g.teams[0], B = g.teams[1];
-    ctx.save();
-    roundRect(ctx, SX - 390, 336, 780, 104, 30);
-    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.stroke();
-    const cy = 380;
-    ctx.beginPath(); ctx.arc(SX - 345, cy, 22, 0, TAU); ctx.fillStyle = A.c1; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = A.c2; ctx.stroke();
-    ctx.beginPath(); ctx.arc(SX + 345, cy, 22, 0, TAU); ctx.fillStyle = B.c1; ctx.fill(); ctx.strokeStyle = B.c2; ctx.stroke();
-    outlinedText(ctx, A.code, SX - 310, cy + 4, `72px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
-    outlinedText(ctx, B.code, SX + 310, cy + 4, `72px ${FONT_BIG}`, '#ffffff', null, 0, 'right');
-    const pulseA = g.t - (B.hitT >= 0 ? B.hitT : -9), pulseB = g.t - (A.hitT >= 0 ? A.hitT : -9);
-    const sa = pulseA < 0.5 ? 1 + 0.35 * Math.sin(pulseA / 0.5 * Math.PI) : 1, sb = pulseB < 0.5 ? 1 + 0.35 * Math.sin(pulseB / 0.5 * Math.PI) : 1;
-    ctx.save(); ctx.translate(SX - 70, cy + 4); ctx.scale(sa, sa); outlinedText(ctx, String(A.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
-    outlinedText(ctx, '–', SX, cy + 2, `80px ${FONT_BIG}`, 'rgba(255,255,255,0.7)', null, 0);
-    ctx.save(); ctx.translate(SX + 70, cy + 4); ctx.scale(sb, sb); outlinedText(ctx, String(B.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
-    let label, col = '#ffffff';
-    if (g.goldenGoal) { const x = Math.floor(g.t - g.ggStart); label = `+0:${String(x).padStart(2, '0')}`; col = '#FFD54F'; }
-    else { const s = Math.ceil(g.derbyLeft); label = `0:${String(s).padStart(2, '0')}`; if (s <= 5) col = '#ff6b6b'; }
-    outlinedText(ctx, label, SX, 426, `30px ${FONT_BIG}`, col, null, 0);
-    ctx.restore();
+    /* final duel score shares the lane above the pitch with the elimination text and fades out while one shows */
+    const want = g.finalDuel && !g.morph && !FX.ann ? 1 : 0;
+    this.duelA = (this.duelA || 0) + (want - (this.duelA || 0)) * 0.18;
+    if (this.duelA > 0.02) { ctx.save(); ctx.globalAlpha = this.duelA; this.duelScore(ctx, g, SX); ctx.restore(); }
+    this.announcement(ctx, 394);
   },
 
   /* final duel score (first to CONFIG.FINAL_GOALS) above the pitch: top-goal team on the left */
@@ -660,7 +634,7 @@ const HUD = {
     ctx.restore();
   },
 
-  /* single announcement lane: above the pitch (arena) or in the bottom band (derby, under the scoreboard layout) */
+  /* single announcement lane above the pitch */
   announcement(ctx, y) {
     const a = FX.ann;
     if (!a) return;

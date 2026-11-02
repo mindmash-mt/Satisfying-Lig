@@ -124,7 +124,6 @@ const FX = {
       case 'overtime':
         AudioSys.whistle(0.45, 0.25); break;
       case 'finalDuel': AudioSys.whoosh(); break;
-      case 'goldenGoal': AudioSys.whistle(0.5, 0.25); break;
       case 'morphStart': AudioSys.whoosh(); break;
       case 'win': AudioSys.finalWhistle(); break;
     }

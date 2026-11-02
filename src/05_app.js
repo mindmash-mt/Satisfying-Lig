@@ -8,14 +8,13 @@ const League = {
       version: 1, teamsVersion: 3,
       teams: DEFAULT_TEAMS.map((t, i) => ({ id: 't' + (i + 1), name: t.name, code: t.code, c1: t.c1, c2: t.c2 })),
       reserve: RESERVE_TEAMS.map((t, i) => ({ id: 't' + (DEFAULT_TEAMS.length + i + 1), name: t.name, code: t.code, c1: t.c1, c2: t.c2 })),
-      table: {}, week: 1, weekMatch: 1, matchNo: 1, seasonLength: CONFIG.SEASON_LENGTH,
-      points: CONFIG.POINTS.slice(), derbyWinPoints: CONFIG.DERBY_WIN_POINTS,
+      table: {}, week: 1, weekMatch: 1, matchNo: 1, season: 1, seasonLength: CONFIG.SEASON_LENGTH,
+      points: CONFIG.POINTS.slice(), seasonPlan: null,
       history: [], champions: [], settings: {},
     };
   },
   defaultSettings() {
-    return { mode: 'arena', teamCount: CONFIG.DEFAULT_TEAM_COUNT, selMode: 'auto', manual: [],
-      theme: 'auto', lives: CONFIG.DEFAULT_LIVES, speedMult: CONFIG.DEFAULT_SPEED_MULT, powerups: false,
+    return { theme: 'auto', lives: CONFIG.DEFAULT_LIVES, speedMult: CONFIG.DEFAULT_SPEED_MULT, powerups: false,
       simSpeed: 1, volume: 0.8, muted: false, testMatch: false, sv: 2 };
   },
   normalize(d) {
@@ -44,6 +43,9 @@ const League = {
     }
     out.week = Math.max(1, +d.week || 1); out.weekMatch = Math.max(1, +d.weekMatch || 1); out.matchNo = Math.max(1, +d.matchNo || 1);
     delete out.day;
+    delete out.derbyWinPoints;               // the derby mode was removed: every match is a group match
+    out.season = Math.max(1, +d.season || 1);
+    out.seasonPlan = this.validPlanShape(d.seasonPlan) ? d.seasonPlan : null;
     out.seasonLength = Math.max(1, +d.seasonLength || CONFIG.SEASON_LENGTH);
     out.points = Array.isArray(d.points) && d.points.length ? d.points.map(x => +x || 0) : CONFIG.POINTS.slice();
     while (out.points.length < 10) out.points.push(0);
@@ -54,7 +56,8 @@ const League = {
     out.champions = Array.isArray(d.champions) ? d.champions : [];
     out.settings = Object.assign(this.defaultSettings(), d.settings || {});
     delete out.settings.seed;                 // the seed is chosen per match and never stored ahead of it
-    if (out.settings.mode === 'final') out.settings.mode = 'arena';   // Season Final was removed: the table leader is the champion
+    /* removed options: match mode (derby / season final), manual team pick, team count per match (always CONFIG.GROUP_SIZE) */
+    for (const k of ['mode', 'selMode', 'manual', 'teamCount']) delete out.settings[k];
     /* settings v2: single life by default — migrate older saved settings once */
     if (!d.settings || d.settings.sv !== 2) { out.settings.lives = CONFIG.DEFAULT_LIVES; out.settings.sv = 2; }
     if (out.settings.theme !== 'auto' && !THEME_DEFS[out.settings.theme]) out.settings.theme = 'auto';   // removed themes (bumpers)
@@ -71,8 +74,8 @@ const League = {
     /* teams v3 = top European clubs + Turkey's big three: a saved league built on older default teams starts a fresh season */
     if (d && d.teamsVersion !== 3) {
       const f = this.fresh();
-      Object.assign(this.data, { teams: f.teams, reserve: f.reserve, table: {}, week: 1, weekMatch: 1, matchNo: 1, history: [], champions: [], teamsVersion: 3 });
-      this.data.settings.manual = [];
+      Object.assign(this.data, { teams: f.teams, reserve: f.reserve, table: {}, week: 1, weekMatch: 1, matchNo: 1, history: [], champions: [], teamsVersion: 3, seasonPlan: null });
+      delete this.data.weekPlan;
       this.migrated = true;
     }
   },
@@ -86,10 +89,14 @@ const League = {
     return this.data.teams.map(t => ({ t, r: this.rowOf(table, t.id) })).sort((a, b) =>
       b.r.pts - a.r.pts || (b.r.gf - b.r.ga) - (a.r.gf - a.r.ga) || b.r.gf - a.r.gf || b.r.wins - a.r.wins || a.t.name.localeCompare(b.t.name));
   },
-  pointsFor(res, tm) {
-    if (res.mode === 'arena') return this.data.points[tm.place - 1] || 0;
-    if (res.mode === 'derby') return tm.place === 1 ? this.data.derbyWinPoints : 0;
-    return 0;
+  pointsFor(res, tm) { return this.data.points[tm.place - 1] || 0; },
+  /* every group has exactly CONFIG.GROUP_SIZE clubs, so the league size must be a multiple of it */
+  validTeamCount(n) { return n >= CONFIG.GROUP_SIZE && n % CONFIG.GROUP_SIZE === 0; },
+  /* the season has begun once a match was played or a week/group match was passed: from then on the fixture,
+     the team list and the season length are fixed until the season ends */
+  seasonStarted() { const d = this.data; return d.history.length > 0 || d.week > 1 || d.weekMatch > 1; },
+  validPlanShape(p) {
+    return !!(p && typeof p === 'object' && Array.isArray(p.weeks) && p.weeks.every(w => Array.isArray(w) && w.every(g => Array.isArray(g))));
   },
   /* end of season: the table leader is the champion; the last RELEGATE_COUNT teams go out, the next clubs of the reserve queue come in */
   seasonChange() {
@@ -110,8 +117,8 @@ const League = {
     d.teams = d.teams.filter(t => !ch.out.some(o => o.id === t.id)).concat(ch.in);
     d.reserve = d.reserve.slice(ch.in.length).concat(ch.out);
     d.season = season + 1;
-    d.table = {}; d.week = 1; d.weekMatch = 1; d.history = []; d.weekPlan = null;
-    d.settings.mode = 'arena'; d.settings.manual = [];
+    d.table = {}; d.week = 1; d.weekMatch = 1; d.history = []; d.seasonPlan = null;   // next season gets a new fixture
+    delete d.weekPlan;
     this.save();
     return archive;
   },
@@ -187,17 +194,12 @@ const $ = (id) => document.getElementById(id);
 const UI = {
   init() {
     const s = League.data.settings;
-    $('mode').value = s.mode; $('teamCount').value = s.teamCount; $('selMode').value = s.selMode;
     $('theme').value = s.theme; $('lives').value = s.lives;
     $('speedMult').value = s.speedMult; $('simSpeed').value = String(s.simSpeed);
     $('volume').value = s.volume; $('testMatch').checked = s.testMatch;
-    $('pointsInput').value = League.data.points.join(','); $('seasonLen').value = League.data.seasonLength;
-    $('derbyPts').value = League.data.derbyWinPoints;
+    $('pointsInput').value = League.data.points.slice(0, CONFIG.GROUP_SIZE).join(','); $('seasonLen').value = League.data.seasonLength;
     AudioSys.vol = s.volume; AudioSys.muted = s.muted;
     const read = () => {
-      s.mode = $('mode').value;
-      s.teamCount = clamp(Math.round(+$('teamCount').value || 6), 4, 10);
-      s.selMode = $('selMode').value;
       s.theme = $('theme').value;
       s.lives = clamp(Math.round(+$('lives').value || 3), 1, 5);
       s.speedMult = clamp(+$('speedMult').value || 1, 0.7, 1.5);
@@ -206,7 +208,7 @@ const UI = {
       League.save(); this.refresh();
       if (!App.running || App.end) App.prepare();
     };
-    ['mode', 'teamCount', 'selMode', 'theme', 'lives', 'speedMult', 'testMatch'].forEach(id => $(id).addEventListener('change', read));
+    ['theme', 'lives', 'speedMult', 'testMatch'].forEach(id => $(id).addEventListener('change', read));
     $('speedMult').addEventListener('input', () => { $('speedVal').textContent = '×' + (+$('speedMult').value).toFixed(2); });
     $('simSpeed').addEventListener('change', () => { s.simSpeed = +$('simSpeed').value || 1; League.save(); });
     $('volume').addEventListener('input', () => { s.volume = +$('volume').value; AudioSys.vol = s.volume; AudioSys.apply(); });
@@ -217,8 +219,18 @@ const UI = {
     $('btnPause').addEventListener('click', () => App.togglePause());
     $('btnReset').addEventListener('click', () => App.reset());
     $('btnNewDay').addEventListener('click', () => {
-      League.data.week++; League.data.weekMatch = 1; League.save(); this.refresh(); if (!App.running || App.end) App.prepare();
-      this.toast(`📅 Hafta ${League.data.week} başladı.`);
+      const d = League.data;
+      if (d.week > d.seasonLength) { alert('Sezon tamamlandı. Önce yeni sezonu başlatın.'); return; }
+      /* skipping a week leaves its unplayed group matches unplayed for good: warn and ask first */
+      const left = App.unplayedThisWeek();
+      if (left.length) {
+        const code = (id) => (d.teams.find(t => t.id === id) || {}).code || '?';
+        const list = left.map(x => `  • ${x.no}. grup maçı: ${x.ids.map(code).join(' · ')}`).join('\n');
+        if (!confirm(`⚠️ Hafta ${d.week} içinde oynanmamış ${left.length} grup maçı var:\n${list}\n\n` +
+          `Yeni haftaya geçilirse bu maçlar hiç oynanmayacak; bu ${left.length * CONFIG.GROUP_SIZE} takım sezonu diğerlerinden eksik maçla bitirecek (adil olmaz).\n\nYine de sonraki haftaya (Hafta ${d.week + 1}) geçilsin mi?`)) return;
+      }
+      d.week++; d.weekMatch = 1; League.save(); this.refresh(); if (!App.running || App.end) App.prepare();
+      this.toast(d.week > d.seasonLength ? '🏁 Sezonun son haftası geçildi.' : `📅 Hafta ${d.week} başladı.`);
     });
     $('btnExport').addEventListener('click', () => {
       downloadBlob(new Blob([JSON.stringify(League.data, null, 2)], { type: 'application/json' }), `arena_league_week${League.data.week}.json`);
@@ -231,6 +243,8 @@ const UI = {
         try {
           const d = JSON.parse(rd.result);
           if (!d || !Array.isArray(d.teams) || d.teams.length < 2) throw new Error('Geçersiz dosya: takım listesi yok.');
+          if (!League.validTeamCount(d.teams.length))
+            throw new Error(`Takım sayısı (${d.teams.length}) ${CONFIG.GROUP_SIZE}'nın katı olmalı; aksi halde gruplar eşit olmaz.`);
           League.data = League.normalize(d); League.save(); this.init2(); App.prepare();
           this.toast('✅ Lig verisi içe aktarıldı.');
         } catch (e) { alert('İçe aktarma başarısız: ' + e.message); }
@@ -240,55 +254,61 @@ const UI = {
     });
     $('btnResetLeague').addEventListener('click', () => {
       if (!confirm('Lig tablosu, gün sayacı, maç numarası ve geçmiş silinecek (takımlar korunur). Emin misiniz?')) return;
-      const d = League.data; d.table = {}; d.week = 1; d.weekMatch = 1; d.matchNo = 1; d.history = []; d.champions = [];
+      const d = League.data; d.table = {}; d.week = 1; d.weekMatch = 1; d.matchNo = 1; d.history = []; d.champions = []; d.seasonPlan = null; delete d.weekPlan;
       League.save(); this.refresh(); App.prepare(); this.toast('Lig sıfırlandı.');
     });
     $('btnTeams').addEventListener('click', () => TeamEditor.open());
     $('pointsInput').addEventListener('change', () => {
-      const arr = $('pointsInput').value.split(/[,\s;]+/).filter(Boolean).map(x => Math.max(0, Math.round(+x) || 0)).slice(0, 10);
+      const arr = $('pointsInput').value.split(/[,\s;]+/).filter(Boolean).map(x => Math.max(0, Math.round(+x) || 0)).slice(0, CONFIG.GROUP_SIZE);
       while (arr.length < 10) arr.push(0);
-      League.data.points = arr; $('pointsInput').value = arr.join(','); League.save();
+      League.data.points = arr; $('pointsInput').value = arr.slice(0, CONFIG.GROUP_SIZE).join(','); League.save();
     });
-    $('derbyPts').addEventListener('change', () => { League.data.derbyWinPoints = Math.max(0, Math.round(+$('derbyPts').value) || 0); League.save(); });
-    $('seasonLen').addEventListener('change', () => { League.data.seasonLength = Math.max(1, Math.round(+$('seasonLen').value) || CONFIG.SEASON_LENGTH); League.save(); this.refresh(); });
+    $('seasonLen').addEventListener('change', () => {
+      const d = League.data;
+      /* the season fixture is fixed once the season has begun */
+      if (League.seasonStarted()) { $('seasonLen').value = d.seasonLength; alert('Sezon başladı: sezon uzunluğu ancak yeni sezonda değiştirilebilir.'); return; }
+      d.seasonLength = Math.max(1, Math.round(+$('seasonLen').value) || CONFIG.SEASON_LENGTH);
+      d.seasonPlan = null; League.save(); this.refresh(); if (!App.running || App.end) App.prepare();
+    });
     $('btnCopy').addEventListener('click', async () => {
       const t = $('caption').value; if (!t) return;
       try { await navigator.clipboard.writeText(t); } catch (e) { $('caption').select(); document.execCommand('copy'); }
       this.toast('📋 Kopyalandı');
     });
     $('btnBalance').addEventListener('click', () => Balance.run());
-    $('manualList').addEventListener('change', () => {
-      s.manual = [...document.querySelectorAll('#manualList input:checked')].map(i => i.value);
-      League.save(); this.refresh(); if (!App.running || App.end) App.prepare();
-    });
     this.refresh();
   },
   init2() { this.init_values(); this.refresh(); },
   init_values() {
     const s = League.data.settings;
-    $('mode').value = s.mode; $('teamCount').value = s.teamCount; $('selMode').value = s.selMode;
     $('theme').value = s.theme; $('lives').value = s.lives; $('speedMult').value = s.speedMult;
     $('testMatch').checked = s.testMatch;
-    $('pointsInput').value = League.data.points.join(','); $('seasonLen').value = League.data.seasonLength; $('derbyPts').value = League.data.derbyWinPoints;
+    $('pointsInput').value = League.data.points.slice(0, CONFIG.GROUP_SIZE).join(','); $('seasonLen').value = League.data.seasonLength;
   },
   refresh() {
     const d = League.data, s = d.settings;
     $('speedVal').textContent = '×' + (+s.speedMult).toFixed(2);
     $('btnMute').textContent = s.muted ? '🔇' : '🔊';
-    $('rowTeamCount').style.display = s.mode === 'arena' ? '' : 'none';
-    $('manualList').classList.toggle('hidden', s.selMode !== 'manual');
-    if (s.selMode === 'manual') {
-      const ml = $('manualList');
-      const need = s.mode === 'derby' ? 2 : s.teamCount;
-      ml.innerHTML = `<div class="hint">Seçili: <b>${s.manual.filter(id => d.teams.some(t => t.id === id)).length}</b> / ${need} — ${s.mode === 'derby' ? 'tam 2 takım' : '4–10 takım (işaretli sayı kullanılır)'}</div>` +
-        d.teams.map(t => `<label class="mt"><input type="checkbox" value="${t.id}" ${s.manual.includes(t.id) ? 'checked' : ''}><span class="dot" style="background:${t.c1};border-color:${t.c2}"></span>${esc(t.code)} · ${esc(t.name)}</label>`).join('');
+    const code = (id) => esc((d.teams.find(t => t.id === id) || {}).code || '?');
+    const plan = App.seasonPlan(), started = League.seasonStarted();
+    $('seasonLen').disabled = started;
+    $('seasonLen').title = started ? 'Sezon başladı: yeni sezonda değiştirilebilir' : '';
+    let info = `<div class="kv"><span>Sezon</span><b>${d.season || 1}</b></div><div class="kv"><span>Hafta</span><b>${Math.min(d.week, d.seasonLength)} / ${d.seasonLength}</b></div>`;
+    if (!plan) {
+      info += `<div class="warn">⚠️ Takım sayısı (${d.teams.length}) ${CONFIG.GROUP_SIZE}'nın katı değil. Gruplar eşit olsun diye maç oynatılamaz — <b>Takımları düzenle</b> ile takım sayısını ${CONFIG.GROUP_SIZE}'nın katı yapın.</div>`;
+      $('fixture').innerHTML = '';
+    } else {
+      info += `<div class="kv"><span>Sıradaki grup maçı</span><b>${d.week > d.seasonLength ? '—' : `${d.weekMatch} / ${App.perWeek()}`}</b></div><div class="kv"><span>Oynanan maç (bu sezon)</span><b>${d.history.length}</b></div>`
+        + `<div class="hint">${d.teams.length} takım, her maçta ${CONFIG.GROUP_SIZE} takım → haftada ${App.perWeek()} grup maçı; her takım her hafta tam 1 maç oynar. Haftanın son grup maçı kaydedilince hafta kendiliğinden ilerler.</div>`;
+      const wk = plan.weeks[d.week - 1];
+      if (wk) info += `<div class="hint" style="margin-top:10px"><b>Hafta ${d.week} grupları</b></div>` + wk.map((g, i) =>
+        `<div class="kv"><span>${i + 1}. grup${i + 1 < d.weekMatch ? ' ✓' : i + 1 === d.weekMatch ? ' ▶' : ''}</span><b style="font-weight:600">${g.map(code).join(' · ')}</b></div>`).join('');
+      const st = fixtureMeetings(d.teams.map(t => t.id), plan.weeks.slice(0, d.seasonLength));
+      $('fixture').innerHTML = `<details><summary>📋 Sezon ${d.season || 1} fikstürü (${d.seasonLength} hafta)</summary>`
+        + `<div class="hint">Sezon başında adil olarak bir kez oluşturuldu ve sezon bitene kadar değişmez. Her takım ikilisi sezonda en az <b>${st.min}</b>, en çok <b>${st.max}</b> kez aynı grupta.</div>`
+        + `<div class="fixture">${plan.weeks.slice(0, d.seasonLength).map((w, i) => `<div class="wk${i + 1 === d.week ? ' cur' : ''}"><b>H${i + 1}</b> · ${w.map(g => g.map(code).join(' ')).join(' &nbsp;|&nbsp; ')}</div>`).join('')}</div></details>`;
     }
-    $('leagueInfo').innerHTML = `<div class="kv"><span>Hafta</span><b>${d.week} / ${d.seasonLength}</b></div><div class="kv"><span>Sıradaki grup maçı</span><b>${d.weekMatch} / ${App.perWeek()}</b></div><div class="kv"><span>Oynanan maç (toplam)</span><b>${d.history.length}</b></div><div class="hint">${d.teams.length} takım, maç başına ${s.teamCount} takım → haftada ${App.perWeek()} grup maçı; haftanın son grup maçı kaydedilince hafta kendiliğinden ilerler.</div>`
-      + (s.selMode === 'auto' ? (() => {
-          const plan = App.weekPlan(), cs = App.coocStats();
-          const rows = plan.groups.map((g, i) => `<div class="kv"><span>${i + 1}. grup${i + 1 < d.weekMatch ? ' ✓' : i + 1 === d.weekMatch ? ' ▶' : ''}</span><b style="font-weight:600">${g.map(id => esc((d.teams.find(t => t.id === id) || {}).code || '?')).join(' · ')}</b></div>`).join('');
-          return `<div class="hint" style="margin-top:10px"><b>Hafta ${d.week} grupları</b> (geçmişe göre adil dağıtım)</div>${rows}<div class="hint">Aynı grupta bulunma, takım ikilisi başına: en az <b>${cs.min}</b>, en çok <b>${cs.max}</b> kez.</div>`;
-        })() : '');
+    $('leagueInfo').innerHTML = info;
     const note = $('seasonNote');
     if (d.week >= d.seasonLength) {
       note.classList.remove('hidden');
@@ -364,7 +384,11 @@ const TeamEditor = {
   },
   save() {
     this.collect();
-    if (this.rows.length < 4) { alert('En az 4 takım olmalı.'); return; }
+    if (League.seasonStarted()) { alert('Sezon başladı: takımlar ancak yeni sezon başında (hiç maç oynanmadan) değiştirilebilir; fikstür sezon bitene kadar sabit.'); return; }
+    if (!League.validTeamCount(this.rows.length)) {
+      alert(`Takım sayısı ${CONFIG.GROUP_SIZE}'nın katı olmalı (${CONFIG.GROUP_SIZE}, ${CONFIG.GROUP_SIZE * 2}, ${CONFIG.GROUP_SIZE * 3}, ${CONFIG.GROUP_SIZE * 4}…); şu an ${this.rows.length}. Aksi halde gruplar eşit olmaz.`);
+      return;
+    }
     const codes = new Set();
     for (const r of this.rows) {
       if (r.code.length !== 3) { alert(`"${r.name}" için kod tam 3 harf/rakam olmalı.`); return; }
@@ -375,7 +399,7 @@ const TeamEditor = {
     d.teams = this.rows.map(r => ({ ...r }));
     const ids = new Set(d.teams.map(t => t.id));
     for (const id of Object.keys(d.table)) if (!ids.has(id)) delete d.table[id];
-    d.settings.manual = d.settings.manual.filter(id => ids.has(id));
+    d.seasonPlan = null;                       // new team list → new fixture (allowed only before the season begins)
     League.save(); UI.refresh(); App.prepare();
     $('teamModal').classList.add('hidden'); UI.toast('✅ Takımlar kaydedildi.');
   },
@@ -388,104 +412,85 @@ const App = {
   game: null, setup: null, running: false, paused: false, end: null, endT: 0, matchRealT: 0, title: '', intro: null, introT: 0,
   introOn() { return !!(this.running && this.intro && this.introT < CONFIG.INTRO_DURATION); },
   simSpeed() { return League.data.settings.simSpeed || 1; },
-  /* league points a finishing place earns in the current mode */
-  pointsForPlace(place) {
-    const mode = this.setup ? this.setup.mode : 'arena';
-    if (mode === 'arena') return League.data.points[place - 1] || 0;
-    if (mode === 'derby') return place === 1 ? League.data.derbyWinPoints : 0;
-    return null;
-  },
+  /* league points a finishing place earns */
+  pointsForPlace(place) { return League.data.points[place - 1] || 0; },
   /* group matches per week: every club plays once a week (18 clubs, 6 per match → 3) */
-  perWeek() { const d = League.data; return groupSizes(d.teams.length, clamp(d.settings.teamCount, 4, 10)).length; },
-  /* how many times each pair of clubs has shared an arena match (from history) */
-  coocMap() {
-    const C = new Map();
-    for (const h of League.data.history) {
-      if (h.mode !== 'arena') continue;
-      const t = h.teams;
-      for (let i = 0; i < t.length; i++) for (let j = i + 1; j < t.length; j++) {
-        const k = t[i] < t[j] ? t[i] + '|' + t[j] : t[j] + '|' + t[i];
-        C.set(k, (C.get(k) || 0) + 1);
+  perWeek() { return Math.max(1, Math.floor(League.data.teams.length / CONFIG.GROUP_SIZE)); },
+  /* the season fixture: built once when the season starts (fair split, see planSeason) and stored with the league;
+     it is never rebuilt while the season is running (team list and season length are locked then) */
+  seasonPlan() {
+    const d = League.data, ids = d.teams.map(t => t.id), key = ids.slice().sort().join(',');
+    const p = d.seasonPlan, season = d.season || 1;
+    if (p && p.season === season && p.key === key && p.size === CONFIG.GROUP_SIZE && p.weeks.length >= d.seasonLength) return p;
+    if (!League.validTeamCount(ids.length)) return null;
+    const rng = new RNG(randomSeed());
+    /* normally the season has not begun yet. A save from an older version (weekly plans) may be mid-season:
+       then the weeks already passed stay as they were played and the current week keeps its played groups */
+    const fixed = [];
+    if (League.seasonStarted()) {
+      const arena = d.history.filter(h => h.mode === 'arena' && Array.isArray(h.teams));
+      for (let w = 1; w < d.week; w++) fixed.push(arena.filter(h => h.week === w).map(h => h.teams.slice()));
+      const old = d.weekPlan && d.weekPlan.week === d.week && Array.isArray(d.weekPlan.groups) ? d.weekPlan.groups : null;
+      const valid = (gs) => gs.every(g => g.length === CONFIG.GROUP_SIZE) && new Set(gs.flat()).size === gs.flat().length && gs.flat().every(id => ids.includes(id));
+      let cur = arena.filter(h => h.week === d.week).sort((a, b) => (a.weekMatch || 0) - (b.weekMatch || 0)).map(h => h.teams.slice());
+      if (!valid(cur)) cur = [];
+      if (old && valid(old) && old.length === ids.length / CONFIG.GROUP_SIZE && cur.every((g, i) => old[i] && g.slice().sort().join() === old[i].slice().sort().join())) cur = old.map(g => g.slice());
+      else {
+        const rest = rng.shuffle(ids.filter(id => !cur.some(g => g.includes(id))));
+        while (rest.length) cur.push(rest.splice(0, CONFIG.GROUP_SIZE));
       }
+      fixed.push(cur);
     }
-    return C;
+    const weeks = fixed.concat(planSeason(ids, d.seasonLength, CONFIG.GROUP_SIZE, rng, fixed));
+    d.seasonPlan = { season, key, size: CONFIG.GROUP_SIZE, created: new Date().toISOString(), weeks };
+    delete d.weekPlan;
+    League.save();
+    return d.seasonPlan;
   },
-  coocStats() {
-    const C = this.coocMap(), ids = League.data.teams.map(t => t.id), v = [];
-    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
-      const k = ids[i] < ids[j] ? ids[i] + '|' + ids[j] : ids[j] + '|' + ids[i]; v.push(C.get(k) || 0);
-    }
-    return v.length ? { min: Math.min(...v), max: Math.max(...v) } : { min: 0, max: 0 };
-  },
-  /* this week's groups: computed once at the start of the week (fair split by meeting history) and stored */
-  weekPlan() {
-    const d = League.data, s = d.settings;
-    const ids = d.teams.map(t => t.id);
-    const key = ids.join(',') + '#' + s.teamCount;
-    if (!d.weekPlan || d.weekPlan.week !== d.week || d.weekPlan.key !== key) {
-      const C = this.coocMap();
-      const cooc = (a, b) => C.get(a < b ? a + '|' + b : b + '|' + a) || 0;
-      const rng = new RNG((d.week * 7919 + d.history.length * 31 + 17) >>> 0);
-      d.weekPlan = { week: d.week, key, groups: planGroups(ids, groupSizes(ids.length, s.teamCount), cooc, rng) };
-      League.save();
-    }
-    return d.weekPlan;
+  /* the group matches of the current week that have not been played yet */
+  unplayedThisWeek() {
+    const d = League.data, plan = this.seasonPlan();
+    if (!plan || d.week > d.seasonLength) return [];
+    const wk = plan.weeks[d.week - 1] || [];
+    return wk.map((ids, i) => ({ no: i + 1, ids })).filter(x => x.no >= d.weekMatch);
   },
   buildSetup() {
     const d = League.data, s = d.settings;
     const seed = randomSeed();                 // a fresh hidden seed for every match setup
     const srng = new RNG((seed ^ 0x5BD1E995) >>> 0);
-    let teams, err = null;
-    {
-      const n = s.mode === 'derby' ? 2 : s.teamCount;
-      if (s.selMode === 'manual') {
-        teams = d.teams.filter(t => s.manual.includes(t.id));
-        if (s.mode === 'derby' && teams.length !== 2) err = 'Derby için manuel listede tam 2 takım işaretleyin.';
-        if (s.mode === 'arena' && (teams.length < 4 || teams.length > 10)) err = 'Arena için manuel listede 4–10 takım işaretleyin.';
-      } else if (s.mode === 'arena') {
-        /* auto arena: this week's fair group (every club once a week, pairs meet equally often) */
-        const plan = this.weekPlan();
-        const ids = plan.groups[(d.weekMatch - 1) % plan.groups.length];
-        teams = ids.map(id => d.teams.find(t => t.id === id)).filter(Boolean);
-        if (teams.length < 3) err = 'Grup için yeterli takım yok.';
-      } else {
-        /* auto derby: draw from the least-played teams (seeded) */
-        const groups = new Map();
-        for (const t of d.teams) { const p = League.rowOf(d.table, t.id).played; if (!groups.has(p)) groups.set(p, []); groups.get(p).push(t); }
-        teams = [];
-        for (const p of [...groups.keys()].sort((a, b) => a - b)) {
-          const grp = srng.shuffle(groups.get(p).sort((a, b) => a.id.localeCompare(b.id)));
-          for (const t of grp) if (teams.length < n) teams.push(t);
-        }
-        if (teams.length < n) err = 'Yeterli takım yok.';
-      }
+    /* every match is the next group match of the season fixture */
+    let teams = [], err = null;
+    const plan = this.seasonPlan();
+    if (!plan) err = `Takım sayısı (${d.teams.length}) ${CONFIG.GROUP_SIZE}'nın katı olmalı — Takımları düzenle ile düzeltin.`;
+    else if (d.week > d.seasonLength) err = 'Sezon tamamlandı — panelden yeni sezonu başlatın.';
+    else {
+      const ids = (plan.weeks[d.week - 1] || [])[d.weekMatch - 1] || [];
+      teams = ids.map(id => d.teams.find(t => t.id === id)).filter(Boolean);
+      if (teams.length !== CONFIG.GROUP_SIZE) err = 'Bu grup maçı için fikstürde takım bulunamadı.';
     }
     let theme = s.theme;
     if (theme === 'auto') theme = srng.pick(THEME_IDS);
     else if (!THEME_DEFS[theme]) theme = 'classic';
-    const title = s.mode === 'derby' ? `WEEK ${d.week} · DERBY` : `WEEK ${d.week} · GROUP MATCH ${d.weekMatch}`;
-    return { err, title, mode: s.mode, week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(), matchNo: d.matchNo, seed, theme, test: s.testMatch,
-      opts: { mode: s.mode, teams: (teams || []).map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false } };
+    const title = `WEEK ${d.week} · GROUP MATCH ${d.weekMatch}`;
+    return { err, title, mode: 'arena', week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(), matchNo: d.matchNo, seed, theme, test: s.testMatch,
+      opts: { mode: 'arena', teams: teams.map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false } };
   },
   /* what the video shows before the match: today's matches (played ones with their results, the rest as fixtures) */
   buildIntro() {
     const s = this.setup, d = League.data;
     const tm = (id) => d.teams.find(t => t.id === id);
     const tObj = (t, extra) => Object.assign({ id: t.id, name: t.name, c1: t.c1, c2: t.c2 }, extra || {});
-    const matches = [];
-    if (s.mode === 'arena') {
-      const plan = this.weekPlan();
-      for (let j = 1; j <= s.perWeek; j++) {
-        const label = `GROUP MATCH ${j}`;
-        if (j < s.weekMatch) {
-          const h = d.history.slice().reverse().find(x => x.mode === 'arena' && x.week === s.week && x.weekMatch === j);
-          if (h) matches.push({ label, status: 'done', teams: h.result.slice().sort((a, b) => a.place - b.place)
-            .map(r => { const t = tm(r.id); return t ? tObj(t, { place: r.place, pts: d.points[r.place - 1] || 0 }) : null; }).filter(Boolean) });
-        } else if (j === s.weekMatch) matches.push({ label, status: 'now', teams: s.opts.teams.map(t => tObj(t)) });
-        else matches.push({ label, status: 'later', teams: (plan.groups[j - 1] || []).map(tm).filter(Boolean).map(t => tObj(t)) });
-      }
-    } else matches.push({ label: 'DERBY', status: 'now', teams: s.opts.teams.map(t => tObj(t)) });
-    return { title: s.title, sub: s.mode === 'arena' ? `WEEK ${s.week}` : s.title, matches };
+    const matches = [], week = (this.seasonPlan().weeks[s.week - 1]) || [];
+    for (let j = 1; j <= s.perWeek; j++) {
+      const label = `GROUP MATCH ${j}`;
+      if (j < s.weekMatch) {
+        const h = d.history.slice().reverse().find(x => x.mode === 'arena' && x.week === s.week && x.weekMatch === j);
+        if (h) matches.push({ label, status: 'done', teams: h.result.slice().sort((a, b) => a.place - b.place)
+          .map(r => { const t = tm(r.id); return t ? tObj(t, { place: r.place, pts: d.points[r.place - 1] || 0 }) : null; }).filter(Boolean) });
+      } else if (j === s.weekMatch) matches.push({ label, status: 'now', teams: s.opts.teams.map(t => tObj(t)) });
+      else matches.push({ label, status: 'later', teams: (week[j - 1] || []).map(tm).filter(Boolean).map(t => tObj(t)) });
+    }
+    return { title: s.title, sub: `WEEK ${s.week}`, matches };
   },
   prepare() {
     if (Recorder.active) return false;
@@ -509,7 +514,7 @@ const App = {
     if (record) {
       if (!Recorder.supported()) { alert('Bu tarayıcı MediaRecorder/captureStream desteklemiyor. Güncel Chrome kullanın.'); return; }
       const s = this.setup;
-      Recorder.start(s.mode === 'arena' ? `arena_week${s.week}_match${s.weekMatch}` : `${s.mode}_week${s.week}`);
+      Recorder.start(`arena_week${s.week}_match${s.weekMatch}`);
     }
     this.running = true;
     lastNow = performance.now();
@@ -549,8 +554,7 @@ const App = {
     const leaderBefore = rkB[0] && rkB[0].r.played ? rkB[0].t.id : null;
     const leaderAfter = rkA[0].t;
     let subtitle;
-    if (g.isDerby) { const a = g.teams[0], b = g.teams[1]; subtitle = `${a.code} ${a.score} – ${b.score} ${b.code}`; }
-    else {
+    {
       const L = g.teams.find(t => t.place === 2);
       subtitle = L && g.finalDuel ? `Final: ${W.code} ${W.score} – ${L.score} ${L.code}` : `${W.gf} goals · ${W.saves} saves`;
     }
@@ -564,17 +568,15 @@ const App = {
     /* persist */
     if (!s.test) {
       d.table = after;
-      d.history.push({ matchNo: s.matchNo, week: s.week, weekMatch: s.mode === 'arena' ? s.weekMatch : null, mode: s.mode, seed: s.seed, theme: res.theme, date: new Date().toISOString(),
+      d.history.push({ matchNo: s.matchNo, week: s.week, weekMatch: s.weekMatch, mode: 'arena', seed: s.seed, theme: res.theme, date: new Date().toISOString(),
         teams: res.teams.map(t => t.id), winner: W.id, duration: res.duration,
         result: res.teams.map(t => ({ id: t.id, code: t.code, place: t.place, gf: t.gf, ga: t.ga, saves: t.saves, score: t.score })) });
       d.matchNo++;
-      if (s.mode === 'arena') {
-        d.weekMatch++;
-        if (d.weekMatch > s.perWeek) { d.week++; d.weekMatch = 1; setTimeout(() => UI.toast(`📅 Hafta ${d.week} başladı.`), 300); }
-      }
+      d.weekMatch++;
+      if (d.weekMatch > s.perWeek) { d.week++; d.weekMatch = 1; setTimeout(() => UI.toast(`📅 Hafta ${d.week} başladı.`), 300); }
       League.save();
       /* last group match of the season: the table leader is the champion, the last teams will be relegated */
-      if (s.mode === 'arena' && d.week > d.seasonLength) {
+      if (d.week > d.seasonLength) {
         const ch = League.seasonChange();
         this.end.seasonEnd = { season: d.season || 1, champion: { id: ch.champion.id, name: ch.champion.name }, out: ch.out.map(t => t.id), in: ch.in.map(t => ({ id: t.id, name: t.name })) };
         for (const r of this.end.rows) { r.champ = r.id === ch.champion.id; r.out = ch.out.some(t => t.id === r.id); }
@@ -586,12 +588,8 @@ const App = {
   },
   caption(res, W, newLeader) {
     const s = this.setup, g = this.game;
-    let l1;
-    if (s.mode === 'derby') { const L = g.teams[1 - g.winner]; l1 = `Week ${s.week} · Derby 🏆 ${W.name} win ${W.score}–${L.score} vs ${L.name}!`; }
-    else {
-      const L = g.teams.find(t => t.place === 2);
-      l1 = `Week ${s.week} · Group Match ${s.weekMatch} 🏆 ${W.name} win${L && g.finalDuel ? ` the final ${W.score}–${L.score} vs ${L.name}` : ''}!`;
-    }
+    const L = g.teams.find(t => t.place === 2);
+    const l1 = `Week ${s.week} · Group Match ${s.weekMatch} 🏆 ${W.name} win${L && g.finalDuel ? ` the final ${W.score}–${L.score} vs ${L.name}` : ''}!`;
     const top = g.teams.slice().sort((a, b) => b.gf - a.gf || a.place - b.place)[0];
     let extra = '';
     if (top && top.gf > 0) {
@@ -619,7 +617,7 @@ const Balance = {
   run() {
     if (this.busy || Recorder.active) return;
     const s = League.data.settings, teamsAll = League.data.teams;
-    const mode = s.mode, n = mode === 'derby' ? 2 : s.teamCount;
+    const n = CONFIG.GROUP_SIZE;
     if (teamsAll.length < n) { alert('Yeterli takım yok.'); return; }
     this.busy = true; $('btnBalance').disabled = true;
     const N = 100, res = [];
@@ -632,7 +630,7 @@ const Balance = {
         const r = new RNG((seed ^ 0x51ED27) >>> 0);
         const teams = r.shuffle(teamsAll).slice(0, n).map(t => ({ ...t }));
         let theme = s.theme === 'auto' ? r.pick(THEME_IDS) : s.theme;
-        const g = new Game({ mode, teams, seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false });
+        const g = new Game({ mode: 'arena', teams, seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false });
         while (!g.over && g.t < 200) g.step(DT);
         res.push(g.getResult());
         i++;

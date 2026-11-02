@@ -68,8 +68,9 @@
   th:first-child, td:first-child { text-align: left; color: var(--muted); }
   .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid #fff; margin-right: 7px; vertical-align: -1px; }
   table.mini td, table.mini th { padding: 3px 4px; font-size: 11.5px; }
-  .checklist { max-height: 230px; overflow-y: auto; background: #0e131c; border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; margin-bottom: 10px; }
-  .checklist label.mt { display: flex; align-items: center; color: var(--text); font-weight: 500; margin: 3px 0; font-size: 13px; }
+  .fixture { max-height: 260px; overflow-y: auto; background: #0e131c; border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; margin: 6px 0 10px; font-size: 12px; }
+  .fixture .wk { margin: 3px 0; color: var(--text); }
+  .fixture .wk.cur { color: #FFD54F; }
   .progress { height: 6px; background: #0e131c; border-radius: 99px; overflow: hidden; margin: 10px 0 4px; }
   #balBar { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .15s; }
   .bal-grid { margin-top: 6px; }
@@ -118,17 +119,8 @@
 
     <section>
       <h2>Ayarlar</h2>
-      <label>Mod
-        <select id="mode"><option value="arena">Arena — günlük ana video</option><option value="derby">Derby — 2 takım</option></select>
-      </label>
-      <div class="grid2">
-        <label id="rowTeamCount">Takım sayısı (4–10)<input type="number" id="teamCount" min="4" max="10"></label>
-        <label>Can sayısı (1–5)<input type="number" id="lives" min="1" max="5"></label>
-      </div>
-      <label id="rowSel">Takım seçimi
-        <select id="selMode"><option value="auto">Otomatik (en az oynayanlar, rastgele kura)</option><option value="manual">Manuel</option></select>
-      </label>
-      <div id="manualList" class="checklist hidden"></div>
+      <div class="hint" style="margin-top:0">Her maç, sezon fikstüründeki sıradaki <b>6 takımlık grup maçıdır</b>.</div>
+      <label>Can sayısı (1–5)<input type="number" id="lives" min="1" max="5"></label>
       <label>Tema
         <select id="theme"><option value="auto">Otomatik (rastgele)</option><option value="classic">⚽ Classic</option><option value="snow">❄️ Snow</option><option value="rain">🌧️ Rain</option><option value="night">🌙 Night</option></select>
       </label>
@@ -157,10 +149,10 @@
         <button id="btnResetLeague" class="danger">🗑 Ligi sıfırla</button>
       </div>
       <div class="grid2">
-        <label>Arena puanları (1.→10.)<input id="pointsInput"></label>
-        <label>Derby galibi puanı<input type="number" id="derbyPts" min="0"></label>
+        <label>Grup maçı puanları (1.→6.)<input id="pointsInput"></label>
+        <label>Sezon uzunluğu (hafta)<input type="number" id="seasonLen" min="1"></label>
       </div>
-      <label>Sezon uzunluğu (hafta)<input type="number" id="seasonLen" min="1"></label>
+      <div id="fixture"></div>
       <div id="leagueTable"></div>
     </section>
 
@@ -175,9 +167,10 @@
       <details>
         <summary>❓ Yardım</summary>
         <ul>
-          <li><b>Başlat</b> (veya Boşluk): seçili ayarlarla yeni bir rastgele maç oynatır.</li>
+          <li><b>Başlat</b> (veya Boşluk): fikstürdeki sıradaki 6 takımlık grup maçını yeni bir rastgele seed ile oynatır.</li>
+          <li><b>Fikstür:</b> sezonun tüm grup maçları sezon başında bir kez, adil olarak oluşturulur (takım ikilileri olabildiğince eşit sayıda karşılaşır) ve sezon bitene kadar değişmez. Takım sayısı 6'nın katı olmalıdır (6, 12, 18, 24…); takımlar ve sezon uzunluğu yalnızca sezon başında değiştirilebilir.</li>
           <li><b>Kaydet ve Başlat</b>: maçı sıfırdan 1x gerçek zamanlı oynatır; bitiş ekranından sonra video otomatik iner. Kayıt sırasında sekmeyi arka plana atmayın (tarayıcı çizimi yavaşlatır).</li>
-          <li>Kayıtlı (test olmayan) her arena maçından sonra grup maçı numarası artar ve maç geçmişine o maçın (görünmeyen) seed'i kaydedilir. Haftada her takım bir kez oynar; haftanın son grup maçından sonra hafta kendiliğinden ilerler (<b>Yeni hafta</b> ile elle de geçilebilir).</li>
+          <li>Kayıtlı (test olmayan) her arena maçından sonra grup maçı numarası artar ve maç geçmişine o maçın (görünmeyen) seed'i kaydedilir. Haftada her takım bir kez oynar; haftanın son grup maçından sonra hafta kendiliğinden ilerler (<b>Yeni hafta</b> ile elle de geçilebilir; haftada oynanmamış grup maçı varsa uyarı çıkar, çünkü atlanan maçlar bir daha oynanmaz).</li>
           <li>Sezonun son haftası oynanınca final maçı yoktur: tabloda <b>1. olan şampiyon</b> olur. Panelde <b>Yeni sezonu başlat</b> ile sezon arşivlenir; tablonun son 3 takımı ligden çıkar, yedek kuyruğundaki 3 kulüp onların yerine gelir (çıkanlar kuyruğun sonuna geçer).</li>
         </ul>
         <p>WebM dosyasını Instagram'a uygun MP4'e çevirmek için:</p>

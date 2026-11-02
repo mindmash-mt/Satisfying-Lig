@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /*
   Terminal denge testi — fizik/oyun mantığını (src/01_core.js + src/02_sim.js) çizimsiz çalıştırır.
-  Kullanım:  node tools/balance.js [mod] [takım sayısı] [can] [maç sayısı]
-  Örnek:     node tools/balance.js arena 6 1 200
-             node tools/balance.js derby
+  Kullanım:  node tools/balance.js [can] [maç sayısı]
+  Örnek:     node tools/balance.js 1 200
+  Her maç bir grup maçıdır (CONFIG.GROUP_SIZE = 6 takım).
   Ayar denemek için: CFG='{"BALL_SPEED":650,"WALL_ACCEL":0.08}' node tools/balance.js
 */
 const fs = require('fs'), path = require('path');
@@ -14,8 +14,8 @@ new Function('module', src('01_core.js') + '\n' + src('02_sim.js') +
 const { CONFIG, DEFAULT_TEAMS, Game, RNG, DT, THEME_IDS } = m.exports;
 if (process.env.CFG) Object.assign(CONFIG, JSON.parse(process.env.CFG));
 
-const [mode = 'arena', nArg = '6', livesArg = '1', countArg = '100'] = process.argv.slice(2);
-const n = mode === 'derby' ? 2 : +nArg, lives = +livesArg, N = +countArg;
+const [livesArg = '1', countArg = '100'] = process.argv.slice(2);
+const mode = 'arena', n = CONFIG.GROUP_SIZE, lives = +livesArg, N = +countArg;
 const teamsAll = DEFAULT_TEAMS.map((t, i) => ({ id: 't' + (i + 1), ...t }));
 const run = (opts) => { const g = new Game(opts); while (!g.over) g.step(DT); return g.getResult(); };
 
@@ -31,7 +31,7 @@ for (let i = 0; i < N; i++) {
 }
 durs.sort((a, b) => a - b);
 const avg = durs.reduce((a, b) => a + b, 0) / N, pct = (x) => Math.round((x / N) * 100) + '%';
-console.log(`${N} maç · mod ${mode} · ${n} takım · ${lives} can`);
+console.log(`${N} grup maçı · ${n} takım · ${lives} can`);
 console.log(`Süre: ort ${avg.toFixed(1)} sn · medyan ${durs[N >> 1].toFixed(1)} · min ${durs[0].toFixed(1)} · maks ${durs[N - 1].toFixed(1)} (hedef ort. 25–40 sn ${avg >= 25 && avg <= 40 ? '✅' : '⚠️'})`);
 console.log(`Uzatma: ${pct(ot)} · Ort. gol: ${(goals / N).toFixed(1)} · Ort. kurtarış: ${(saves / N).toFixed(1)} · Kendi kalesine: ${goals ? Math.round((own / goals) * 100) : 0}% · Duvardan kaçan top: ${esc}`);
 console.log('Kale pozisyonuna göre sıra dağılımı (satırlar ~eşitse adil):');

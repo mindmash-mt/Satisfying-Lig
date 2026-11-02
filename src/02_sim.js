@@ -41,8 +41,7 @@ function buildGeo(kind, verts, sideTeams, cx, cy, goalInfo, netDepth, goalFrac, 
 class Game {
   constructor(o) {
     this.o = o;
-    this.mode = o.mode;                    // 'arena' | 'derby'
-    this.isDerby = o.mode === 'derby';
+    this.mode = 'arena';                   // group matches only
     this.rng = new RNG(o.seed >>> 0);
     this.onEvent = null;
     this.cx = CONFIG.CX; this.cy = CONFIG.CY;
@@ -63,7 +62,7 @@ class Game {
     this.omega = 0; this.rot = 0;
 
     let defs = o.teams.slice();
-    if (!this.isDerby) defs = this.rng.shuffle(defs);
+    defs = this.rng.shuffle(defs);
     this.N0 = defs.length;
     this.teams = defs.map((d, i) => ({
       i, id: d.id, name: d.name, code: d.code, c1: d.c1, c2: d.c2,
@@ -74,10 +73,7 @@ class Game {
       k: { s: 0, vs: 0, halfLen: 20, flashT: -9, saveCd: 0, active: true },
     }));
 
-    if (this.isDerby) {
-      this.shape = 'rect'; this.W = CONFIG.DERBY_W; this.H = CONFIG.DERBY_H; this.rectTeams = [0, 1];
-      this.netDepth = CONFIG.NET_DEPTH_RECT; this.derbyLeft = CONFIG.DERBY_TIME; this.goldenGoal = false; this.ggStart = 0;
-    } else if (defs.length <= 2) {
+    if (defs.length <= 2) {
       this.shape = 'rect'; this.W = CONFIG.FINAL_W; this.H = CONFIG.FINAL_H; this.rectTeams = [0, 1];
       this.netDepth = CONFIG.NET_DEPTH_RECT; this.finalDuel = true; this.startDuelScore();
     } else {
@@ -129,13 +125,12 @@ class Game {
     for (let i = 0; i < verts.length; i++) { const a = verts[i], b = verts[(i + 1) % verts.length], L = Math.hypot(b.x - a.x, b.y - a.y); if (L >= 0.5) { per += L; n++; } }
     return buildGeo('poly', verts, sides, this.cx, this.cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH, CONFIG.GOAL_FRAC, n ? per / n : 0);
   }
-  /* centre line of the rectangular pitch: the final duel pitch is shifted down a little, the derby pitch is not */
-  rectCy() { return this.cy + (this.isDerby ? 0 : CONFIG.FINAL_DY); }
+  /* centre line of the rectangular final-duel pitch: shifted down a little so it clears the scoreboard */
+  rectCy() { return this.cy + CONFIG.FINAL_DY; }
   rectGeo(W, H, teams) {
     const cy = this.rectCy(), x0 = this.cx - W / 2, x1 = this.cx + W / 2, y0 = cy - H / 2, y1 = cy + H / 2;
     const verts = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
-    const g = buildGeo('rect', verts, [teams[0], -1, teams[1], -1], this.cx, cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH_RECT,
-      this.isDerby ? CONFIG.DERBY_GOAL_FRAC : CONFIG.FINAL_GOAL_FRAC);
+    const g = buildGeo('rect', verts, [teams[0], -1, teams[1], -1], this.cx, cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH_RECT, CONFIG.FINAL_GOAL_FRAC);
     g.W = W; g.H = H;
     return g;
   }
@@ -183,9 +178,6 @@ class Game {
         const m = this.duelMateSpot(t, top, this.W, this.H, cx);
         this.players.push(mk(t, m.x, m.y, false));
       }
-    } else if (this.isDerby) {
-      this.players.push(mk(0, this.cx - 150, this.cy - 230), mk(0, this.cx + 150, this.cy - 110),
-        mk(1, this.cx + 150, this.cy + 230), mk(1, this.cx - 150, this.cy + 110));
     } else {
       for (const g of this.geo.goals) {
         this.players.push(mk(g.team, this.cx + (g.mx - this.cx) * 0.5, this.cy + (g.my - this.cy) * 0.5));
@@ -195,7 +187,7 @@ class Game {
   targetSpeed() {
     let s = CONFIG.BALL_SPEED * this.o.speedMult * this.theme.speed;
     if (this.t < this.fxSpeedUntil) s *= 1.4;
-    if (this.finalDuel && !this.isDerby) s *= 1.15;
+    if (this.finalDuel) s *= 1.15;
     return s;
   }
   /* every wall/post bounce makes that ball a little faster (capped); a new ball starts at base speed */
@@ -221,7 +213,7 @@ class Game {
     b.sp = this.ballSpeedTarget(b);
   }
   maxBallsNow() {
-    if (this.isDerby || this.finalDuel) return 1;
+    if (this.finalDuel) return 1;
     return Math.min(CONFIG.MAX_BALLS, 1 + Math.floor(this.t / CONFIG.BALL_ADD_EVERY));
   }
   spawnBall(initial) {
@@ -283,25 +275,11 @@ class Game {
 
   updateTimers(dt) {
     const t = this.t;
-    if (!this.isDerby) {
-      const ot = t - this.otStart;
-      if (CONFIG.GOAL_GROW && !this.overtime && ot >= CONFIG.OT_AT && !this.winnerSet) { this.overtime = true; this.everOvertime = true; this.emit('overtime'); }
-      if (this.overtime) {
-        this.otMult = 1 + (CONFIG.OT_MULT - 1) * clamp01((ot - CONFIG.OT_AT) / CONFIG.OT_RAMP)
-          + 1.2 * clamp01((ot - CONFIG.OT_AT - CONFIG.OT_RAMP) / 5);
-      }
-    } else {
-      this.derbyLeft = Math.max(0, CONFIG.DERBY_TIME - t);
-      if (!this.winnerSet && !this.goldenGoal && t >= CONFIG.DERBY_TIME) {
-        const a = this.teams[0].score, b = this.teams[1].score;
-        if (a !== b) this.finish(a > b ? 0 : 1);
-        else { this.goldenGoal = true; this.ggStart = t; this.emit('goldenGoal'); }
-      }
-      if (this.goldenGoal && !this.winnerSet) {
-        const x = t - this.ggStart - 10;
-        if (CONFIG.GOAL_GROW && x > 0 && !this.overtime) { this.overtime = true; this.everOvertime = true; this.emit('overtime'); }
-        this.otMult = 1 + 0.8 * clamp01(x / 10) + 0.5 * clamp01((x - 10) / 10);
-      }
+    const ot = t - this.otStart;
+    if (CONFIG.GOAL_GROW && !this.overtime && ot >= CONFIG.OT_AT && !this.winnerSet) { this.overtime = true; this.everOvertime = true; this.emit('overtime'); }
+    if (this.overtime) {
+      this.otMult = 1 + (CONFIG.OT_MULT - 1) * clamp01((ot - CONFIG.OT_AT) / CONFIG.OT_RAMP)
+        + 1.2 * clamp01((ot - CONFIG.OT_AT - CONFIG.OT_RAMP) / 5);
     }
     for (let i = this.powerups.length - 1; i >= 0; i--) {
       const p = this.powerups[i]; p.age += dt;
@@ -464,7 +442,7 @@ class Game {
     const fresh = this.t - b.hitP > 0.12;
     b.lastTouch = p.team; b.hitP = this.t;
     if (fresh) this.emit('player', { x: b.x - nx * CONFIG.BALL_R, y: b.y - ny * CONFIG.BALL_R, team: p.team });
-    if (this.finalDuel && !this.isDerby && !this.winnerSet && p.captain && this.headingToRivalGoal(b, p.team)) {
+    if (this.finalDuel && !this.winnerSet && p.captain && this.headingToRivalGoal(b, p.team)) {
       if (!b.shot || b.shotTeam !== p.team) {
         b.shot = true; b.shotTeam = p.team;
         b.sp = this.ballSpeedTarget(b);
@@ -601,15 +579,6 @@ class Game {
     T.ga++; T.hitT = this.t; this.stats.goals++;
     this.spawnBlock = Math.max(this.spawnBlock, this.t + CONFIG.GOAL_RESPAWN);
     const ev = { team: g.team, scorer, own, x: b.x, y: b.y, along, nx: g.nx, ny: g.ny, ballId: b.id };
-    if (this.isDerby) {
-      const other = 1 - g.team;
-      this.teams[other].score++;                    // the match score still counts own goals…
-      if (own) this.stats.ownGoals++;
-      else if (scorer >= 0) this.creditGoal(scorer);  // …but a team's goal tally only counts its own goals
-      this.emit('goal', ev);
-      if (this.goldenGoal) this.finish(other);
-      return;
-    }
     if (own) this.stats.ownGoals++;
     else if (scorer >= 0) this.creditGoal(scorer);
     if (this.finalDuel) { const other = this.activeTeams().find(i => i !== g.team); if (other !== undefined) this.teams[other].score++; }
@@ -735,20 +704,18 @@ class Game {
     if (this.winnerSet) return;
     this.winnerSet = true; this.winner = w;
     if (w >= 0) this.teams[w].place = 1;
-    if (this.isDerby && w >= 0) this.teams[1 - w].place = 2;
     this.duration = this.t; this.ending = CONFIG.WIN_SLOW_GAME; this.elimSlow = 0;
     this.slowmo = null;
     this.emit('win', { team: w });
   }
   forceFinish() {   // pathological safety: rank remaining teams by lives (never hit with sane settings)
-    if (this.isDerby) { const a = this.teams[0].score, b = this.teams[1].score; this.finish(a >= b ? 0 : 1); return; }
     const act = this.activeTeams().map(i => this.teams[i]);
     act.sort((a, b) => b.lives - a.lives || a.ga - b.ga || a.i - b.i);
     for (let r = act.length - 1; r >= 1; r--) { act[r].eliminated = true; act[r].place = r + 1; act[r].elimT = this.t; }
     this.finish(act[0].i);
   }
   checkFinalSlowmo() {
-    if (!this.finalDuel || this.isDerby || this.winnerSet || this.morph || this.t < this.slowmoCd) return;
+    if (!this.finalDuel || this.winnerSet || this.morph || this.t < this.slowmoCd) return;
     for (const g of this.geo.goals) {
       const T = this.teams[g.team];
       if (T.lives !== 1 || g.closed) continue;
@@ -768,8 +735,8 @@ class Game {
   /* ---------- POWERUPS (logic) ---------- */
   spawnPowerup() {
     const geo = this.geo, M = CONFIG.PU_WALL_MARGIN;
-    /* no Extra Life in derby or single-life matches; no Split Ball when only one ball is allowed */
-    const defs = POWERUP_DEFS.filter(d => !(d.id === 'life' && (this.isDerby || this.o.lives <= 1)) && !(d.id === 'split' && CONFIG.MAX_BALLS <= 1));
+    /* no Extra Life in single-life matches; no Split Ball when only one ball is allowed */
+    const defs = POWERUP_DEFS.filter(d => !(d.id === 'life' && this.o.lives <= 1) && !(d.id === 'split' && CONFIG.MAX_BALLS <= 1));
     let pos = null;
     for (let tries = 0; tries < 12 && !pos; tries++) {
       let x, y;
@@ -821,7 +788,7 @@ class Game {
       case 'speed': this.fxSpeedUntil = this.t + def.dur; text = '⚡ SPEED UP!'; break;
       case 'split': {
         let live = 0; for (const x of this.balls) if (x.state === 'live') live++;
-        const cap = CONFIG.MAX_BALLS <= 1 ? 1 : (this.isDerby || this.finalDuel ? 1 : CONFIG.MAX_BALLS) + 1;
+        const cap = CONFIG.MAX_BALLS <= 1 ? 1 : (this.finalDuel ? 1 : CONFIG.MAX_BALLS) + 1;
         text = '➕ SPLIT BALL!';
         if (live < cap) {
           const a = Math.atan2(b.vy, b.vx), sp = b.sp;

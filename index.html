@@ -68,8 +68,9 @@
   th:first-child, td:first-child { text-align: left; color: var(--muted); }
   .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid #fff; margin-right: 7px; vertical-align: -1px; }
   table.mini td, table.mini th { padding: 3px 4px; font-size: 11.5px; }
-  .checklist { max-height: 230px; overflow-y: auto; background: #0e131c; border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; margin-bottom: 10px; }
-  .checklist label.mt { display: flex; align-items: center; color: var(--text); font-weight: 500; margin: 3px 0; font-size: 13px; }
+  .fixture { max-height: 260px; overflow-y: auto; background: #0e131c; border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; margin: 6px 0 10px; font-size: 12px; }
+  .fixture .wk { margin: 3px 0; color: var(--text); }
+  .fixture .wk.cur { color: #FFD54F; }
   .progress { height: 6px; background: #0e131c; border-radius: 99px; overflow: hidden; margin: 10px 0 4px; }
   #balBar { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .15s; }
   .bal-grid { margin-top: 6px; }
@@ -118,17 +119,8 @@
 
     <section>
       <h2>Ayarlar</h2>
-      <label>Mod
-        <select id="mode"><option value="arena">Arena — günlük ana video</option><option value="derby">Derby — 2 takım</option></select>
-      </label>
-      <div class="grid2">
-        <label id="rowTeamCount">Takım sayısı (4–10)<input type="number" id="teamCount" min="4" max="10"></label>
-        <label>Can sayısı (1–5)<input type="number" id="lives" min="1" max="5"></label>
-      </div>
-      <label id="rowSel">Takım seçimi
-        <select id="selMode"><option value="auto">Otomatik (en az oynayanlar, rastgele kura)</option><option value="manual">Manuel</option></select>
-      </label>
-      <div id="manualList" class="checklist hidden"></div>
+      <div class="hint" style="margin-top:0">Her maç, sezon fikstüründeki sıradaki <b>6 takımlık grup maçıdır</b>.</div>
+      <label>Can sayısı (1–5)<input type="number" id="lives" min="1" max="5"></label>
       <label>Tema
         <select id="theme"><option value="auto">Otomatik (rastgele)</option><option value="classic">⚽ Classic</option><option value="snow">❄️ Snow</option><option value="rain">🌧️ Rain</option><option value="night">🌙 Night</option></select>
       </label>
@@ -157,10 +149,10 @@
         <button id="btnResetLeague" class="danger">🗑 Ligi sıfırla</button>
       </div>
       <div class="grid2">
-        <label>Arena puanları (1.→10.)<input id="pointsInput"></label>
-        <label>Derby galibi puanı<input type="number" id="derbyPts" min="0"></label>
+        <label>Grup maçı puanları (1.→6.)<input id="pointsInput"></label>
+        <label>Sezon uzunluğu (hafta)<input type="number" id="seasonLen" min="1"></label>
       </div>
-      <label>Sezon uzunluğu (hafta)<input type="number" id="seasonLen" min="1"></label>
+      <div id="fixture"></div>
       <div id="leagueTable"></div>
     </section>
 
@@ -175,9 +167,10 @@
       <details>
         <summary>❓ Yardım</summary>
         <ul>
-          <li><b>Başlat</b> (veya Boşluk): seçili ayarlarla yeni bir rastgele maç oynatır.</li>
+          <li><b>Başlat</b> (veya Boşluk): fikstürdeki sıradaki 6 takımlık grup maçını yeni bir rastgele seed ile oynatır.</li>
+          <li><b>Fikstür:</b> sezonun tüm grup maçları sezon başında bir kez, adil olarak oluşturulur (takım ikilileri olabildiğince eşit sayıda karşılaşır) ve sezon bitene kadar değişmez. Takım sayısı 6'nın katı olmalıdır (6, 12, 18, 24…); takımlar ve sezon uzunluğu yalnızca sezon başında değiştirilebilir.</li>
           <li><b>Kaydet ve Başlat</b>: maçı sıfırdan 1x gerçek zamanlı oynatır; bitiş ekranından sonra video otomatik iner. Kayıt sırasında sekmeyi arka plana atmayın (tarayıcı çizimi yavaşlatır).</li>
-          <li>Kayıtlı (test olmayan) her arena maçından sonra grup maçı numarası artar ve maç geçmişine o maçın (görünmeyen) seed'i kaydedilir. Haftada her takım bir kez oynar; haftanın son grup maçından sonra hafta kendiliğinden ilerler (<b>Yeni hafta</b> ile elle de geçilebilir).</li>
+          <li>Kayıtlı (test olmayan) her arena maçından sonra grup maçı numarası artar ve maç geçmişine o maçın (görünmeyen) seed'i kaydedilir. Haftada her takım bir kez oynar; haftanın son grup maçından sonra hafta kendiliğinden ilerler (<b>Yeni hafta</b> ile elle de geçilebilir; haftada oynanmamış grup maçı varsa uyarı çıkar, çünkü atlanan maçlar bir daha oynanmaz).</li>
           <li>Sezonun son haftası oynanınca final maçı yoktur: tabloda <b>1. olan şampiyon</b> olur. Panelde <b>Yeni sezonu başlat</b> ile sezon arşivlenir; tablonun son 3 takımı ligden çıkar, yedek kuyruğundaki 3 kulüp onların yerine gelir (çıkanlar kuyruğun sonuna geçer).</li>
         </ul>
         <p>WebM dosyasını Instagram'a uygun MP4'e çevirmek için:</p>
@@ -212,11 +205,11 @@ const CONFIG = {
   /* Tuned with the balance test. Single-ball mode: MAX_BALLS 1 (set >1 to bring back the ball schedule). */
   /* ball starts at BALL_SPEED and gets WALL_ACCEL faster on every wall/post bounce, up to BALL_MAX_MULT × */
   BALL_R: 16, BALL_SPEED: 600, WALL_ACCEL: 0.10, BALL_MAX_MULT: 2.4, MAX_BALLS: 1, BALL_ADD_EVERY: 3, GOAL_RESPAWN: 1.1,
-  POST_R: 10, GOAL_FRAC: 0.50, ELIM_GOAL_GROW: 0.25, FINAL_GOAL_FRAC: 0.54, DERBY_GOAL_FRAC: 0.50, NET_DEPTH: 50, NET_DEPTH_RECT: 34,
+  POST_R: 10, GOAL_FRAC: 0.50, ELIM_GOAL_GROW: 0.25, FINAL_GOAL_FRAC: 0.54, NET_DEPTH: 50, NET_DEPTH_RECT: 34,
   KEEPER_INSET: 28, KEEPER_LEN_FRAC: 0.30, KEEPER_THICK: 14, KEEPER_SPEED: 320, KEEPER_GAIN: 3, KEEPER_READ: 0.3,
   PLAYER_R: 24, PLAYER_SPEED: 260,
   ROT_SPEED_DEG: 0, ROT_GROWTH: 1.12,
-  GOAL_GROW: false,   // false: goals never widen (no growth after eliminations, in overtime or derby golden goal)
+  GOAL_GROW: false,   // false: goals never widen (no growth after eliminations or in overtime)
   OT_AT: 45, OT_RAMP: 10, OT_MULT: 1.6,
   ELIM_SLOW_GAME: 0.18, ELIM_FREEZE: 1.0, WIN_SLOW_GAME: 0.24, TS_SLOW: 0.3,
   FINAL_SLOWMO_GAME: 0.375, FINAL_SLOWMO_TS: 0.25, FINAL_SLOWMO_DIST: 120,
@@ -225,10 +218,11 @@ const CONFIG = {
   /* final duel: 2 players per team, one is the captain. A captain touch that sends the ball toward the rival goal
      (within CAPTAIN_AIM_DEG of the goal centre) makes it CAPTAIN_SHOT_MULT × faster until it hits anything else. */
   CAPTAIN_SHOT_MULT: 2, CAPTAIN_AIM_DEG: 55,
-  DERBY_W: 720, DERBY_H: 880, DERBY_TIME: 30,
   PU_R: 26, PU_LIFE: 8, PU_MIN: 6, PU_MAX: 10, PU_MAX_COUNT: 2, PU_WALL_MARGIN: 80,
-  DEFAULT_LIVES: 1, DEFAULT_TEAM_COUNT: 6, DEFAULT_SPEED_MULT: 1.0,
-  POINTS: [4, 3, 2, 1, 0, 0, 0, 0, 0, 0], DERBY_WIN_POINTS: 5, SEASON_LENGTH: 17,
+  DEFAULT_LIVES: 1, DEFAULT_SPEED_MULT: 1.0,
+  /* every match is a group match of exactly GROUP_SIZE clubs; the league size must be a multiple of it so all groups are equal */
+  GROUP_SIZE: 6,
+  POINTS: [4, 3, 2, 1, 0, 0, 0, 0, 0, 0], SEASON_LENGTH: 17,
   STORAGE_KEY: 'arenaLeague_v1',
   /* before the match: today's group matches (results / fixtures) → match. After it: one animated league table (held until the video ends) */
   INTRO_DURATION: 3.4,
@@ -372,51 +366,99 @@ function shade(h, k) { /* k<0 darker, k>0 lighter */
 function luminance(h) { const [r, g, b] = hexToRgb(h); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; }
 
 /* =====================================================================
-   FAIR WEEKLY GROUPS (used by LEAGUE)
-   Splits the clubs into groups so that pairs who have shared a group the fewest times are put together.
-   cooc(a,b) = how many times a and b have already been in the same arena match.
-   Seeded multi-start local search (swap moves); the cost of a pair grows with the square of its
-   meeting count, so the season converges to every pair meeting (almost) equally often.
+   SEASON FIXTURE (used by LEAGUE)
+   The whole season's group plan is built once, when the season starts, and is not changed until it ends.
+   Every week the clubs are split into equal groups of `size` (the league size is a multiple of it), so every
+   club plays exactly once a week and the same number of matches in the season.
+   Goal: every pair of clubs shares a group as equally often as possible. Cost = Σ (meetings of a pair)²;
+   with a fixed total number of meetings this is lowest when the meetings are spread evenly.
+   Seeded: a greedy week-by-week start, then simulated annealing with swaps inside a week
+   (two clubs from different groups of the same week trade places, so every week stays a valid split).
+   fixed: weeks already decided (e.g. played before a migration) — kept as they are and only counted.
    ===================================================================== */
-function groupSizes(n, groupSize) {
-  const k = Math.max(1, Math.ceil(n / groupSize)), base = Math.floor(n / k), extra = n % k;
-  return Array.from({ length: k }, (_, i) => base + (i < extra ? 1 : 0));
-}
-function planGroups(ids, sizes, cooc, rng, restarts = 60) {
-  const n = ids.length;
-  const W = [];
-  for (let i = 0; i < n; i++) { W.push(new Float64Array(n)); }
-  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
-    const c = cooc(ids[i], ids[j]);
-    W[i][j] = W[j][i] = (c + 1) * (c + 1) - c * c;          // marginal cost of meeting once more = 2c+1
+function planSeason(ids, weeks, size, rng, fixed = []) {
+  if (!ids.length || ids.length % size !== 0) throw new Error(`Takım sayısı (${ids.length}) ${size}'nın katı olmalı.`);
+  /* several independent seeded runs (4, or up to 10 while pairs still differ by more than 2 meetings);
+     keep the one whose pair meetings are spread the narrowest */
+  let best = null, bestKey = Infinity;
+  for (let r = 0; r < 10 && (r < 4 || bestKey >= 3e9); r++) {
+    const plan = planSeasonRun(ids, weeks, size, rng, fixed), st = fixtureMeetings(ids, fixed.concat(plan));
+    const key = (st.max - st.min) * 1e9 + st.sq;
+    if (key < bestKey) { bestKey = key; best = plan; }
   }
-  let best = null, bestCost = Infinity;
-  for (let r = 0; r < restarts; r++) {
-    const perm = rng.shuffle([...Array(n).keys()]);
-    const grp = new Int32Array(n);
-    let p = 0; sizes.forEach((sz, gi) => { for (let k = 0; k < sz; k++) grp[perm[p++]] = gi; });
-    const tie = (i, j) => ((i * 7919 + j * 104729 + r * 31) % 97) * 1e-6;  // deterministic tie-break
+  return best;
+}
+function planSeasonRun(ids, weeks, size, rng, fixed) {
+  const n = ids.length, K = n / size;
+  const C = new Int32Array(n * n), idx = new Map(ids.map((id, i) => [id, i]));
+  const meet = (members, d) => {
+    for (let x = 0; x < members.length; x++) for (let y = x + 1; y < members.length; y++) {
+      const a = members[x], b = members[y]; C[a * n + b] += d; C[b * n + a] += d;
+    }
+  };
+  for (const wk of fixed) for (const grp of wk) meet(grp.map(id => idx.get(id)).filter(i => i !== undefined), 1);
+  const free = Math.max(0, weeks - fixed.length);
+  const W = [];                                   // W[w][club] = group index of the club in free week w
+  const members = (g, gi) => { const m = []; for (let i = 0; i < n; i++) if (g[i] === gi) m.push(i); return m; };
+  /* cost change if clubs a (group A) and b (group B) trade places in a week with assignment g */
+  const delta = (g, a, b) => {
+    const A = g[a], B = g[b];
+    let d = 0;
+    for (let x = 0; x < n; x++) {
+      if (x === a || x === b) continue;
+      if (g[x] === A) d += 2 * (C[b * n + x] - C[a * n + x]) + 2;        // (c+1)² - c² and (c-1)² - c²
+      else if (g[x] === B) d += 2 * (C[a * n + x] - C[b * n + x]) + 2;
+    }
+    return d;
+  };
+  const swap = (g, a, b) => {
+    const A = g[a], B = g[b];
+    for (let x = 0; x < n; x++) {
+      if (x === a || x === b) continue;
+      if (g[x] === A) { C[a * n + x]--; C[x * n + a]--; C[b * n + x]++; C[x * n + b]++; }
+      else if (g[x] === B) { C[b * n + x]--; C[x * n + b]--; C[a * n + x]++; C[x * n + a]++; }
+    }
+    g[a] = B; g[b] = A;
+  };
+  /* greedy start: each week a random split, improved by swaps against the meetings so far */
+  for (let w = 0; w < free; w++) {
+    const perm = rng.shuffle([...Array(n).keys()]), g = new Int32Array(n);
+    perm.forEach((club, p) => { g[club] = Math.floor(p / size); });
+    for (let gi = 0; gi < K; gi++) meet(members(g, gi), 1);
     let improved = true;
     while (improved) {
       improved = false;
-      for (let a = 0; a < n && !improved; a++) for (let b = a + 1; b < n && !improved; b++) {
-        if (grp[a] === grp[b]) continue;
-        let d = 0;
-        for (let x = 0; x < n; x++) {
-          if (x === a || x === b) continue;
-          if (grp[x] === grp[a]) d += W[b][x] - W[a][x];
-          else if (grp[x] === grp[b]) d += W[a][x] - W[b][x];
-        }
-        if (d < -1e-9) { const t = grp[a]; grp[a] = grp[b]; grp[b] = t; improved = true; }
+      for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) {
+        if (g[a] !== g[b] && delta(g, a, b) < 0) { swap(g, a, b); improved = true; }
       }
     }
-    let cost = 0;
-    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (grp[i] === grp[j]) cost += W[i][j] + tie(i, j);
-    if (cost < bestCost) { bestCost = cost; best = Array.from(grp); }
+    W.push(g);
   }
-  const groups = sizes.map(() => []);
-  best.forEach((gi, i) => groups[gi].push(ids[i]));
-  return groups;
+  /* annealing over the whole season (cooling from T0 to T1), then a last greedy pass */
+  if (free > 0 && K > 1) {
+    const iters = 25000 * free, T0 = 2, T1 = 0.1;
+    for (let it = 0; it < iters; it++) {
+      const g = W[Math.floor(rng.next() * free)];
+      const a = Math.floor(rng.next() * n), b = Math.floor(rng.next() * n);
+      if (g[a] === g[b]) continue;
+      const d = delta(g, a, b), T = T0 * Math.pow(T1 / T0, it / iters);
+      if (d <= 0 || rng.next() < Math.exp(-d / T)) swap(g, a, b);
+    }
+    for (const g of W) for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) if (g[a] !== g[b] && delta(g, a, b) < 0) swap(g, a, b);
+  }
+  return W.map(g => Array.from({ length: K }, (_, gi) => members(g, gi).map(i => ids[i])));
+}
+/* how many times each pair has shared a group in a list of weeks (stats for the panel and tests) */
+function fixtureMeetings(ids, weekList) {
+  const M = new Map(), key = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
+  for (const wk of weekList) for (const grp of wk) for (let i = 0; i < grp.length; i++) for (let j = i + 1; j < grp.length; j++) {
+    const k = key(grp[i], grp[j]); M.set(k, (M.get(k) || 0) + 1);
+  }
+  let min = Infinity, max = 0, sq = 0;
+  for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+    const c = M.get(key(ids[i], ids[j])) || 0; if (c < min) min = c; if (c > max) max = c; sq += c * c;
+  }
+  return { min: isFinite(min) ? min : 0, max, sq };
 }
 
 /* =====================================================================
@@ -462,8 +504,7 @@ function buildGeo(kind, verts, sideTeams, cx, cy, goalInfo, netDepth, goalFrac, 
 class Game {
   constructor(o) {
     this.o = o;
-    this.mode = o.mode;                    // 'arena' | 'derby'
-    this.isDerby = o.mode === 'derby';
+    this.mode = 'arena';                   // group matches only
     this.rng = new RNG(o.seed >>> 0);
     this.onEvent = null;
     this.cx = CONFIG.CX; this.cy = CONFIG.CY;
@@ -484,7 +525,7 @@ class Game {
     this.omega = 0; this.rot = 0;
 
     let defs = o.teams.slice();
-    if (!this.isDerby) defs = this.rng.shuffle(defs);
+    defs = this.rng.shuffle(defs);
     this.N0 = defs.length;
     this.teams = defs.map((d, i) => ({
       i, id: d.id, name: d.name, code: d.code, c1: d.c1, c2: d.c2,
@@ -495,10 +536,7 @@ class Game {
       k: { s: 0, vs: 0, halfLen: 20, flashT: -9, saveCd: 0, active: true },
     }));
 
-    if (this.isDerby) {
-      this.shape = 'rect'; this.W = CONFIG.DERBY_W; this.H = CONFIG.DERBY_H; this.rectTeams = [0, 1];
-      this.netDepth = CONFIG.NET_DEPTH_RECT; this.derbyLeft = CONFIG.DERBY_TIME; this.goldenGoal = false; this.ggStart = 0;
-    } else if (defs.length <= 2) {
+    if (defs.length <= 2) {
       this.shape = 'rect'; this.W = CONFIG.FINAL_W; this.H = CONFIG.FINAL_H; this.rectTeams = [0, 1];
       this.netDepth = CONFIG.NET_DEPTH_RECT; this.finalDuel = true; this.startDuelScore();
     } else {
@@ -550,13 +588,12 @@ class Game {
     for (let i = 0; i < verts.length; i++) { const a = verts[i], b = verts[(i + 1) % verts.length], L = Math.hypot(b.x - a.x, b.y - a.y); if (L >= 0.5) { per += L; n++; } }
     return buildGeo('poly', verts, sides, this.cx, this.cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH, CONFIG.GOAL_FRAC, n ? per / n : 0);
   }
-  /* centre line of the rectangular pitch: the final duel pitch is shifted down a little, the derby pitch is not */
-  rectCy() { return this.cy + (this.isDerby ? 0 : CONFIG.FINAL_DY); }
+  /* centre line of the rectangular final-duel pitch: shifted down a little so it clears the scoreboard */
+  rectCy() { return this.cy + CONFIG.FINAL_DY; }
   rectGeo(W, H, teams) {
     const cy = this.rectCy(), x0 = this.cx - W / 2, x1 = this.cx + W / 2, y0 = cy - H / 2, y1 = cy + H / 2;
     const verts = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
-    const g = buildGeo('rect', verts, [teams[0], -1, teams[1], -1], this.cx, cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH_RECT,
-      this.isDerby ? CONFIG.DERBY_GOAL_FRAC : CONFIG.FINAL_GOAL_FRAC);
+    const g = buildGeo('rect', verts, [teams[0], -1, teams[1], -1], this.cx, cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH_RECT, CONFIG.FINAL_GOAL_FRAC);
     g.W = W; g.H = H;
     return g;
   }
@@ -604,9 +641,6 @@ class Game {
         const m = this.duelMateSpot(t, top, this.W, this.H, cx);
         this.players.push(mk(t, m.x, m.y, false));
       }
-    } else if (this.isDerby) {
-      this.players.push(mk(0, this.cx - 150, this.cy - 230), mk(0, this.cx + 150, this.cy - 110),
-        mk(1, this.cx + 150, this.cy + 230), mk(1, this.cx - 150, this.cy + 110));
     } else {
       for (const g of this.geo.goals) {
         this.players.push(mk(g.team, this.cx + (g.mx - this.cx) * 0.5, this.cy + (g.my - this.cy) * 0.5));
@@ -616,7 +650,7 @@ class Game {
   targetSpeed() {
     let s = CONFIG.BALL_SPEED * this.o.speedMult * this.theme.speed;
     if (this.t < this.fxSpeedUntil) s *= 1.4;
-    if (this.finalDuel && !this.isDerby) s *= 1.15;
+    if (this.finalDuel) s *= 1.15;
     return s;
   }
   /* every wall/post bounce makes that ball a little faster (capped); a new ball starts at base speed */
@@ -642,7 +676,7 @@ class Game {
     b.sp = this.ballSpeedTarget(b);
   }
   maxBallsNow() {
-    if (this.isDerby || this.finalDuel) return 1;
+    if (this.finalDuel) return 1;
     return Math.min(CONFIG.MAX_BALLS, 1 + Math.floor(this.t / CONFIG.BALL_ADD_EVERY));
   }
   spawnBall(initial) {
@@ -704,25 +738,11 @@ class Game {
 
   updateTimers(dt) {
     const t = this.t;
-    if (!this.isDerby) {
-      const ot = t - this.otStart;
-      if (CONFIG.GOAL_GROW && !this.overtime && ot >= CONFIG.OT_AT && !this.winnerSet) { this.overtime = true; this.everOvertime = true; this.emit('overtime'); }
-      if (this.overtime) {
-        this.otMult = 1 + (CONFIG.OT_MULT - 1) * clamp01((ot - CONFIG.OT_AT) / CONFIG.OT_RAMP)
-          + 1.2 * clamp01((ot - CONFIG.OT_AT - CONFIG.OT_RAMP) / 5);
-      }
-    } else {
-      this.derbyLeft = Math.max(0, CONFIG.DERBY_TIME - t);
-      if (!this.winnerSet && !this.goldenGoal && t >= CONFIG.DERBY_TIME) {
-        const a = this.teams[0].score, b = this.teams[1].score;
-        if (a !== b) this.finish(a > b ? 0 : 1);
-        else { this.goldenGoal = true; this.ggStart = t; this.emit('goldenGoal'); }
-      }
-      if (this.goldenGoal && !this.winnerSet) {
-        const x = t - this.ggStart - 10;
-        if (CONFIG.GOAL_GROW && x > 0 && !this.overtime) { this.overtime = true; this.everOvertime = true; this.emit('overtime'); }
-        this.otMult = 1 + 0.8 * clamp01(x / 10) + 0.5 * clamp01((x - 10) / 10);
-      }
+    const ot = t - this.otStart;
+    if (CONFIG.GOAL_GROW && !this.overtime && ot >= CONFIG.OT_AT && !this.winnerSet) { this.overtime = true; this.everOvertime = true; this.emit('overtime'); }
+    if (this.overtime) {
+      this.otMult = 1 + (CONFIG.OT_MULT - 1) * clamp01((ot - CONFIG.OT_AT) / CONFIG.OT_RAMP)
+        + 1.2 * clamp01((ot - CONFIG.OT_AT - CONFIG.OT_RAMP) / 5);
     }
     for (let i = this.powerups.length - 1; i >= 0; i--) {
       const p = this.powerups[i]; p.age += dt;
@@ -885,7 +905,7 @@ class Game {
     const fresh = this.t - b.hitP > 0.12;
     b.lastTouch = p.team; b.hitP = this.t;
     if (fresh) this.emit('player', { x: b.x - nx * CONFIG.BALL_R, y: b.y - ny * CONFIG.BALL_R, team: p.team });
-    if (this.finalDuel && !this.isDerby && !this.winnerSet && p.captain && this.headingToRivalGoal(b, p.team)) {
+    if (this.finalDuel && !this.winnerSet && p.captain && this.headingToRivalGoal(b, p.team)) {
       if (!b.shot || b.shotTeam !== p.team) {
         b.shot = true; b.shotTeam = p.team;
         b.sp = this.ballSpeedTarget(b);
@@ -1022,15 +1042,6 @@ class Game {
     T.ga++; T.hitT = this.t; this.stats.goals++;
     this.spawnBlock = Math.max(this.spawnBlock, this.t + CONFIG.GOAL_RESPAWN);
     const ev = { team: g.team, scorer, own, x: b.x, y: b.y, along, nx: g.nx, ny: g.ny, ballId: b.id };
-    if (this.isDerby) {
-      const other = 1 - g.team;
-      this.teams[other].score++;                    // the match score still counts own goals…
-      if (own) this.stats.ownGoals++;
-      else if (scorer >= 0) this.creditGoal(scorer);  // …but a team's goal tally only counts its own goals
-      this.emit('goal', ev);
-      if (this.goldenGoal) this.finish(other);
-      return;
-    }
     if (own) this.stats.ownGoals++;
     else if (scorer >= 0) this.creditGoal(scorer);
     if (this.finalDuel) { const other = this.activeTeams().find(i => i !== g.team); if (other !== undefined) this.teams[other].score++; }
@@ -1156,20 +1167,18 @@ class Game {
     if (this.winnerSet) return;
     this.winnerSet = true; this.winner = w;
     if (w >= 0) this.teams[w].place = 1;
-    if (this.isDerby && w >= 0) this.teams[1 - w].place = 2;
     this.duration = this.t; this.ending = CONFIG.WIN_SLOW_GAME; this.elimSlow = 0;
     this.slowmo = null;
     this.emit('win', { team: w });
   }
   forceFinish() {   // pathological safety: rank remaining teams by lives (never hit with sane settings)
-    if (this.isDerby) { const a = this.teams[0].score, b = this.teams[1].score; this.finish(a >= b ? 0 : 1); return; }
     const act = this.activeTeams().map(i => this.teams[i]);
     act.sort((a, b) => b.lives - a.lives || a.ga - b.ga || a.i - b.i);
     for (let r = act.length - 1; r >= 1; r--) { act[r].eliminated = true; act[r].place = r + 1; act[r].elimT = this.t; }
     this.finish(act[0].i);
   }
   checkFinalSlowmo() {
-    if (!this.finalDuel || this.isDerby || this.winnerSet || this.morph || this.t < this.slowmoCd) return;
+    if (!this.finalDuel || this.winnerSet || this.morph || this.t < this.slowmoCd) return;
     for (const g of this.geo.goals) {
       const T = this.teams[g.team];
       if (T.lives !== 1 || g.closed) continue;
@@ -1189,8 +1198,8 @@ class Game {
   /* ---------- POWERUPS (logic) ---------- */
   spawnPowerup() {
     const geo = this.geo, M = CONFIG.PU_WALL_MARGIN;
-    /* no Extra Life in derby or single-life matches; no Split Ball when only one ball is allowed */
-    const defs = POWERUP_DEFS.filter(d => !(d.id === 'life' && (this.isDerby || this.o.lives <= 1)) && !(d.id === 'split' && CONFIG.MAX_BALLS <= 1));
+    /* no Extra Life in single-life matches; no Split Ball when only one ball is allowed */
+    const defs = POWERUP_DEFS.filter(d => !(d.id === 'life' && this.o.lives <= 1) && !(d.id === 'split' && CONFIG.MAX_BALLS <= 1));
     let pos = null;
     for (let tries = 0; tries < 12 && !pos; tries++) {
       let x, y;
@@ -1242,7 +1251,7 @@ class Game {
       case 'speed': this.fxSpeedUntil = this.t + def.dur; text = '⚡ SPEED UP!'; break;
       case 'split': {
         let live = 0; for (const x of this.balls) if (x.state === 'live') live++;
-        const cap = CONFIG.MAX_BALLS <= 1 ? 1 : (this.isDerby || this.finalDuel ? 1 : CONFIG.MAX_BALLS) + 1;
+        const cap = CONFIG.MAX_BALLS <= 1 ? 1 : (this.finalDuel ? 1 : CONFIG.MAX_BALLS) + 1;
         text = '➕ SPLIT BALL!';
         if (live < cap) {
           const a = Math.atan2(b.vy, b.vx), sp = b.sp;
@@ -1404,7 +1413,6 @@ const FX = {
       case 'overtime':
         AudioSys.whistle(0.45, 0.25); break;
       case 'finalDuel': AudioSys.whoosh(); break;
-      case 'goldenGoal': AudioSys.whistle(0.5, 0.25); break;
       case 'morphStart': AudioSys.whoosh(); break;
       case 'win': AudioSys.finalWhistle(); break;
     }
@@ -1738,7 +1746,7 @@ const Renderer = {
         ctx.lineWidth = 4; ctx.strokeStyle = T.c1; ctx.stroke();
       }
       if (!T.eliminated) this.goalIcons(g, gl, T);
-      if (!g.isDerby) { this.nameTag(gl, T, geo.netDepth, g.o.lives > 1 && !T.eliminated && !g.finalDuel ? T.lives : 0); this.goalTally(g, gl, T, geo.netDepth); }
+      this.nameTag(gl, T, geo.netDepth, g.o.lives > 1 && !T.eliminated && !g.finalDuel ? T.lives : 0); this.goalTally(g, gl, T, geo.netDepth);
       if (gl.locked) this.resultTag(g, gl, T);
     }
     ctx.restore();
@@ -2156,7 +2164,7 @@ function drawHeart(ctx, x, y, s, fill, stroke) {
 }
 
 /* =====================================================================
-   HUD  (title, derby / final-duel scoreboard, big texts)
+   HUD  (title, final-duel scoreboard, big texts)
    ===================================================================== */
 const HUD = {
   draw(ctx, g, app, vis) {
@@ -2181,37 +2189,11 @@ const HUD = {
       outlinedText(ctx, 'Who wins? Comment below 👇', SX, 316, `600 30px ${FONT_UI}`, '#ffffff', 'rgba(0,0,0,0.55)', 6);
       ctx.restore();
     }
-    if (g.isDerby) { this.scoreboard(ctx, g, SX); this.announcement(ctx, 1512); }
-    else {
-      /* final duel score shares the lane above the pitch with the elimination text and fades out while one shows */
-      const want = g.finalDuel && !g.morph && !FX.ann ? 1 : 0;
-      this.duelA = (this.duelA || 0) + (want - (this.duelA || 0)) * 0.18;
-      if (this.duelA > 0.02) { ctx.save(); ctx.globalAlpha = this.duelA; this.duelScore(ctx, g, SX); ctx.restore(); }
-      this.announcement(ctx, 394);
-    }
-  },
-
-  scoreboard(ctx, g, SX) {
-    const A = g.teams[0], B = g.teams[1];
-    ctx.save();
-    roundRect(ctx, SX - 390, 336, 780, 104, 30);
-    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.stroke();
-    const cy = 380;
-    ctx.beginPath(); ctx.arc(SX - 345, cy, 22, 0, TAU); ctx.fillStyle = A.c1; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = A.c2; ctx.stroke();
-    ctx.beginPath(); ctx.arc(SX + 345, cy, 22, 0, TAU); ctx.fillStyle = B.c1; ctx.fill(); ctx.strokeStyle = B.c2; ctx.stroke();
-    outlinedText(ctx, A.code, SX - 310, cy + 4, `72px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
-    outlinedText(ctx, B.code, SX + 310, cy + 4, `72px ${FONT_BIG}`, '#ffffff', null, 0, 'right');
-    const pulseA = g.t - (B.hitT >= 0 ? B.hitT : -9), pulseB = g.t - (A.hitT >= 0 ? A.hitT : -9);
-    const sa = pulseA < 0.5 ? 1 + 0.35 * Math.sin(pulseA / 0.5 * Math.PI) : 1, sb = pulseB < 0.5 ? 1 + 0.35 * Math.sin(pulseB / 0.5 * Math.PI) : 1;
-    ctx.save(); ctx.translate(SX - 70, cy + 4); ctx.scale(sa, sa); outlinedText(ctx, String(A.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
-    outlinedText(ctx, '–', SX, cy + 2, `80px ${FONT_BIG}`, 'rgba(255,255,255,0.7)', null, 0);
-    ctx.save(); ctx.translate(SX + 70, cy + 4); ctx.scale(sb, sb); outlinedText(ctx, String(B.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
-    let label, col = '#ffffff';
-    if (g.goldenGoal) { const x = Math.floor(g.t - g.ggStart); label = `+0:${String(x).padStart(2, '0')}`; col = '#FFD54F'; }
-    else { const s = Math.ceil(g.derbyLeft); label = `0:${String(s).padStart(2, '0')}`; if (s <= 5) col = '#ff6b6b'; }
-    outlinedText(ctx, label, SX, 426, `30px ${FONT_BIG}`, col, null, 0);
-    ctx.restore();
+    /* final duel score shares the lane above the pitch with the elimination text and fades out while one shows */
+    const want = g.finalDuel && !g.morph && !FX.ann ? 1 : 0;
+    this.duelA = (this.duelA || 0) + (want - (this.duelA || 0)) * 0.18;
+    if (this.duelA > 0.02) { ctx.save(); ctx.globalAlpha = this.duelA; this.duelScore(ctx, g, SX); ctx.restore(); }
+    this.announcement(ctx, 394);
   },
 
   /* final duel score (first to CONFIG.FINAL_GOALS) above the pitch: top-goal team on the left */
@@ -2253,7 +2235,7 @@ const HUD = {
     ctx.restore();
   },
 
-  /* single announcement lane: above the pitch (arena) or in the bottom band (derby, under the scoreboard layout) */
+  /* single announcement lane above the pitch */
   announcement(ctx, y) {
     const a = FX.ann;
     if (!a) return;
@@ -2477,14 +2459,13 @@ const League = {
       version: 1, teamsVersion: 3,
       teams: DEFAULT_TEAMS.map((t, i) => ({ id: 't' + (i + 1), name: t.name, code: t.code, c1: t.c1, c2: t.c2 })),
       reserve: RESERVE_TEAMS.map((t, i) => ({ id: 't' + (DEFAULT_TEAMS.length + i + 1), name: t.name, code: t.code, c1: t.c1, c2: t.c2 })),
-      table: {}, week: 1, weekMatch: 1, matchNo: 1, seasonLength: CONFIG.SEASON_LENGTH,
-      points: CONFIG.POINTS.slice(), derbyWinPoints: CONFIG.DERBY_WIN_POINTS,
+      table: {}, week: 1, weekMatch: 1, matchNo: 1, season: 1, seasonLength: CONFIG.SEASON_LENGTH,
+      points: CONFIG.POINTS.slice(), seasonPlan: null,
       history: [], champions: [], settings: {},
     };
   },
   defaultSettings() {
-    return { mode: 'arena', teamCount: CONFIG.DEFAULT_TEAM_COUNT, selMode: 'auto', manual: [],
-      theme: 'auto', lives: CONFIG.DEFAULT_LIVES, speedMult: CONFIG.DEFAULT_SPEED_MULT, powerups: false,
+    return { theme: 'auto', lives: CONFIG.DEFAULT_LIVES, speedMult: CONFIG.DEFAULT_SPEED_MULT, powerups: false,
       simSpeed: 1, volume: 0.8, muted: false, testMatch: false, sv: 2 };
   },
   normalize(d) {
@@ -2513,6 +2494,9 @@ const League = {
     }
     out.week = Math.max(1, +d.week || 1); out.weekMatch = Math.max(1, +d.weekMatch || 1); out.matchNo = Math.max(1, +d.matchNo || 1);
     delete out.day;
+    delete out.derbyWinPoints;               // the derby mode was removed: every match is a group match
+    out.season = Math.max(1, +d.season || 1);
+    out.seasonPlan = this.validPlanShape(d.seasonPlan) ? d.seasonPlan : null;
     out.seasonLength = Math.max(1, +d.seasonLength || CONFIG.SEASON_LENGTH);
     out.points = Array.isArray(d.points) && d.points.length ? d.points.map(x => +x || 0) : CONFIG.POINTS.slice();
     while (out.points.length < 10) out.points.push(0);
@@ -2523,7 +2507,8 @@ const League = {
     out.champions = Array.isArray(d.champions) ? d.champions : [];
     out.settings = Object.assign(this.defaultSettings(), d.settings || {});
     delete out.settings.seed;                 // the seed is chosen per match and never stored ahead of it
-    if (out.settings.mode === 'final') out.settings.mode = 'arena';   // Season Final was removed: the table leader is the champion
+    /* removed options: match mode (derby / season final), manual team pick, team count per match (always CONFIG.GROUP_SIZE) */
+    for (const k of ['mode', 'selMode', 'manual', 'teamCount']) delete out.settings[k];
     /* settings v2: single life by default — migrate older saved settings once */
     if (!d.settings || d.settings.sv !== 2) { out.settings.lives = CONFIG.DEFAULT_LIVES; out.settings.sv = 2; }
     if (out.settings.theme !== 'auto' && !THEME_DEFS[out.settings.theme]) out.settings.theme = 'auto';   // removed themes (bumpers)
@@ -2540,8 +2525,8 @@ const League = {
     /* teams v3 = top European clubs + Turkey's big three: a saved league built on older default teams starts a fresh season */
     if (d && d.teamsVersion !== 3) {
       const f = this.fresh();
-      Object.assign(this.data, { teams: f.teams, reserve: f.reserve, table: {}, week: 1, weekMatch: 1, matchNo: 1, history: [], champions: [], teamsVersion: 3 });
-      this.data.settings.manual = [];
+      Object.assign(this.data, { teams: f.teams, reserve: f.reserve, table: {}, week: 1, weekMatch: 1, matchNo: 1, history: [], champions: [], teamsVersion: 3, seasonPlan: null });
+      delete this.data.weekPlan;
       this.migrated = true;
     }
   },
@@ -2555,10 +2540,14 @@ const League = {
     return this.data.teams.map(t => ({ t, r: this.rowOf(table, t.id) })).sort((a, b) =>
       b.r.pts - a.r.pts || (b.r.gf - b.r.ga) - (a.r.gf - a.r.ga) || b.r.gf - a.r.gf || b.r.wins - a.r.wins || a.t.name.localeCompare(b.t.name));
   },
-  pointsFor(res, tm) {
-    if (res.mode === 'arena') return this.data.points[tm.place - 1] || 0;
-    if (res.mode === 'derby') return tm.place === 1 ? this.data.derbyWinPoints : 0;
-    return 0;
+  pointsFor(res, tm) { return this.data.points[tm.place - 1] || 0; },
+  /* every group has exactly CONFIG.GROUP_SIZE clubs, so the league size must be a multiple of it */
+  validTeamCount(n) { return n >= CONFIG.GROUP_SIZE && n % CONFIG.GROUP_SIZE === 0; },
+  /* the season has begun once a match was played or a week/group match was passed: from then on the fixture,
+     the team list and the season length are fixed until the season ends */
+  seasonStarted() { const d = this.data; return d.history.length > 0 || d.week > 1 || d.weekMatch > 1; },
+  validPlanShape(p) {
+    return !!(p && typeof p === 'object' && Array.isArray(p.weeks) && p.weeks.every(w => Array.isArray(w) && w.every(g => Array.isArray(g))));
   },
   /* end of season: the table leader is the champion; the last RELEGATE_COUNT teams go out, the next clubs of the reserve queue come in */
   seasonChange() {
@@ -2579,8 +2568,8 @@ const League = {
     d.teams = d.teams.filter(t => !ch.out.some(o => o.id === t.id)).concat(ch.in);
     d.reserve = d.reserve.slice(ch.in.length).concat(ch.out);
     d.season = season + 1;
-    d.table = {}; d.week = 1; d.weekMatch = 1; d.history = []; d.weekPlan = null;
-    d.settings.mode = 'arena'; d.settings.manual = [];
+    d.table = {}; d.week = 1; d.weekMatch = 1; d.history = []; d.seasonPlan = null;   // next season gets a new fixture
+    delete d.weekPlan;
     this.save();
     return archive;
   },
@@ -2656,17 +2645,12 @@ const $ = (id) => document.getElementById(id);
 const UI = {
   init() {
     const s = League.data.settings;
-    $('mode').value = s.mode; $('teamCount').value = s.teamCount; $('selMode').value = s.selMode;
     $('theme').value = s.theme; $('lives').value = s.lives;
     $('speedMult').value = s.speedMult; $('simSpeed').value = String(s.simSpeed);
     $('volume').value = s.volume; $('testMatch').checked = s.testMatch;
-    $('pointsInput').value = League.data.points.join(','); $('seasonLen').value = League.data.seasonLength;
-    $('derbyPts').value = League.data.derbyWinPoints;
+    $('pointsInput').value = League.data.points.slice(0, CONFIG.GROUP_SIZE).join(','); $('seasonLen').value = League.data.seasonLength;
     AudioSys.vol = s.volume; AudioSys.muted = s.muted;
     const read = () => {
-      s.mode = $('mode').value;
-      s.teamCount = clamp(Math.round(+$('teamCount').value || 6), 4, 10);
-      s.selMode = $('selMode').value;
       s.theme = $('theme').value;
       s.lives = clamp(Math.round(+$('lives').value || 3), 1, 5);
       s.speedMult = clamp(+$('speedMult').value || 1, 0.7, 1.5);
@@ -2675,7 +2659,7 @@ const UI = {
       League.save(); this.refresh();
       if (!App.running || App.end) App.prepare();
     };
-    ['mode', 'teamCount', 'selMode', 'theme', 'lives', 'speedMult', 'testMatch'].forEach(id => $(id).addEventListener('change', read));
+    ['theme', 'lives', 'speedMult', 'testMatch'].forEach(id => $(id).addEventListener('change', read));
     $('speedMult').addEventListener('input', () => { $('speedVal').textContent = '×' + (+$('speedMult').value).toFixed(2); });
     $('simSpeed').addEventListener('change', () => { s.simSpeed = +$('simSpeed').value || 1; League.save(); });
     $('volume').addEventListener('input', () => { s.volume = +$('volume').value; AudioSys.vol = s.volume; AudioSys.apply(); });
@@ -2686,8 +2670,18 @@ const UI = {
     $('btnPause').addEventListener('click', () => App.togglePause());
     $('btnReset').addEventListener('click', () => App.reset());
     $('btnNewDay').addEventListener('click', () => {
-      League.data.week++; League.data.weekMatch = 1; League.save(); this.refresh(); if (!App.running || App.end) App.prepare();
-      this.toast(`📅 Hafta ${League.data.week} başladı.`);
+      const d = League.data;
+      if (d.week > d.seasonLength) { alert('Sezon tamamlandı. Önce yeni sezonu başlatın.'); return; }
+      /* skipping a week leaves its unplayed group matches unplayed for good: warn and ask first */
+      const left = App.unplayedThisWeek();
+      if (left.length) {
+        const code = (id) => (d.teams.find(t => t.id === id) || {}).code || '?';
+        const list = left.map(x => `  • ${x.no}. grup maçı: ${x.ids.map(code).join(' · ')}`).join('\n');
+        if (!confirm(`⚠️ Hafta ${d.week} içinde oynanmamış ${left.length} grup maçı var:\n${list}\n\n` +
+          `Yeni haftaya geçilirse bu maçlar hiç oynanmayacak; bu ${left.length * CONFIG.GROUP_SIZE} takım sezonu diğerlerinden eksik maçla bitirecek (adil olmaz).\n\nYine de sonraki haftaya (Hafta ${d.week + 1}) geçilsin mi?`)) return;
+      }
+      d.week++; d.weekMatch = 1; League.save(); this.refresh(); if (!App.running || App.end) App.prepare();
+      this.toast(d.week > d.seasonLength ? '🏁 Sezonun son haftası geçildi.' : `📅 Hafta ${d.week} başladı.`);
     });
     $('btnExport').addEventListener('click', () => {
       downloadBlob(new Blob([JSON.stringify(League.data, null, 2)], { type: 'application/json' }), `arena_league_week${League.data.week}.json`);
@@ -2700,6 +2694,8 @@ const UI = {
         try {
           const d = JSON.parse(rd.result);
           if (!d || !Array.isArray(d.teams) || d.teams.length < 2) throw new Error('Geçersiz dosya: takım listesi yok.');
+          if (!League.validTeamCount(d.teams.length))
+            throw new Error(`Takım sayısı (${d.teams.length}) ${CONFIG.GROUP_SIZE}'nın katı olmalı; aksi halde gruplar eşit olmaz.`);
           League.data = League.normalize(d); League.save(); this.init2(); App.prepare();
           this.toast('✅ Lig verisi içe aktarıldı.');
         } catch (e) { alert('İçe aktarma başarısız: ' + e.message); }
@@ -2709,55 +2705,61 @@ const UI = {
     });
     $('btnResetLeague').addEventListener('click', () => {
       if (!confirm('Lig tablosu, gün sayacı, maç numarası ve geçmiş silinecek (takımlar korunur). Emin misiniz?')) return;
-      const d = League.data; d.table = {}; d.week = 1; d.weekMatch = 1; d.matchNo = 1; d.history = []; d.champions = [];
+      const d = League.data; d.table = {}; d.week = 1; d.weekMatch = 1; d.matchNo = 1; d.history = []; d.champions = []; d.seasonPlan = null; delete d.weekPlan;
       League.save(); this.refresh(); App.prepare(); this.toast('Lig sıfırlandı.');
     });
     $('btnTeams').addEventListener('click', () => TeamEditor.open());
     $('pointsInput').addEventListener('change', () => {
-      const arr = $('pointsInput').value.split(/[,\s;]+/).filter(Boolean).map(x => Math.max(0, Math.round(+x) || 0)).slice(0, 10);
+      const arr = $('pointsInput').value.split(/[,\s;]+/).filter(Boolean).map(x => Math.max(0, Math.round(+x) || 0)).slice(0, CONFIG.GROUP_SIZE);
       while (arr.length < 10) arr.push(0);
-      League.data.points = arr; $('pointsInput').value = arr.join(','); League.save();
+      League.data.points = arr; $('pointsInput').value = arr.slice(0, CONFIG.GROUP_SIZE).join(','); League.save();
     });
-    $('derbyPts').addEventListener('change', () => { League.data.derbyWinPoints = Math.max(0, Math.round(+$('derbyPts').value) || 0); League.save(); });
-    $('seasonLen').addEventListener('change', () => { League.data.seasonLength = Math.max(1, Math.round(+$('seasonLen').value) || CONFIG.SEASON_LENGTH); League.save(); this.refresh(); });
+    $('seasonLen').addEventListener('change', () => {
+      const d = League.data;
+      /* the season fixture is fixed once the season has begun */
+      if (League.seasonStarted()) { $('seasonLen').value = d.seasonLength; alert('Sezon başladı: sezon uzunluğu ancak yeni sezonda değiştirilebilir.'); return; }
+      d.seasonLength = Math.max(1, Math.round(+$('seasonLen').value) || CONFIG.SEASON_LENGTH);
+      d.seasonPlan = null; League.save(); this.refresh(); if (!App.running || App.end) App.prepare();
+    });
     $('btnCopy').addEventListener('click', async () => {
       const t = $('caption').value; if (!t) return;
       try { await navigator.clipboard.writeText(t); } catch (e) { $('caption').select(); document.execCommand('copy'); }
       this.toast('📋 Kopyalandı');
     });
     $('btnBalance').addEventListener('click', () => Balance.run());
-    $('manualList').addEventListener('change', () => {
-      s.manual = [...document.querySelectorAll('#manualList input:checked')].map(i => i.value);
-      League.save(); this.refresh(); if (!App.running || App.end) App.prepare();
-    });
     this.refresh();
   },
   init2() { this.init_values(); this.refresh(); },
   init_values() {
     const s = League.data.settings;
-    $('mode').value = s.mode; $('teamCount').value = s.teamCount; $('selMode').value = s.selMode;
     $('theme').value = s.theme; $('lives').value = s.lives; $('speedMult').value = s.speedMult;
     $('testMatch').checked = s.testMatch;
-    $('pointsInput').value = League.data.points.join(','); $('seasonLen').value = League.data.seasonLength; $('derbyPts').value = League.data.derbyWinPoints;
+    $('pointsInput').value = League.data.points.slice(0, CONFIG.GROUP_SIZE).join(','); $('seasonLen').value = League.data.seasonLength;
   },
   refresh() {
     const d = League.data, s = d.settings;
     $('speedVal').textContent = '×' + (+s.speedMult).toFixed(2);
     $('btnMute').textContent = s.muted ? '🔇' : '🔊';
-    $('rowTeamCount').style.display = s.mode === 'arena' ? '' : 'none';
-    $('manualList').classList.toggle('hidden', s.selMode !== 'manual');
-    if (s.selMode === 'manual') {
-      const ml = $('manualList');
-      const need = s.mode === 'derby' ? 2 : s.teamCount;
-      ml.innerHTML = `<div class="hint">Seçili: <b>${s.manual.filter(id => d.teams.some(t => t.id === id)).length}</b> / ${need} — ${s.mode === 'derby' ? 'tam 2 takım' : '4–10 takım (işaretli sayı kullanılır)'}</div>` +
-        d.teams.map(t => `<label class="mt"><input type="checkbox" value="${t.id}" ${s.manual.includes(t.id) ? 'checked' : ''}><span class="dot" style="background:${t.c1};border-color:${t.c2}"></span>${esc(t.code)} · ${esc(t.name)}</label>`).join('');
+    const code = (id) => esc((d.teams.find(t => t.id === id) || {}).code || '?');
+    const plan = App.seasonPlan(), started = League.seasonStarted();
+    $('seasonLen').disabled = started;
+    $('seasonLen').title = started ? 'Sezon başladı: yeni sezonda değiştirilebilir' : '';
+    let info = `<div class="kv"><span>Sezon</span><b>${d.season || 1}</b></div><div class="kv"><span>Hafta</span><b>${Math.min(d.week, d.seasonLength)} / ${d.seasonLength}</b></div>`;
+    if (!plan) {
+      info += `<div class="warn">⚠️ Takım sayısı (${d.teams.length}) ${CONFIG.GROUP_SIZE}'nın katı değil. Gruplar eşit olsun diye maç oynatılamaz — <b>Takımları düzenle</b> ile takım sayısını ${CONFIG.GROUP_SIZE}'nın katı yapın.</div>`;
+      $('fixture').innerHTML = '';
+    } else {
+      info += `<div class="kv"><span>Sıradaki grup maçı</span><b>${d.week > d.seasonLength ? '—' : `${d.weekMatch} / ${App.perWeek()}`}</b></div><div class="kv"><span>Oynanan maç (bu sezon)</span><b>${d.history.length}</b></div>`
+        + `<div class="hint">${d.teams.length} takım, her maçta ${CONFIG.GROUP_SIZE} takım → haftada ${App.perWeek()} grup maçı; her takım her hafta tam 1 maç oynar. Haftanın son grup maçı kaydedilince hafta kendiliğinden ilerler.</div>`;
+      const wk = plan.weeks[d.week - 1];
+      if (wk) info += `<div class="hint" style="margin-top:10px"><b>Hafta ${d.week} grupları</b></div>` + wk.map((g, i) =>
+        `<div class="kv"><span>${i + 1}. grup${i + 1 < d.weekMatch ? ' ✓' : i + 1 === d.weekMatch ? ' ▶' : ''}</span><b style="font-weight:600">${g.map(code).join(' · ')}</b></div>`).join('');
+      const st = fixtureMeetings(d.teams.map(t => t.id), plan.weeks.slice(0, d.seasonLength));
+      $('fixture').innerHTML = `<details><summary>📋 Sezon ${d.season || 1} fikstürü (${d.seasonLength} hafta)</summary>`
+        + `<div class="hint">Sezon başında adil olarak bir kez oluşturuldu ve sezon bitene kadar değişmez. Her takım ikilisi sezonda en az <b>${st.min}</b>, en çok <b>${st.max}</b> kez aynı grupta.</div>`
+        + `<div class="fixture">${plan.weeks.slice(0, d.seasonLength).map((w, i) => `<div class="wk${i + 1 === d.week ? ' cur' : ''}"><b>H${i + 1}</b> · ${w.map(g => g.map(code).join(' ')).join(' &nbsp;|&nbsp; ')}</div>`).join('')}</div></details>`;
     }
-    $('leagueInfo').innerHTML = `<div class="kv"><span>Hafta</span><b>${d.week} / ${d.seasonLength}</b></div><div class="kv"><span>Sıradaki grup maçı</span><b>${d.weekMatch} / ${App.perWeek()}</b></div><div class="kv"><span>Oynanan maç (toplam)</span><b>${d.history.length}</b></div><div class="hint">${d.teams.length} takım, maç başına ${s.teamCount} takım → haftada ${App.perWeek()} grup maçı; haftanın son grup maçı kaydedilince hafta kendiliğinden ilerler.</div>`
-      + (s.selMode === 'auto' ? (() => {
-          const plan = App.weekPlan(), cs = App.coocStats();
-          const rows = plan.groups.map((g, i) => `<div class="kv"><span>${i + 1}. grup${i + 1 < d.weekMatch ? ' ✓' : i + 1 === d.weekMatch ? ' ▶' : ''}</span><b style="font-weight:600">${g.map(id => esc((d.teams.find(t => t.id === id) || {}).code || '?')).join(' · ')}</b></div>`).join('');
-          return `<div class="hint" style="margin-top:10px"><b>Hafta ${d.week} grupları</b> (geçmişe göre adil dağıtım)</div>${rows}<div class="hint">Aynı grupta bulunma, takım ikilisi başına: en az <b>${cs.min}</b>, en çok <b>${cs.max}</b> kez.</div>`;
-        })() : '');
+    $('leagueInfo').innerHTML = info;
     const note = $('seasonNote');
     if (d.week >= d.seasonLength) {
       note.classList.remove('hidden');
@@ -2833,7 +2835,11 @@ const TeamEditor = {
   },
   save() {
     this.collect();
-    if (this.rows.length < 4) { alert('En az 4 takım olmalı.'); return; }
+    if (League.seasonStarted()) { alert('Sezon başladı: takımlar ancak yeni sezon başında (hiç maç oynanmadan) değiştirilebilir; fikstür sezon bitene kadar sabit.'); return; }
+    if (!League.validTeamCount(this.rows.length)) {
+      alert(`Takım sayısı ${CONFIG.GROUP_SIZE}'nın katı olmalı (${CONFIG.GROUP_SIZE}, ${CONFIG.GROUP_SIZE * 2}, ${CONFIG.GROUP_SIZE * 3}, ${CONFIG.GROUP_SIZE * 4}…); şu an ${this.rows.length}. Aksi halde gruplar eşit olmaz.`);
+      return;
+    }
     const codes = new Set();
     for (const r of this.rows) {
       if (r.code.length !== 3) { alert(`"${r.name}" için kod tam 3 harf/rakam olmalı.`); return; }
@@ -2844,7 +2850,7 @@ const TeamEditor = {
     d.teams = this.rows.map(r => ({ ...r }));
     const ids = new Set(d.teams.map(t => t.id));
     for (const id of Object.keys(d.table)) if (!ids.has(id)) delete d.table[id];
-    d.settings.manual = d.settings.manual.filter(id => ids.has(id));
+    d.seasonPlan = null;                       // new team list → new fixture (allowed only before the season begins)
     League.save(); UI.refresh(); App.prepare();
     $('teamModal').classList.add('hidden'); UI.toast('✅ Takımlar kaydedildi.');
   },
@@ -2857,104 +2863,85 @@ const App = {
   game: null, setup: null, running: false, paused: false, end: null, endT: 0, matchRealT: 0, title: '', intro: null, introT: 0,
   introOn() { return !!(this.running && this.intro && this.introT < CONFIG.INTRO_DURATION); },
   simSpeed() { return League.data.settings.simSpeed || 1; },
-  /* league points a finishing place earns in the current mode */
-  pointsForPlace(place) {
-    const mode = this.setup ? this.setup.mode : 'arena';
-    if (mode === 'arena') return League.data.points[place - 1] || 0;
-    if (mode === 'derby') return place === 1 ? League.data.derbyWinPoints : 0;
-    return null;
-  },
+  /* league points a finishing place earns */
+  pointsForPlace(place) { return League.data.points[place - 1] || 0; },
   /* group matches per week: every club plays once a week (18 clubs, 6 per match → 3) */
-  perWeek() { const d = League.data; return groupSizes(d.teams.length, clamp(d.settings.teamCount, 4, 10)).length; },
-  /* how many times each pair of clubs has shared an arena match (from history) */
-  coocMap() {
-    const C = new Map();
-    for (const h of League.data.history) {
-      if (h.mode !== 'arena') continue;
-      const t = h.teams;
-      for (let i = 0; i < t.length; i++) for (let j = i + 1; j < t.length; j++) {
-        const k = t[i] < t[j] ? t[i] + '|' + t[j] : t[j] + '|' + t[i];
-        C.set(k, (C.get(k) || 0) + 1);
+  perWeek() { return Math.max(1, Math.floor(League.data.teams.length / CONFIG.GROUP_SIZE)); },
+  /* the season fixture: built once when the season starts (fair split, see planSeason) and stored with the league;
+     it is never rebuilt while the season is running (team list and season length are locked then) */
+  seasonPlan() {
+    const d = League.data, ids = d.teams.map(t => t.id), key = ids.slice().sort().join(',');
+    const p = d.seasonPlan, season = d.season || 1;
+    if (p && p.season === season && p.key === key && p.size === CONFIG.GROUP_SIZE && p.weeks.length >= d.seasonLength) return p;
+    if (!League.validTeamCount(ids.length)) return null;
+    const rng = new RNG(randomSeed());
+    /* normally the season has not begun yet. A save from an older version (weekly plans) may be mid-season:
+       then the weeks already passed stay as they were played and the current week keeps its played groups */
+    const fixed = [];
+    if (League.seasonStarted()) {
+      const arena = d.history.filter(h => h.mode === 'arena' && Array.isArray(h.teams));
+      for (let w = 1; w < d.week; w++) fixed.push(arena.filter(h => h.week === w).map(h => h.teams.slice()));
+      const old = d.weekPlan && d.weekPlan.week === d.week && Array.isArray(d.weekPlan.groups) ? d.weekPlan.groups : null;
+      const valid = (gs) => gs.every(g => g.length === CONFIG.GROUP_SIZE) && new Set(gs.flat()).size === gs.flat().length && gs.flat().every(id => ids.includes(id));
+      let cur = arena.filter(h => h.week === d.week).sort((a, b) => (a.weekMatch || 0) - (b.weekMatch || 0)).map(h => h.teams.slice());
+      if (!valid(cur)) cur = [];
+      if (old && valid(old) && old.length === ids.length / CONFIG.GROUP_SIZE && cur.every((g, i) => old[i] && g.slice().sort().join() === old[i].slice().sort().join())) cur = old.map(g => g.slice());
+      else {
+        const rest = rng.shuffle(ids.filter(id => !cur.some(g => g.includes(id))));
+        while (rest.length) cur.push(rest.splice(0, CONFIG.GROUP_SIZE));
       }
+      fixed.push(cur);
     }
-    return C;
+    const weeks = fixed.concat(planSeason(ids, d.seasonLength, CONFIG.GROUP_SIZE, rng, fixed));
+    d.seasonPlan = { season, key, size: CONFIG.GROUP_SIZE, created: new Date().toISOString(), weeks };
+    delete d.weekPlan;
+    League.save();
+    return d.seasonPlan;
   },
-  coocStats() {
-    const C = this.coocMap(), ids = League.data.teams.map(t => t.id), v = [];
-    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
-      const k = ids[i] < ids[j] ? ids[i] + '|' + ids[j] : ids[j] + '|' + ids[i]; v.push(C.get(k) || 0);
-    }
-    return v.length ? { min: Math.min(...v), max: Math.max(...v) } : { min: 0, max: 0 };
-  },
-  /* this week's groups: computed once at the start of the week (fair split by meeting history) and stored */
-  weekPlan() {
-    const d = League.data, s = d.settings;
-    const ids = d.teams.map(t => t.id);
-    const key = ids.join(',') + '#' + s.teamCount;
-    if (!d.weekPlan || d.weekPlan.week !== d.week || d.weekPlan.key !== key) {
-      const C = this.coocMap();
-      const cooc = (a, b) => C.get(a < b ? a + '|' + b : b + '|' + a) || 0;
-      const rng = new RNG((d.week * 7919 + d.history.length * 31 + 17) >>> 0);
-      d.weekPlan = { week: d.week, key, groups: planGroups(ids, groupSizes(ids.length, s.teamCount), cooc, rng) };
-      League.save();
-    }
-    return d.weekPlan;
+  /* the group matches of the current week that have not been played yet */
+  unplayedThisWeek() {
+    const d = League.data, plan = this.seasonPlan();
+    if (!plan || d.week > d.seasonLength) return [];
+    const wk = plan.weeks[d.week - 1] || [];
+    return wk.map((ids, i) => ({ no: i + 1, ids })).filter(x => x.no >= d.weekMatch);
   },
   buildSetup() {
     const d = League.data, s = d.settings;
     const seed = randomSeed();                 // a fresh hidden seed for every match setup
     const srng = new RNG((seed ^ 0x5BD1E995) >>> 0);
-    let teams, err = null;
-    {
-      const n = s.mode === 'derby' ? 2 : s.teamCount;
-      if (s.selMode === 'manual') {
-        teams = d.teams.filter(t => s.manual.includes(t.id));
-        if (s.mode === 'derby' && teams.length !== 2) err = 'Derby için manuel listede tam 2 takım işaretleyin.';
-        if (s.mode === 'arena' && (teams.length < 4 || teams.length > 10)) err = 'Arena için manuel listede 4–10 takım işaretleyin.';
-      } else if (s.mode === 'arena') {
-        /* auto arena: this week's fair group (every club once a week, pairs meet equally often) */
-        const plan = this.weekPlan();
-        const ids = plan.groups[(d.weekMatch - 1) % plan.groups.length];
-        teams = ids.map(id => d.teams.find(t => t.id === id)).filter(Boolean);
-        if (teams.length < 3) err = 'Grup için yeterli takım yok.';
-      } else {
-        /* auto derby: draw from the least-played teams (seeded) */
-        const groups = new Map();
-        for (const t of d.teams) { const p = League.rowOf(d.table, t.id).played; if (!groups.has(p)) groups.set(p, []); groups.get(p).push(t); }
-        teams = [];
-        for (const p of [...groups.keys()].sort((a, b) => a - b)) {
-          const grp = srng.shuffle(groups.get(p).sort((a, b) => a.id.localeCompare(b.id)));
-          for (const t of grp) if (teams.length < n) teams.push(t);
-        }
-        if (teams.length < n) err = 'Yeterli takım yok.';
-      }
+    /* every match is the next group match of the season fixture */
+    let teams = [], err = null;
+    const plan = this.seasonPlan();
+    if (!plan) err = `Takım sayısı (${d.teams.length}) ${CONFIG.GROUP_SIZE}'nın katı olmalı — Takımları düzenle ile düzeltin.`;
+    else if (d.week > d.seasonLength) err = 'Sezon tamamlandı — panelden yeni sezonu başlatın.';
+    else {
+      const ids = (plan.weeks[d.week - 1] || [])[d.weekMatch - 1] || [];
+      teams = ids.map(id => d.teams.find(t => t.id === id)).filter(Boolean);
+      if (teams.length !== CONFIG.GROUP_SIZE) err = 'Bu grup maçı için fikstürde takım bulunamadı.';
     }
     let theme = s.theme;
     if (theme === 'auto') theme = srng.pick(THEME_IDS);
     else if (!THEME_DEFS[theme]) theme = 'classic';
-    const title = s.mode === 'derby' ? `WEEK ${d.week} · DERBY` : `WEEK ${d.week} · GROUP MATCH ${d.weekMatch}`;
-    return { err, title, mode: s.mode, week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(), matchNo: d.matchNo, seed, theme, test: s.testMatch,
-      opts: { mode: s.mode, teams: (teams || []).map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false } };
+    const title = `WEEK ${d.week} · GROUP MATCH ${d.weekMatch}`;
+    return { err, title, mode: 'arena', week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(), matchNo: d.matchNo, seed, theme, test: s.testMatch,
+      opts: { mode: 'arena', teams: teams.map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false } };
   },
   /* what the video shows before the match: today's matches (played ones with their results, the rest as fixtures) */
   buildIntro() {
     const s = this.setup, d = League.data;
     const tm = (id) => d.teams.find(t => t.id === id);
     const tObj = (t, extra) => Object.assign({ id: t.id, name: t.name, c1: t.c1, c2: t.c2 }, extra || {});
-    const matches = [];
-    if (s.mode === 'arena') {
-      const plan = this.weekPlan();
-      for (let j = 1; j <= s.perWeek; j++) {
-        const label = `GROUP MATCH ${j}`;
-        if (j < s.weekMatch) {
-          const h = d.history.slice().reverse().find(x => x.mode === 'arena' && x.week === s.week && x.weekMatch === j);
-          if (h) matches.push({ label, status: 'done', teams: h.result.slice().sort((a, b) => a.place - b.place)
-            .map(r => { const t = tm(r.id); return t ? tObj(t, { place: r.place, pts: d.points[r.place - 1] || 0 }) : null; }).filter(Boolean) });
-        } else if (j === s.weekMatch) matches.push({ label, status: 'now', teams: s.opts.teams.map(t => tObj(t)) });
-        else matches.push({ label, status: 'later', teams: (plan.groups[j - 1] || []).map(tm).filter(Boolean).map(t => tObj(t)) });
-      }
-    } else matches.push({ label: 'DERBY', status: 'now', teams: s.opts.teams.map(t => tObj(t)) });
-    return { title: s.title, sub: s.mode === 'arena' ? `WEEK ${s.week}` : s.title, matches };
+    const matches = [], week = (this.seasonPlan().weeks[s.week - 1]) || [];
+    for (let j = 1; j <= s.perWeek; j++) {
+      const label = `GROUP MATCH ${j}`;
+      if (j < s.weekMatch) {
+        const h = d.history.slice().reverse().find(x => x.mode === 'arena' && x.week === s.week && x.weekMatch === j);
+        if (h) matches.push({ label, status: 'done', teams: h.result.slice().sort((a, b) => a.place - b.place)
+          .map(r => { const t = tm(r.id); return t ? tObj(t, { place: r.place, pts: d.points[r.place - 1] || 0 }) : null; }).filter(Boolean) });
+      } else if (j === s.weekMatch) matches.push({ label, status: 'now', teams: s.opts.teams.map(t => tObj(t)) });
+      else matches.push({ label, status: 'later', teams: (week[j - 1] || []).map(tm).filter(Boolean).map(t => tObj(t)) });
+    }
+    return { title: s.title, sub: `WEEK ${s.week}`, matches };
   },
   prepare() {
     if (Recorder.active) return false;
@@ -2978,7 +2965,7 @@ const App = {
     if (record) {
       if (!Recorder.supported()) { alert('Bu tarayıcı MediaRecorder/captureStream desteklemiyor. Güncel Chrome kullanın.'); return; }
       const s = this.setup;
-      Recorder.start(s.mode === 'arena' ? `arena_week${s.week}_match${s.weekMatch}` : `${s.mode}_week${s.week}`);
+      Recorder.start(`arena_week${s.week}_match${s.weekMatch}`);
     }
     this.running = true;
     lastNow = performance.now();
@@ -3018,8 +3005,7 @@ const App = {
     const leaderBefore = rkB[0] && rkB[0].r.played ? rkB[0].t.id : null;
     const leaderAfter = rkA[0].t;
     let subtitle;
-    if (g.isDerby) { const a = g.teams[0], b = g.teams[1]; subtitle = `${a.code} ${a.score} – ${b.score} ${b.code}`; }
-    else {
+    {
       const L = g.teams.find(t => t.place === 2);
       subtitle = L && g.finalDuel ? `Final: ${W.code} ${W.score} – ${L.score} ${L.code}` : `${W.gf} goals · ${W.saves} saves`;
     }
@@ -3033,17 +3019,15 @@ const App = {
     /* persist */
     if (!s.test) {
       d.table = after;
-      d.history.push({ matchNo: s.matchNo, week: s.week, weekMatch: s.mode === 'arena' ? s.weekMatch : null, mode: s.mode, seed: s.seed, theme: res.theme, date: new Date().toISOString(),
+      d.history.push({ matchNo: s.matchNo, week: s.week, weekMatch: s.weekMatch, mode: 'arena', seed: s.seed, theme: res.theme, date: new Date().toISOString(),
         teams: res.teams.map(t => t.id), winner: W.id, duration: res.duration,
         result: res.teams.map(t => ({ id: t.id, code: t.code, place: t.place, gf: t.gf, ga: t.ga, saves: t.saves, score: t.score })) });
       d.matchNo++;
-      if (s.mode === 'arena') {
-        d.weekMatch++;
-        if (d.weekMatch > s.perWeek) { d.week++; d.weekMatch = 1; setTimeout(() => UI.toast(`📅 Hafta ${d.week} başladı.`), 300); }
-      }
+      d.weekMatch++;
+      if (d.weekMatch > s.perWeek) { d.week++; d.weekMatch = 1; setTimeout(() => UI.toast(`📅 Hafta ${d.week} başladı.`), 300); }
       League.save();
       /* last group match of the season: the table leader is the champion, the last teams will be relegated */
-      if (s.mode === 'arena' && d.week > d.seasonLength) {
+      if (d.week > d.seasonLength) {
         const ch = League.seasonChange();
         this.end.seasonEnd = { season: d.season || 1, champion: { id: ch.champion.id, name: ch.champion.name }, out: ch.out.map(t => t.id), in: ch.in.map(t => ({ id: t.id, name: t.name })) };
         for (const r of this.end.rows) { r.champ = r.id === ch.champion.id; r.out = ch.out.some(t => t.id === r.id); }
@@ -3055,12 +3039,8 @@ const App = {
   },
   caption(res, W, newLeader) {
     const s = this.setup, g = this.game;
-    let l1;
-    if (s.mode === 'derby') { const L = g.teams[1 - g.winner]; l1 = `Week ${s.week} · Derby 🏆 ${W.name} win ${W.score}–${L.score} vs ${L.name}!`; }
-    else {
-      const L = g.teams.find(t => t.place === 2);
-      l1 = `Week ${s.week} · Group Match ${s.weekMatch} 🏆 ${W.name} win${L && g.finalDuel ? ` the final ${W.score}–${L.score} vs ${L.name}` : ''}!`;
-    }
+    const L = g.teams.find(t => t.place === 2);
+    const l1 = `Week ${s.week} · Group Match ${s.weekMatch} 🏆 ${W.name} win${L && g.finalDuel ? ` the final ${W.score}–${L.score} vs ${L.name}` : ''}!`;
     const top = g.teams.slice().sort((a, b) => b.gf - a.gf || a.place - b.place)[0];
     let extra = '';
     if (top && top.gf > 0) {
@@ -3088,7 +3068,7 @@ const Balance = {
   run() {
     if (this.busy || Recorder.active) return;
     const s = League.data.settings, teamsAll = League.data.teams;
-    const mode = s.mode, n = mode === 'derby' ? 2 : s.teamCount;
+    const n = CONFIG.GROUP_SIZE;
     if (teamsAll.length < n) { alert('Yeterli takım yok.'); return; }
     this.busy = true; $('btnBalance').disabled = true;
     const N = 100, res = [];
@@ -3101,7 +3081,7 @@ const Balance = {
         const r = new RNG((seed ^ 0x51ED27) >>> 0);
         const teams = r.shuffle(teamsAll).slice(0, n).map(t => ({ ...t }));
         let theme = s.theme === 'auto' ? r.pick(THEME_IDS) : s.theme;
-        const g = new Game({ mode, teams, seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false });
+        const g = new Game({ mode: 'arena', teams, seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false });
         while (!g.over && g.t < 200) g.step(DT);
         res.push(g.getResult());
         i++;
@@ -3335,7 +3315,7 @@ const Offline = {
       winner: E.winner.name, subtitle: E.subtitle,
       standings: E.standings.map(x => ({ place: x.place, name: x.name, code: x.code, gf: x.gf, pts: x.pts })),
       caption: $('caption').value,
-      base: s.mode === 'arena' ? `s${d.season || 1}_week${String(s.week).padStart(2, '0')}_match${s.weekMatch}` : `s${d.season || 1}_${s.mode}_week${String(s.week).padStart(2, '0')}`,
+      base: `s${d.season || 1}_week${String(s.week).padStart(2, '0')}_match${s.weekMatch}`,
     };
   }
 };
