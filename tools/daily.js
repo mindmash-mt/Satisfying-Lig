@@ -80,7 +80,7 @@ function standingsMd(d) {
     L.push('## Son maçlar', '', '| Maç | Hafta · grup | Sıralama (gol) | Tema | Süre | Tarih |', '|---:|---|---|---|---:|---|');
     for (const h of last) {
       const order = h.result.slice().sort((a, b) => a.place - b.place).map(r => `${r.place}. ${code(r.id)} (${r.gf})`).join(' · ');
-      const when = h.mode === 'derby' ? `H${h.week} · derby` : `H${h.week} · ${h.weekMatch}`;
+      const when = `H${h.week} · ${h.weekMatch}`;
       L.push(`| ${h.matchNo} | ${when} | ${order} | ${h.theme} | ${Math.round(h.duration)} sn | ${istanbul(new Date(h.date)).date} |`);
     }
     L.push('');
@@ -114,11 +114,15 @@ function standingsMd(d) {
     Offline.begin();
     const d = League.data, s = d.settings;
     if (!d.season) d.season = 1;
-    s.mode = 'arena'; s.selMode = 'auto'; s.testMatch = false; s.theme = s.theme || 'auto';
+    s.testMatch = false; s.theme = s.theme || 'auto';
     League.save();
+    /* the season fixture is built once at the start of the season and stored in league.json */
+    const sp = App.seasonPlan();
+    if (!sp) return { error: `Takım sayısı (${d.teams.length}) ${CONFIG.GROUP_SIZE}'nın katı değil; gruplar eşit olamaz.` };
     return { season: d.season, week: d.week, weekMatch: d.weekMatch, perWeek: App.perWeek(), seasonLength: d.seasonLength,
-      groups: App.weekPlan().groups.map(g => g.map(id => d.teams.find(t => t.id === id).code)) };
+      groups: (sp.weeks[d.week - 1] || []).map(g => g.map(id => (d.teams.find(t => t.id === id) || {}).code || id)) };
   });
+  if (plan.error) throw new Error(plan.error);
   log(`Sezon ${plan.season} · Hafta ${plan.week}/${plan.seasonLength} · grup maçı ${plan.weekMatch}/${plan.perWeek} · gruplar: ${plan.groups.map(g => g.join(' ')).join(' | ')}`);
 
   const videos = [];

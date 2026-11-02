@@ -40,9 +40,9 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 - **Top:** 600 px/sn ile başlar, her **duvar veya direk** çarpmasında %10 hızlanır (en fazla 2,4 katı). Oyuncu ve kaleci çarpmaları hızı değiştirmez. Gol olunca yeni top yine başlangıç hızıyla doğar. Top hızlandıkça izi uzar ve son dokunan takımın renginde parlar.
 - **Kaleciler** topu sürekli takip eder; her takımın kalecisine maç başında rastgele bir yetenek (`skill`) atanır.
 - **Oyuncular** sahada rastgele dolaşır, topa çarptıklarında topun son dokunan takımı olurlar.
-- **Goller:** Gol, topa en son dokunan takımın hanesine yazılır (oyuncu **veya kaleci**). Kendi kalesine atılan goller hiçbir takımın gol sayısına eklenmez (final düellosu ve derby skorunu ise yine değiştirir). Atılan goller lig tablosunda (`AG`/GF) birikir.
+- **Goller:** Gol, topa en son dokunan takımın hanesine yazılır (oyuncu **veya kaleci**). Kendi kalesine atılan goller hiçbir takımın gol sayısına eklenmez (final düellosu skorunu ise yine değiştirir). Atılan goller lig tablosunda (`AG`/GF) birikir.
 - **Gol sayacı:** Her takımın kalesinin arkasında, takım adının dışında, o maçta attığı her gol için bir mini futbol topu belirir (gol anında büyüyerek çıkar, takım renginde halka yayar). Çok gol atılırsa toplar küçülür ve ikinci sıraya geçer. Elenen takımın topları da kalır; sayı bitiş ekranındaki `⚽` gol sütunuyla aynıdır (kendi kalesine atılan goller sayılmaz).
-- **Maç öncesi (~3,4 sn, `INTRO_DURATION`):** **`TODAY'S MATCHES`** ekranı: o gün (hafta) oynanmış grup maçları sonuçlarıyla (`FULL TIME`, her takımın sırası ve `+puan`), sıradaki maç (`PLAYING NOW`, hangi takımların oynayacağı) ve oynanacak maçlar (`LATER TODAY`) fikstür olarak listelenir. Ardından maç ekranı açılır. Derby'de yalnızca o maç görünür.
+- **Maç öncesi (~3,4 sn, `INTRO_DURATION`):** **`TODAY'S MATCHES`** ekranı: o gün (hafta) oynanmış grup maçları sonuçlarıyla (`FULL TIME`, her takımın sırası ve `+puan`), sıradaki maç (`PLAYING NOW`, hangi takımların oynayacağı) ve oynanacak maçlar (`LATER TODAY`) fikstür olarak listelenir. Ardından maç ekranı açılır.
 - **Maç sonu (~7 sn, `END_DURATION`):** tek ekranda **güncel tüm puan durumu**. Önce her takımın o maçtaki sırası (`1ST`, `2ND`…) ve aldığı puan çıkar: puan alanlar yeşil `+4`, alamayanlar kırmızı `+0`. Sonra puanlar sayarak güncellenir ve takımlar yeni sıralarına kayar (▲/▼). Video bu tabloda biter. Eski kazanan kartı, maç sonucu ve ilk 8 tablosu kaldırıldı. Sezonun son maçında şampiyon altın, ligden çıkacak son 3 takım kırmızı çerçeveyle işaretlenir ve başlıkta şampiyon yazar.
 - **Tablo sütunları:** sıra, takım, `P` (oynanan), `GD` (averaj), maçtaki sıra + puan, `PTS`.
 - **Gol** yiyen takım elenir:
@@ -57,9 +57,8 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 - Saha çizgileri her temada beyazdır; sahada hiçbir engel (tampon vb.) yoktur.
 - Maç sırasında **sadece eleme bilgileri** (ve final düellosunda skor) yazı olarak görünür; gol, kurtarış vb. sadece efekt ve sesle anlatılır.
 
-### Derby
-İki takım, klasik saha, takım başına 1 kaleci + 2 oyuncu. 30 sn sonunda çok gol atan kazanır; berabere biterse ilk gol kazanır. Galibe +5 puan.
-
+### Yalnızca grup maçları
+Her maç, sezon fikstüründeki sıradaki **6 takımlık grup maçıdır**. Eski **Derby** modu ve **manuel takım seçimi** kaldırıldı; tabloya yalnızca fikstürdeki grup maçları işlenir (eski kayıtlardaki bu ayarlar açılışta temizlenir).
 
 ### Temalar
 Otomatik (rastgele) veya elle seçilir: **Classic**, **Snow** (top %10 hızlı), **Rain** (top %15 yavaş), **Night** (karanlık, ışık saçan top ve kaleler). Eski **Bumpers** teması (sahadaki tamponlar) kaldırıldı; kayıtlı ayarda seçiliyse Otomatik'e döner.
@@ -73,19 +72,22 @@ Dünyanın önde gelen 18 kulübü, kendi renkleriyle: Real Madrid, Barcelona, A
 
 Daha eski varsayılan takımlarla kaydedilmiş bir lig, uygulama ilk açıldığında bu takımlarla sıfırdan başlar.
 
-Ad, 3 harfli kod ve renkler panelden **✏️ Takımları düzenle** ile değiştirilebilir; takım eklenip silinebilir.
+Ad, 3 harfli kod ve renkler panelden **✏️ Takımları düzenle** ile değiştirilebilir; takım eklenip silinebilir. Gruplar hep eşit (6'şar takım) olsun diye **takım sayısı 6'nın katı olmalıdır** (6, 12, 18, 24…); başka bir sayı kaydedilmez, içe aktarılan dosya da reddedilir. Takımlar yalnızca **sezon başında** (hiç maç oynanmadan) değiştirilebilir.
 
-### Haftalar ve adil gruplar
-- 18 takım, maç başına 6 takım → **haftada 3 grup maçı**. Her takım haftada bir kez oynar.
-- Başlıkta `WEEK 3 · GROUP MATCH 2` yazar. Haftanın son grup maçı kaydedilince hafta kendiliğinden ilerler (**📅 Yeni hafta** ile elle de geçilir).
-- Haftanın grupları, geçmişte **birbiriyle en az aynı grupta bulunmuş** takımları bir araya getirecek şekilde dağıtılır. 17 haftalık bir sezonda her takım ikilisi 4–6 kez aynı grupta bulunur (rastgele dağıtımda bu aralık çok daha geniştir). Panel, haftanın gruplarını ve en az/en çok karşılaşma sayısını gösterir.
+### Sezon fikstürü (adil gruplar)
+- 18 takım, her maçta 6 takım (`GROUP_SIZE`) → **haftada 3 grup maçı**. Her takım her hafta tam bir kez oynar; sezonu herkes aynı sayıda maçla bitirir.
+- **Fikstür sezon başında bir kez oluşturulur ve sezon bitene kadar değişmez.** Bütün haftaların grupları, takım ikilileri sezon boyunca olabildiğince eşit sayıda aynı grupta bulunacak şekilde birlikte planlanır (`planSeason`: seed'li başlangıç + benzetimli tavlama). 17 haftalık bir sezonda her ikili 4–6 kez aynı grupta bulunur. Fikstür lig verisinde (`seasonPlan`) saklanır.
+- Sezon başladıktan sonra takım listesi ve sezon uzunluğu değiştirilemez; bu sayede fikstür sabit kalır. Yeni sezon başlatılınca (takım değişiminden sonra) yeni fikstür oluşturulur.
+- Panel haftanın gruplarını ve açılır **Sezon fikstürü** listesini (tüm haftalar, en az/en çok karşılaşma sayısı) gösterir.
+- Başlıkta `WEEK 3 · GROUP MATCH 2` yazar. Haftanın son grup maçı kaydedilince hafta kendiliğinden ilerler. **📅 Yeni hafta** ile elle de geçilebilir; haftada oynanmamış grup maçı varsa hangi maçların (ve kaç takımın) atlanacağını gösteren bir **uyarı** çıkar ve onay istenir, çünkü atlanan maçlar bir daha oynanmaz.
+- Sezonun son haftası bitince yeni maç kurulmaz; önce yeni sezon başlatılır.
 
 ### Puanlama
-| Sıra | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| Puan | 4 | 3 | 2 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Sıra | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| Puan | 4 | 3 | 2 | 1 | 0 | 0 |
 
-İlk 4 puan alır, gerisi 0 puan alır (6 takımlı maçta 5. ve 6. sıra `+0 PTS`). Puanlar panelden değiştirilebilir; eski varsayılan 10-7-5-4-3-2-1 ile kaydedilmiş bir lig açılışta yeni varsayılana geçer. Tablo sıralaması: **Puan → Averaj → Atılan gol → Birincilik**. Tablo sütunları: O, P, 1st, AG, YG, AV.
+İlk 4 puan alır, 5. ve 6. sıra `+0 PTS` alır. Bütün gruplar 6 takımlık olduğu için her maçın beklenen puanı her takım için aynıdır. Puanlar panelden değiştirilebilir; eski varsayılan 10-7-5-4-3-2-1 ile kaydedilmiş bir lig açılışta yeni varsayılana geçer. Tablo sıralaması: **Puan → Averaj → Atılan gol → Birincilik**. Tablo sütunları: O, P, 1st, AG, YG, AV.
 
 ### Sezon sonu: şampiyon ve takım değişimi
 Sezonun son haftası (varsayılan 17) oynanınca **final maçı yoktur**: tabloda **1. olan takım şampiyon** olur ve kaydedilir. Ardından:
@@ -96,7 +98,7 @@ Sezonun son haftası (varsayılan 17) oynanınca **final maçı yoktur**: tablod
 
 ### Kalıcılık ve yedekleme
 - Lig verisi tarayıcının `localStorage`'ında `arenaLeague_v1` anahtarıyla saklanır. Depolama kullanılamazsa uygulama bellekte çalışır ve panelde uyarı gösterir.
-- **⬇ Tabloyu dışa aktar** / **⬆ Tabloyu içe aktar**: takımlar, tablo, hafta, maç geçmişi (seed, mod, tema, takımlar, sonuç) tek bir JSON dosyasında.
+- **⬇ Tabloyu dışa aktar** / **⬆ Tabloyu içe aktar**: takımlar, tablo, hafta, maç geçmişi (seed, tema, takımlar, sonuç) ve sezon fikstürü tek bir JSON dosyasında.
 - **Test maçı** kutusu işaretliyse sonuç tabloya yazılmaz.
 - Sezon uzunluğu varsayılan 17 haftadır; sezon bitince panel şampiyonu ve ligden çıkacak takımları gösterir, **Yeni sezonu başlat** düğmesi sezonu arşivleyip yenisini açar.
 - Tarayıcıdaki lig, repodaki aktif ligden ayrıdır; tarayıcıda yapılan denemeler aktif lige yansımaz. Aktif ligi tarayıcıda görmek için `data/active/league.json` dosyasını **⬆ Tabloyu içe aktar** ile yükleyin (bkz. [Otomatik günlük maç günü](#otomatik-günlük-maç-günü)).
@@ -136,9 +138,9 @@ Aktif lig, Claude Code'da tanımlı zamanlanmış bir görevle her gün İstanbu
 | Bölüm | İçerik |
 |---|---|
 | Maç | Başlat, Kaydet ve Başlat, Duraklat/Devam, Sıfırla, durum ve `● REC` göstergesi |
-| Ayarlar | Mod, takım sayısı (4–10), can (1–5), takım seçimi (otomatik/manuel), tema, top hızı çarpanı, test maçı, simülasyon hızı (1x/2x/4x, sadece önizleme), ses |
+| Ayarlar | Can (1–5), tema, top hızı çarpanı, test maçı, simülasyon hızı (1x/2x/4x, sadece önizleme), ses |
 | Açıklama metni | Maç sonunda otomatik dolan, kopyalanabilir paylaşım metni |
-| Lig | Hafta bilgisi, haftanın grupları, Yeni hafta, dışa/içe aktar, takımları düzenle, ligi sıfırla, puan ayarları, tam lig tablosu |
+| Lig | Sezon/hafta bilgisi, haftanın grupları, sezon fikstürü, Yeni hafta (oynanmamış maç varsa uyarır), dışa/içe aktar, takımları düzenle, ligi sıfırla, puan ayarları, tam lig tablosu |
 | Denge testi | Mevcut ayarlarla 100 maçı çizimsiz simüle eder (lig tablosunu etkilemez) |
 | Yardım | Kısa kullanım notları ve ffmpeg komutu |
 
@@ -146,15 +148,7 @@ Aktif lig, Claude Code'da tanımlı zamanlanmış bir görevle her gün İstanbu
 
 ## Denge
 
-Varsayılan ayarlarla (6 takım, 1 can) 100 maçlık testlerde:
-
-| Mod | Ortalama süre |
-|---|---|
-| Arena, 6 takım | ~58 sn |
-| Arena, 4 takım | ~36 sn |
-| Arena, 8 takım | ~94 sn |
-| Arena, 10 takım | ~140 sn (bazı maçlar 300 sn sınırına ulaşır) |
-| Derby | ~31 sn |
+Varsayılan ayarlarla (6 takımlık grup maçı, 1 can) testlerde ortalama maç süresi **~58 sn**. 2000 maçlık testte her kale konumu her sırayı %15–18 oranında aldı (eşit dağılım %16,7); final düellosunda üst ve alt kale %50'şer kazandı.
 
 Önemli ayarlar `src/01_core.js` dosyasının başındaki `CONFIG` nesnesinde:
 
@@ -166,7 +160,7 @@ Varsayılan ayarlarla (6 takım, 1 can) 100 maçlık testlerde:
 | `GOAL_FRAC` | 0.50 | Arena kale ağzı (ortalama kenar uzunluğunun oranı) |
 | `ARENA_HALF_H` | 465 | Arenanın merkezden üst/alt köşelerine yüksekliği (uzatma miktarı) |
 | `ROT_SPEED_DEG` | 0 | Arenanın dönme hızı (°/sn; 0 = sabit) |
-| `GOAL_GROW` | false | `true` yapılırsa kaleler elemelerden sonra (`ELIM_GOAL_GROW` 0.25), uzatmada ve derby altın golünde genişler |
+| `GOAL_GROW` | false | `true` yapılırsa kaleler elemelerden sonra (`ELIM_GOAL_GROW` 0.25) ve uzatmada genişler |
 | `FINAL_GOAL_FRAC` | 0.54 | Final düellosu kale ağzı (saha genişliğinin oranı) |
 | `FINAL_GOALS` | 2 | Final düellosunu kazanmak için gereken gol |
 | `FINAL_W` / `FINAL_H` | 820 / 1030 | Final düellosu sahasının boyutu (`FINAL_DY` 30: skor tablosunun altında kalsın diye biraz aşağıda) |
@@ -184,8 +178,8 @@ index.html          Uygulamanın kendisi (tek dosya, doğrudan açılır)
 build.sh            src/ parçalarını index.html'de birleştirir
 src/
   00_head.html      HTML iskeleti, panel ve stiller
-  01_core.js        CONFIG, takımlar, seed'li RNG, matematik, adil grup dağıtıcı
-  02_sim.js         Fizik ve oyun mantığı (arena, top, kaleci, oyuncu, eleme, final düellosu, derby)
+  01_core.js        CONFIG, takımlar, seed'li RNG, matematik, sezon fikstürü planlayıcısı
+  02_sim.js         Fizik ve oyun mantığı (arena, top, kaleci, oyuncu, eleme, final düellosu)
   03_fx_audio.js    Temalar, görsel efektler, Web Audio ile sentezlenen sesler
   04_render.js      Canvas çizimi, HUD ve bitiş ekranı
   05_app.js         Lig, kayıt, kontrol paneli, denge testi, ana döngü
@@ -208,9 +202,8 @@ data/
 Terminalden denge testi (Node.js 18+):
 
 ```bash
-node tools/balance.js                 # arena, 6 takım, 1 can, 100 maç
-node tools/balance.js arena 8 1 200   # mod, takım sayısı, can, maç sayısı
-node tools/balance.js derby
+node tools/balance.js          # 6 takımlık grup maçı, 1 can, 100 maç
+node tools/balance.js 1 200    # can, maç sayısı
 CFG='{"BALL_SPEED":650,"WALL_ACCEL":0.08}' node tools/balance.js   # ayar denemek için
 ```
 

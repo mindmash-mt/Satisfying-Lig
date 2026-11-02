@@ -10,11 +10,11 @@ const CONFIG = {
   /* Tuned with the balance test. Single-ball mode: MAX_BALLS 1 (set >1 to bring back the ball schedule). */
   /* ball starts at BALL_SPEED and gets WALL_ACCEL faster on every wall/post bounce, up to BALL_MAX_MULT × */
   BALL_R: 16, BALL_SPEED: 600, WALL_ACCEL: 0.10, BALL_MAX_MULT: 2.4, MAX_BALLS: 1, BALL_ADD_EVERY: 3, GOAL_RESPAWN: 1.1,
-  POST_R: 10, GOAL_FRAC: 0.50, ELIM_GOAL_GROW: 0.25, FINAL_GOAL_FRAC: 0.54, DERBY_GOAL_FRAC: 0.50, NET_DEPTH: 50, NET_DEPTH_RECT: 34,
+  POST_R: 10, GOAL_FRAC: 0.50, ELIM_GOAL_GROW: 0.25, FINAL_GOAL_FRAC: 0.54, NET_DEPTH: 50, NET_DEPTH_RECT: 34,
   KEEPER_INSET: 28, KEEPER_LEN_FRAC: 0.30, KEEPER_THICK: 14, KEEPER_SPEED: 320, KEEPER_GAIN: 3, KEEPER_READ: 0.3,
   PLAYER_R: 24, PLAYER_SPEED: 260,
   ROT_SPEED_DEG: 0, ROT_GROWTH: 1.12,
-  GOAL_GROW: false,   // false: goals never widen (no growth after eliminations, in overtime or derby golden goal)
+  GOAL_GROW: false,   // false: goals never widen (no growth after eliminations or in overtime)
   OT_AT: 45, OT_RAMP: 10, OT_MULT: 1.6,
   ELIM_SLOW_GAME: 0.18, ELIM_FREEZE: 1.0, WIN_SLOW_GAME: 0.24, TS_SLOW: 0.3,
   FINAL_SLOWMO_GAME: 0.375, FINAL_SLOWMO_TS: 0.25, FINAL_SLOWMO_DIST: 120,
@@ -23,10 +23,11 @@ const CONFIG = {
   /* final duel: 2 players per team, one is the captain. A captain touch that sends the ball toward the rival goal
      (within CAPTAIN_AIM_DEG of the goal centre) makes it CAPTAIN_SHOT_MULT × faster until it hits anything else. */
   CAPTAIN_SHOT_MULT: 2, CAPTAIN_AIM_DEG: 55,
-  DERBY_W: 720, DERBY_H: 880, DERBY_TIME: 30,
   PU_R: 26, PU_LIFE: 8, PU_MIN: 6, PU_MAX: 10, PU_MAX_COUNT: 2, PU_WALL_MARGIN: 80,
-  DEFAULT_LIVES: 1, DEFAULT_TEAM_COUNT: 6, DEFAULT_SPEED_MULT: 1.0,
-  POINTS: [4, 3, 2, 1, 0, 0, 0, 0, 0, 0], DERBY_WIN_POINTS: 5, SEASON_LENGTH: 17,
+  DEFAULT_LIVES: 1, DEFAULT_SPEED_MULT: 1.0,
+  /* every match is a group match of exactly GROUP_SIZE clubs; the league size must be a multiple of it so all groups are equal */
+  GROUP_SIZE: 6,
+  POINTS: [4, 3, 2, 1, 0, 0, 0, 0, 0, 0], SEASON_LENGTH: 17,
   STORAGE_KEY: 'arenaLeague_v1',
   /* before the match: today's group matches (results / fixtures) → match. After it: one animated league table (held until the video ends) */
   INTRO_DURATION: 3.4,
@@ -170,49 +171,97 @@ function shade(h, k) { /* k<0 darker, k>0 lighter */
 function luminance(h) { const [r, g, b] = hexToRgb(h); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; }
 
 /* =====================================================================
-   FAIR WEEKLY GROUPS (used by LEAGUE)
-   Splits the clubs into groups so that pairs who have shared a group the fewest times are put together.
-   cooc(a,b) = how many times a and b have already been in the same arena match.
-   Seeded multi-start local search (swap moves); the cost of a pair grows with the square of its
-   meeting count, so the season converges to every pair meeting (almost) equally often.
+   SEASON FIXTURE (used by LEAGUE)
+   The whole season's group plan is built once, when the season starts, and is not changed until it ends.
+   Every week the clubs are split into equal groups of `size` (the league size is a multiple of it), so every
+   club plays exactly once a week and the same number of matches in the season.
+   Goal: every pair of clubs shares a group as equally often as possible. Cost = Σ (meetings of a pair)²;
+   with a fixed total number of meetings this is lowest when the meetings are spread evenly.
+   Seeded: a greedy week-by-week start, then simulated annealing with swaps inside a week
+   (two clubs from different groups of the same week trade places, so every week stays a valid split).
+   fixed: weeks already decided (e.g. played before a migration) — kept as they are and only counted.
    ===================================================================== */
-function groupSizes(n, groupSize) {
-  const k = Math.max(1, Math.ceil(n / groupSize)), base = Math.floor(n / k), extra = n % k;
-  return Array.from({ length: k }, (_, i) => base + (i < extra ? 1 : 0));
-}
-function planGroups(ids, sizes, cooc, rng, restarts = 60) {
-  const n = ids.length;
-  const W = [];
-  for (let i = 0; i < n; i++) { W.push(new Float64Array(n)); }
-  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
-    const c = cooc(ids[i], ids[j]);
-    W[i][j] = W[j][i] = (c + 1) * (c + 1) - c * c;          // marginal cost of meeting once more = 2c+1
+function planSeason(ids, weeks, size, rng, fixed = []) {
+  if (!ids.length || ids.length % size !== 0) throw new Error(`Takım sayısı (${ids.length}) ${size}'nın katı olmalı.`);
+  /* several independent seeded runs (4, or up to 10 while pairs still differ by more than 2 meetings);
+     keep the one whose pair meetings are spread the narrowest */
+  let best = null, bestKey = Infinity;
+  for (let r = 0; r < 10 && (r < 4 || bestKey >= 3e9); r++) {
+    const plan = planSeasonRun(ids, weeks, size, rng, fixed), st = fixtureMeetings(ids, fixed.concat(plan));
+    const key = (st.max - st.min) * 1e9 + st.sq;
+    if (key < bestKey) { bestKey = key; best = plan; }
   }
-  let best = null, bestCost = Infinity;
-  for (let r = 0; r < restarts; r++) {
-    const perm = rng.shuffle([...Array(n).keys()]);
-    const grp = new Int32Array(n);
-    let p = 0; sizes.forEach((sz, gi) => { for (let k = 0; k < sz; k++) grp[perm[p++]] = gi; });
-    const tie = (i, j) => ((i * 7919 + j * 104729 + r * 31) % 97) * 1e-6;  // deterministic tie-break
+  return best;
+}
+function planSeasonRun(ids, weeks, size, rng, fixed) {
+  const n = ids.length, K = n / size;
+  const C = new Int32Array(n * n), idx = new Map(ids.map((id, i) => [id, i]));
+  const meet = (members, d) => {
+    for (let x = 0; x < members.length; x++) for (let y = x + 1; y < members.length; y++) {
+      const a = members[x], b = members[y]; C[a * n + b] += d; C[b * n + a] += d;
+    }
+  };
+  for (const wk of fixed) for (const grp of wk) meet(grp.map(id => idx.get(id)).filter(i => i !== undefined), 1);
+  const free = Math.max(0, weeks - fixed.length);
+  const W = [];                                   // W[w][club] = group index of the club in free week w
+  const members = (g, gi) => { const m = []; for (let i = 0; i < n; i++) if (g[i] === gi) m.push(i); return m; };
+  /* cost change if clubs a (group A) and b (group B) trade places in a week with assignment g */
+  const delta = (g, a, b) => {
+    const A = g[a], B = g[b];
+    let d = 0;
+    for (let x = 0; x < n; x++) {
+      if (x === a || x === b) continue;
+      if (g[x] === A) d += 2 * (C[b * n + x] - C[a * n + x]) + 2;        // (c+1)² - c² and (c-1)² - c²
+      else if (g[x] === B) d += 2 * (C[a * n + x] - C[b * n + x]) + 2;
+    }
+    return d;
+  };
+  const swap = (g, a, b) => {
+    const A = g[a], B = g[b];
+    for (let x = 0; x < n; x++) {
+      if (x === a || x === b) continue;
+      if (g[x] === A) { C[a * n + x]--; C[x * n + a]--; C[b * n + x]++; C[x * n + b]++; }
+      else if (g[x] === B) { C[b * n + x]--; C[x * n + b]--; C[a * n + x]++; C[x * n + a]++; }
+    }
+    g[a] = B; g[b] = A;
+  };
+  /* greedy start: each week a random split, improved by swaps against the meetings so far */
+  for (let w = 0; w < free; w++) {
+    const perm = rng.shuffle([...Array(n).keys()]), g = new Int32Array(n);
+    perm.forEach((club, p) => { g[club] = Math.floor(p / size); });
+    for (let gi = 0; gi < K; gi++) meet(members(g, gi), 1);
     let improved = true;
     while (improved) {
       improved = false;
-      for (let a = 0; a < n && !improved; a++) for (let b = a + 1; b < n && !improved; b++) {
-        if (grp[a] === grp[b]) continue;
-        let d = 0;
-        for (let x = 0; x < n; x++) {
-          if (x === a || x === b) continue;
-          if (grp[x] === grp[a]) d += W[b][x] - W[a][x];
-          else if (grp[x] === grp[b]) d += W[a][x] - W[b][x];
-        }
-        if (d < -1e-9) { const t = grp[a]; grp[a] = grp[b]; grp[b] = t; improved = true; }
+      for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) {
+        if (g[a] !== g[b] && delta(g, a, b) < 0) { swap(g, a, b); improved = true; }
       }
     }
-    let cost = 0;
-    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (grp[i] === grp[j]) cost += W[i][j] + tie(i, j);
-    if (cost < bestCost) { bestCost = cost; best = Array.from(grp); }
+    W.push(g);
   }
-  const groups = sizes.map(() => []);
-  best.forEach((gi, i) => groups[gi].push(ids[i]));
-  return groups;
+  /* annealing over the whole season (cooling from T0 to T1), then a last greedy pass */
+  if (free > 0 && K > 1) {
+    const iters = 25000 * free, T0 = 2, T1 = 0.1;
+    for (let it = 0; it < iters; it++) {
+      const g = W[Math.floor(rng.next() * free)];
+      const a = Math.floor(rng.next() * n), b = Math.floor(rng.next() * n);
+      if (g[a] === g[b]) continue;
+      const d = delta(g, a, b), T = T0 * Math.pow(T1 / T0, it / iters);
+      if (d <= 0 || rng.next() < Math.exp(-d / T)) swap(g, a, b);
+    }
+    for (const g of W) for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) if (g[a] !== g[b] && delta(g, a, b) < 0) swap(g, a, b);
+  }
+  return W.map(g => Array.from({ length: K }, (_, gi) => members(g, gi).map(i => ids[i])));
+}
+/* how many times each pair has shared a group in a list of weeks (stats for the panel and tests) */
+function fixtureMeetings(ids, weekList) {
+  const M = new Map(), key = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
+  for (const wk of weekList) for (const grp of wk) for (let i = 0; i < grp.length; i++) for (let j = i + 1; j < grp.length; j++) {
+    const k = key(grp[i], grp[j]); M.set(k, (M.get(k) || 0) + 1);
+  }
+  let min = Infinity, max = 0, sq = 0;
+  for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+    const c = M.get(key(ids[i], ids[j])) || 0; if (c < min) min = c; if (c > max) max = c; sq += c * c;
+  }
+  return { min: isFinite(min) ? min : 0, max, sq };
 }
