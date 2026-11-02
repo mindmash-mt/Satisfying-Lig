@@ -1,0 +1,35 @@
+name: GitHub Pages
+
+# main dalına her gönderimde tek dosyalık uygulamayı GitHub Pages'te yayınlar.
+# Depo ayarlarında: Settings → Pages → Source: "GitHub Actions" seçilmelidir.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Derle
+        run: |
+          ./build.sh dist/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
