@@ -63,10 +63,10 @@ function writeLeague(d) {
   fs.renameSync(tmp, leagueFile);
 }
 
-function standingsMd(d) {
+/* rankIds: the table order from the app itself (League.ranking), so the tie-break rules live in one place only */
+function standingsMd(d, rankIds) {
   const row = (id) => d.table[id] || { played: 0, pts: 0, wins: 0, gf: 0, ga: 0 };
-  const rk = d.teams.map(t => ({ t, r: row(t.id) })).sort((a, b) =>
-    b.r.pts - a.r.pts || (b.r.gf - b.r.ga) - (a.r.gf - a.r.ga) || b.r.gf - a.r.gf || b.r.wins - a.r.wins || a.t.name.localeCompare(b.t.name));
+  const rk = rankIds.map(id => d.teams.find(t => t.id === id)).filter(Boolean).map(t => ({ t, r: row(t.id) }));
   const code = (id) => (d.teams.find(t => t.id === id) || {}).code || id;
   const L = [];
   L.push('# Satisfying Lig — Aktif lig', '');
@@ -168,8 +168,10 @@ function standingsMd(d) {
       log(`📦 Sezon ${archived.season} arşivlendi; Sezon ${d.season} başladı.`);
     }
   } finally {
+    let rankIds = null;
+    try { rankIds = await page.evaluate(() => League.ranking().map(x => x.t.id)); } catch (e) { /* page gone */ }
     await browser.close();
-    if (d && !dry) fs.writeFileSync(path.join(dataDir, 'STANDINGS.md'), standingsMd(d));
+    if (d && !dry && rankIds) fs.writeFileSync(path.join(dataDir, 'STANDINGS.md'), standingsMd(d, rankIds));
     if (!process.env.KEEP_TMP) fs.rmSync(tmpDir, { recursive: true, force: true });
     const summary = { league, dryRun: dry, date: now.date, videos, seasonArchived: archived ? archived.season : null,
       next: d ? { season: d.season, week: d.week, weekMatch: d.weekMatch } : null };
