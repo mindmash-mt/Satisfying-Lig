@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   FOOTBALL ARENA LEAGUE — kullanım:
-  1) Maç başlatma: Sağdaki panelden mod/ayarları seçin, "▶ Başlat" (veya Boşluk tuşu). Aynı seed + ayarlar = birebir aynı maç.
+  1) Maç başlatma: Sağdaki panelden mod/ayarları seçin, "▶ Başlat" (veya Boşluk tuşu). Her maç rastgele bir seed ile kurulur (görünmez; oynanan maçların seed'i maç geçmişinde saklanır).
   2) Kayıt alma: "● Kaydet ve Başlat" maçı sıfırdan 1x hızda oynatır, bitiş ekranından sonra video dosyasını otomatik indirir (sekme açık/görünür kalmalı).
   3) Hafta: Başlıkta "WEEK 3 · GROUP MATCH 2" yazar. Haftanın son grup maçı kaydedilince hafta kendiliğinden ilerler; "📅 Yeni hafta" ile elle de geçilir.
   4) Tabloyu yedekleme: "⬇ Tabloyu dışa aktar" JSON indirir; "⬆ Tabloyu içe aktar" ile geri yüklenir. Veriler localStorage'da (arenaLeague_v1) da tutulur.
@@ -126,12 +126,11 @@
         <label>Can sayısı (1–5)<input type="number" id="lives" min="1" max="5"></label>
       </div>
       <label id="rowSel">Takım seçimi
-        <select id="selMode"><option value="auto">Otomatik (en az oynayanlar, seed'li kura)</option><option value="manual">Manuel</option></select>
+        <select id="selMode"><option value="auto">Otomatik (en az oynayanlar, rastgele kura)</option><option value="manual">Manuel</option></select>
       </label>
       <div id="manualList" class="checklist hidden"></div>
-      <label>Seed<div class="row"><input type="number" id="seed" min="0"><button id="btnRandSeed">🎲 Rastgele seed</button></div></label>
       <label>Tema
-        <select id="theme"><option value="auto">Otomatik (seed ile)</option><option value="classic">⚽ Classic</option><option value="snow">❄️ Snow</option><option value="rain">🌧️ Rain</option><option value="night">🌙 Night</option></select>
+        <select id="theme"><option value="auto">Otomatik (rastgele)</option><option value="classic">⚽ Classic</option><option value="snow">❄️ Snow</option><option value="rain">🌧️ Rain</option><option value="night">🌙 Night</option></select>
       </label>
       <label>Top hızı çarpanı <b id="speedVal" style="color:var(--text)"></b><input type="range" id="speedMult" min="0.7" max="1.5" step="0.05"></label>
       <label class="chk"><input type="checkbox" id="testMatch"> Test maçı (sonuç tabloya yazılmaz)</label>
@@ -176,9 +175,9 @@
       <details>
         <summary>❓ Yardım</summary>
         <ul>
-          <li><b>Başlat</b> (veya Boşluk): seçili seed ve ayarlarla maçı oynatır. Aynı seed + takımlar + ayarlar = birebir aynı maç.</li>
+          <li><b>Başlat</b> (veya Boşluk): seçili ayarlarla yeni bir rastgele maç oynatır.</li>
           <li><b>Kaydet ve Başlat</b>: maçı sıfırdan 1x gerçek zamanlı oynatır; bitiş ekranından sonra video otomatik iner. Kayıt sırasında sekmeyi arka plana atmayın (tarayıcı çizimi yavaşlatır).</li>
-          <li>Kayıtlı (test olmayan) her arena maçından sonra grup maçı numarası artar ve yeni rastgele seed atanır. Haftada her takım bir kez oynar; haftanın son grup maçından sonra hafta kendiliğinden ilerler (<b>Yeni hafta</b> ile elle de geçilebilir).</li>
+          <li>Kayıtlı (test olmayan) her arena maçından sonra grup maçı numarası artar ve maç geçmişine o maçın (görünmeyen) seed'i kaydedilir. Haftada her takım bir kez oynar; haftanın son grup maçından sonra hafta kendiliğinden ilerler (<b>Yeni hafta</b> ile elle de geçilebilir).</li>
           <li>Sezonun son haftası oynanınca final maçı yoktur: tabloda <b>1. olan şampiyon</b> olur. Panelde <b>Yeni sezonu başlat</b> ile sezon arşivlenir; tablonun son 3 takımı ligden çıkar, yedek kuyruğundaki 3 kulüp onların yerine gelir (çıkanlar kuyruğun sonuna geçer).</li>
         </ul>
         <p>WebM dosyasını Instagram'a uygun MP4'e çevirmek için:</p>
@@ -2484,7 +2483,7 @@ const League = {
     };
   },
   defaultSettings() {
-    return { mode: 'arena', teamCount: CONFIG.DEFAULT_TEAM_COUNT, selMode: 'auto', manual: [], seed: randomSeed(),
+    return { mode: 'arena', teamCount: CONFIG.DEFAULT_TEAM_COUNT, selMode: 'auto', manual: [],
       theme: 'auto', lives: CONFIG.DEFAULT_LIVES, speedMult: CONFIG.DEFAULT_SPEED_MULT, powerups: false,
       simSpeed: 1, volume: 0.8, muted: false, testMatch: false, sv: 2 };
   },
@@ -2523,6 +2522,7 @@ const League = {
     out.history = Array.isArray(d.history) ? d.history : [];
     out.champions = Array.isArray(d.champions) ? d.champions : [];
     out.settings = Object.assign(this.defaultSettings(), d.settings || {});
+    delete out.settings.seed;                 // the seed is chosen per match and never stored ahead of it
     if (out.settings.mode === 'final') out.settings.mode = 'arena';   // Season Final was removed: the table leader is the champion
     /* settings v2: single life by default — migrate older saved settings once */
     if (!d.settings || d.settings.sv !== 2) { out.settings.lives = CONFIG.DEFAULT_LIVES; out.settings.sv = 2; }
@@ -2594,7 +2594,11 @@ const League = {
   },
 };
 function validColor(c, def) { return /^#[0-9a-fA-F]{6}$/.test(String(c || '')) ? String(c).toUpperCase() : def; }
-function randomSeed() { return 1 + Math.floor(Math.random() * 99999); }
+/* every match gets its own random 32-bit seed (never shown, never stored ahead of the match; played matches keep theirs in the history) */
+function randomSeed() {
+  try { const a = new Uint32Array(1); crypto.getRandomValues(a); if (a[0]) return a[0]; } catch (e) { /* no crypto: fall back below */ }
+  return 1 + Math.floor(Math.random() * 4294967295);
+}
 function downloadBlob(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name;
@@ -2653,7 +2657,7 @@ const UI = {
   init() {
     const s = League.data.settings;
     $('mode').value = s.mode; $('teamCount').value = s.teamCount; $('selMode').value = s.selMode;
-    $('seed').value = s.seed; $('theme').value = s.theme; $('lives').value = s.lives;
+    $('theme').value = s.theme; $('lives').value = s.lives;
     $('speedMult').value = s.speedMult; $('simSpeed').value = String(s.simSpeed);
     $('volume').value = s.volume; $('testMatch').checked = s.testMatch;
     $('pointsInput').value = League.data.points.join(','); $('seasonLen').value = League.data.seasonLength;
@@ -2663,7 +2667,6 @@ const UI = {
       s.mode = $('mode').value;
       s.teamCount = clamp(Math.round(+$('teamCount').value || 6), 4, 10);
       s.selMode = $('selMode').value;
-      s.seed = Math.max(0, Math.floor(+$('seed').value || 0));
       s.theme = $('theme').value;
       s.lives = clamp(Math.round(+$('lives').value || 3), 1, 5);
       s.speedMult = clamp(+$('speedMult').value || 1, 0.7, 1.5);
@@ -2672,13 +2675,12 @@ const UI = {
       League.save(); this.refresh();
       if (!App.running || App.end) App.prepare();
     };
-    ['mode', 'teamCount', 'selMode', 'seed', 'theme', 'lives', 'speedMult', 'testMatch'].forEach(id => $(id).addEventListener('change', read));
+    ['mode', 'teamCount', 'selMode', 'theme', 'lives', 'speedMult', 'testMatch'].forEach(id => $(id).addEventListener('change', read));
     $('speedMult').addEventListener('input', () => { $('speedVal').textContent = '×' + (+$('speedMult').value).toFixed(2); });
     $('simSpeed').addEventListener('change', () => { s.simSpeed = +$('simSpeed').value || 1; League.save(); });
     $('volume').addEventListener('input', () => { s.volume = +$('volume').value; AudioSys.vol = s.volume; AudioSys.apply(); });
     $('volume').addEventListener('change', () => League.save());
     $('btnMute').addEventListener('click', () => { s.muted = !s.muted; AudioSys.muted = s.muted; AudioSys.apply(); League.save(); this.refresh(); });
-    $('btnRandSeed').addEventListener('click', () => { $('seed').value = randomSeed(); read(); });
     $('btnStart').addEventListener('click', () => App.start(false));
     $('btnRecord').addEventListener('click', () => App.start(true));
     $('btnPause').addEventListener('click', () => App.togglePause());
@@ -2734,7 +2736,7 @@ const UI = {
   init_values() {
     const s = League.data.settings;
     $('mode').value = s.mode; $('teamCount').value = s.teamCount; $('selMode').value = s.selMode;
-    $('seed').value = s.seed; $('theme').value = s.theme; $('lives').value = s.lives; $('speedMult').value = s.speedMult;
+    $('theme').value = s.theme; $('lives').value = s.lives; $('speedMult').value = s.speedMult;
     $('testMatch').checked = s.testMatch;
     $('pointsInput').value = League.data.points.join(','); $('seasonLen').value = League.data.seasonLength; $('derbyPts').value = League.data.derbyWinPoints;
   },
@@ -2900,7 +2902,7 @@ const App = {
   },
   buildSetup() {
     const d = League.data, s = d.settings;
-    const seed = (s.seed >>> 0);
+    const seed = randomSeed();                 // a fresh hidden seed for every match setup
     const srng = new RNG((seed ^ 0x5BD1E995) >>> 0);
     let teams, err = null;
     {
@@ -2976,7 +2978,7 @@ const App = {
     if (record) {
       if (!Recorder.supported()) { alert('Bu tarayıcı MediaRecorder/captureStream desteklemiyor. Güncel Chrome kullanın.'); return; }
       const s = this.setup;
-      Recorder.start(s.mode === 'arena' ? `arena_week${s.week}_match${s.weekMatch}_seed${s.seed}` : `${s.mode}_week${s.week}_seed${s.seed}`);
+      Recorder.start(s.mode === 'arena' ? `arena_week${s.week}_match${s.weekMatch}` : `${s.mode}_week${s.week}`);
     }
     this.running = true;
     lastNow = performance.now();
@@ -3039,7 +3041,6 @@ const App = {
         d.weekMatch++;
         if (d.weekMatch > s.perWeek) { d.week++; d.weekMatch = 1; setTimeout(() => UI.toast(`📅 Hafta ${d.week} başladı.`), 300); }
       }
-      d.settings.seed = randomSeed(); $('seed').value = d.settings.seed;
       League.save();
       /* last group match of the season: the table leader is the champion, the last teams will be relegated */
       if (s.mode === 'arena' && d.week > d.seasonLength) {
@@ -3096,7 +3097,7 @@ const Balance = {
     const stepChunk = () => {
       const until = performance.now() + 30;
       while (i < N && performance.now() < until) {
-        const seed = randomSeed() * 7 + i;
+        const seed = randomSeed();
         const r = new RNG((seed ^ 0x51ED27) >>> 0);
         const teams = r.shuffle(teamsAll).slice(0, n).map(t => ({ ...t }));
         let theme = s.theme === 'auto' ? r.pick(THEME_IDS) : s.theme;
@@ -3334,7 +3335,7 @@ const Offline = {
       winner: E.winner.name, subtitle: E.subtitle,
       standings: E.standings.map(x => ({ place: x.place, name: x.name, code: x.code, gf: x.gf, pts: x.pts })),
       caption: $('caption').value,
-      base: s.mode === 'arena' ? `s${d.season || 1}_week${String(s.week).padStart(2, '0')}_match${s.weekMatch}_seed${s.seed}` : `s${d.season || 1}_${s.mode}_seed${s.seed}`,
+      base: s.mode === 'arena' ? `s${d.season || 1}_week${String(s.week).padStart(2, '0')}_match${s.weekMatch}` : `s${d.season || 1}_${s.mode}_week${String(s.week).padStart(2, '0')}`,
     };
   }
 };

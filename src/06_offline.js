@@ -128,7 +128,7 @@ const Offline = {
       winner: E.winner.name, subtitle: E.subtitle,
       standings: E.standings.map(x => ({ place: x.place, name: x.name, code: x.code, gf: x.gf, pts: x.pts })),
       caption: $('caption').value,
-      base: s.mode === 'arena' ? `s${d.season || 1}_week${String(s.week).padStart(2, '0')}_match${s.weekMatch}_seed${s.seed}` : `s${d.season || 1}_${s.mode}_seed${s.seed}`,
+      base: s.mode === 'arena' ? `s${d.season || 1}_week${String(s.week).padStart(2, '0')}_match${s.weekMatch}` : `s${d.season || 1}_${s.mode}_week${String(s.week).padStart(2, '0')}`,
     };
   }
 };
