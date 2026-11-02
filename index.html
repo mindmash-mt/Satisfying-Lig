@@ -1043,7 +1043,10 @@ class Game {
     if (this.winnerSet) return;
     const T = this.teams[g.team];
     const scorer = b.lastTouch, own = scorer === g.team;
-    T.ga++; T.hitT = this.t; this.stats.goals++;
+    /* only a goal that some opponent scored counts as "conceded" (YG): an own goal, or a ball nobody had touched, still knocks the team out
+       but is no team's goal, so every YG is some team's AG and the league's totals match */
+    if (!own && scorer >= 0) T.ga++;
+    T.hitT = this.t; this.stats.goals++;
     this.spawnBlock = Math.max(this.spawnBlock, this.t + CONFIG.GOAL_RESPAWN);
     const ev = { team: g.team, scorer, own, x: b.x, y: b.y, along, nx: g.nx, ny: g.ny, ballId: b.id };
     if (own) this.stats.ownGoals++;
@@ -2464,7 +2467,7 @@ const League = {
       teams: DEFAULT_TEAMS.map((t, i) => ({ id: 't' + (i + 1), name: t.name, code: t.code, c1: t.c1, c2: t.c2 })),
       reserve: RESERVE_TEAMS.map((t, i) => ({ id: 't' + (DEFAULT_TEAMS.length + i + 1), name: t.name, code: t.code, c1: t.c1, c2: t.c2 })),
       table: {}, week: 1, weekMatch: 1, matchNo: 1, season: 1, seasonLength: CONFIG.SEASON_LENGTH,
-      points: CONFIG.POINTS.slice(), seasonPlan: null,
+      points: CONFIG.POINTS.slice(), seasonPlan: null, tieOrder: null,
       history: [], champions: [], settings: {},
     };
   },
@@ -2494,13 +2497,17 @@ const League = {
     out.table = (d.table && typeof d.table === 'object') ? d.table : {};
     for (const id of Object.keys(out.table)) {
       const r = out.table[id] || {};
-      out.table[id] = { played: +r.played || 0, pts: +r.pts || 0, wins: +r.wins || 0, gf: +r.gf || 0, ga: +r.ga || 0 };
+      const pl = Array.isArray(r.places) ? r.places.slice(0, 6).map(x => +x || 0) : [];
+      while (pl.length < 6) pl.push(0);
+      if (!Array.isArray(r.places)) pl[0] = +r.wins || 0;   // older tables only knew the wins
+      out.table[id] = { played: +r.played || 0, pts: +r.pts || 0, wins: +r.wins || 0, gf: +r.gf || 0, ga: +r.ga || 0, places: pl };
     }
     out.week = Math.max(1, +d.week || 1); out.weekMatch = Math.max(1, +d.weekMatch || 1); out.matchNo = Math.max(1, +d.matchNo || 1);
     delete out.day;
     delete out.derbyWinPoints;               // the derby mode was removed: every match is a group match
     out.season = Math.max(1, +d.season || 1);
     out.seasonPlan = this.validPlanShape(d.seasonPlan) ? d.seasonPlan : null;
+    out.tieOrder = Array.isArray(d.tieOrder) ? d.tieOrder.map(String) : null;
     out.seasonLength = Math.max(1, +d.seasonLength || CONFIG.SEASON_LENGTH);
     out.points = Array.isArray(d.points) && d.points.length ? d.points.map(x => +x || 0) : CONFIG.POINTS.slice();
     while (out.points.length < 10) out.points.push(0);
@@ -2539,10 +2546,27 @@ const League = {
     catch (e) { this.storageOK = false; }
     UI.storageWarn(!this.storageOK);
   },
-  rowOf(table, id) { return table[id] || { played: 0, pts: 0, wins: 0, gf: 0, ga: 0 }; },
+  rowOf(table, id) { return table[id] || { played: 0, pts: 0, wins: 0, gf: 0, ga: 0, places: [0, 0, 0, 0, 0, 0] }; },
+  /* the season's tie-break draw: a random order of the clubs, drawn once when the season starts and stored with the league
+     (so it is the same on every screen and in the repo files). It only decides a tie that nothing else separates. */
+  tieOrderFor() {
+    const d = this.data, ids = d.teams.map(t => t.id);
+    const have = Array.isArray(d.tieOrder) ? d.tieOrder.filter(id => ids.includes(id)) : [];
+    if (Array.isArray(d.tieOrder) && d.tieOrder.length === ids.length && have.length === ids.length && new Set(have).size === ids.length) return d.tieOrder;
+    const rng = new RNG(randomSeed());
+    d.tieOrder = have.concat(rng.shuffle(ids.filter(id => !have.includes(id))));
+    return d.tieOrder;
+  },
+  /* table order: points → 1st places → 2nd places → 3rd places → 4th places → goals scored (own goals excluded) → the season's draw.
+     Goal difference is deliberately not used: a club's goals against follow its finishing place, so it would only count the placing twice. */
   ranking(table = this.data.table) {
-    return this.data.teams.map(t => ({ t, r: this.rowOf(table, t.id) })).sort((a, b) =>
-      b.r.pts - a.r.pts || (b.r.gf - b.r.ga) - (a.r.gf - a.r.ga) || b.r.gf - a.r.gf || b.r.wins - a.r.wins || a.t.name.localeCompare(b.t.name));
+    const draw = this.tieOrderFor(), pos = (id) => draw.indexOf(id);
+    return this.data.teams.map(t => ({ t, r: this.rowOf(table, t.id) })).sort((a, b) => {
+      if (b.r.pts !== a.r.pts) return b.r.pts - a.r.pts;
+      const pa = a.r.places || [], pb = b.r.places || [];
+      for (let i = 0; i < 4; i++) if ((pb[i] || 0) !== (pa[i] || 0)) return (pb[i] || 0) - (pa[i] || 0);
+      return b.r.gf - a.r.gf || pos(a.t.id) - pos(b.t.id);
+    });
   },
   pointsFor(res, tm) { return this.data.points[tm.place - 1] || 0; },
   /* every group has exactly CONFIG.GROUP_SIZE clubs, so the league size must be a multiple of it */
@@ -2573,6 +2597,7 @@ const League = {
     d.reserve = d.reserve.slice(ch.in.length).concat(ch.out);
     d.season = season + 1;
     d.table = {}; d.week = 1; d.weekMatch = 1; d.history = []; d.seasonPlan = null;   // next season gets a new fixture
+    d.tieOrder = null; this.tieOrderFor();                                           // ...and a new tie-break draw
     delete d.weekPlan;
     this.save();
     return archive;
@@ -2580,7 +2605,9 @@ const League = {
   applyTo(table, res) {
     for (const tm of res.teams) {
       if (!this.data.teams.some(t => t.id === tm.id)) continue;
-      const r = table[tm.id] || (table[tm.id] = { played: 0, pts: 0, wins: 0, gf: 0, ga: 0 });
+      const r = table[tm.id] || (table[tm.id] = { played: 0, pts: 0, wins: 0, gf: 0, ga: 0, places: [0, 0, 0, 0, 0, 0] });
+      if (!Array.isArray(r.places)) r.places = [r.wins || 0, 0, 0, 0, 0, 0];
+      r.places[tm.place - 1]++;
       r.played++; r.gf += tm.gf; r.ga += tm.ga; r.pts += this.pointsFor(res, tm);
       if (tm.place === 1) r.wins++;
     }
@@ -2709,7 +2736,7 @@ const UI = {
     });
     $('btnResetLeague').addEventListener('click', () => {
       if (!confirm('Lig tablosu, gün sayacı, maç numarası ve geçmiş silinecek (takımlar korunur). Emin misiniz?')) return;
-      const d = League.data; d.table = {}; d.week = 1; d.weekMatch = 1; d.matchNo = 1; d.history = []; d.champions = []; d.seasonPlan = null; delete d.weekPlan;
+      const d = League.data; d.table = {}; d.week = 1; d.weekMatch = 1; d.matchNo = 1; d.history = []; d.champions = []; d.seasonPlan = null; d.tieOrder = null; delete d.weekPlan;
       League.save(); this.refresh(); App.prepare(); this.toast('Lig sıfırlandı.');
     });
     $('btnTeams').addEventListener('click', () => TeamEditor.open());

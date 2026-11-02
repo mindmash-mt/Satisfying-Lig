@@ -576,7 +576,10 @@ class Game {
     if (this.winnerSet) return;
     const T = this.teams[g.team];
     const scorer = b.lastTouch, own = scorer === g.team;
-    T.ga++; T.hitT = this.t; this.stats.goals++;
+    /* only a goal that some opponent scored counts as "conceded" (YG): an own goal, or a ball nobody had touched, still knocks the team out
+       but is no team's goal, so every YG is some team's AG and the league's totals match */
+    if (!own && scorer >= 0) T.ga++;
+    T.hitT = this.t; this.stats.goals++;
     this.spawnBlock = Math.max(this.spawnBlock, this.t + CONFIG.GOAL_RESPAWN);
     const ev = { team: g.team, scorer, own, x: b.x, y: b.y, along, nx: g.nx, ny: g.ny, ballId: b.id };
     if (own) this.stats.ownGoals++;
