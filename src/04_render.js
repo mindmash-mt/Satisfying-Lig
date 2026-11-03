@@ -693,6 +693,42 @@ const HUD = {
    ===================================================================== */
 const LeagueTable = {
   GREEN: '#2EE66B', RED: '#FF4D4D',
+  /* column x offsets inside a row (the table stays clear of the right edge, where Reels / TikTok put their buttons) */
+  COL: { rank: 44, arrow: 80, dot: 110, name: 134, nameW: 200, p: 362, gd: 414, match: 505, pts: 604, form: 660, pillW: 64, pillGap: 8 },
+  /* last-matches pill colours by place: 1st gold, 2nd silver, 3rd bronze, 4th neutral, 5th+ red (no points) */
+  PILL: [null, ['#FFD54F', '#2a2100'], ['#CFD8DC', '#1c2328'], ['#D9915A', '#2b1606'], ['rgba(255,255,255,0.22)', '#ffffff'], ['rgba(255,77,77,0.42)', '#ffffff']],
+  pill(ctx, x, cy, w, h, place, k) {
+    if (k <= 0.01) return;
+    ctx.save(); ctx.translate(x + w / 2, cy); ctx.scale(k, k);
+    roundRect(ctx, -w / 2, -h / 2, w, h, h * 0.3);
+    if (!place) {
+      ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.stroke();
+      outlinedText(ctx, '–', 0, 1, `${Math.round(h * 0.7)}px ${FONT_BIG}`, 'rgba(255,255,255,0.35)', null, 0);
+    } else {
+      const [bg, fg] = this.PILL[Math.min(place, 5)];
+      ctx.fillStyle = bg; ctx.fill();
+      outlinedText(ctx, ordinal(place), 0, 2, `${Math.round(h * 0.74)}px ${FONT_BIG}`, fg, null, 0);
+    }
+    ctx.restore();
+  },
+  /* the last FORM_COUNT places, newest on the right; after the match the old pills slide left and the new place pops in */
+  form(ctx, x, cy, h, r, tt, post) {
+    const C = this.COL, N = CONFIG.FORM_COUNT, slotX = (i) => x + C.form + i * (C.pillW + C.pillGap);
+    const oldF = r.oldForm || [], newF = r.newForm || oldF;
+    const changed = post && r.place && newF.length && newF !== oldF;
+    const p = changed ? easeInOutCubic((tt - 1.9) / 0.4) : 0;
+    for (let i = 0; i < N; i++) this.pill(ctx, slotX(i), cy, C.pillW, h, 0, 1);   // empty slots underneath
+    if (!changed) { oldF.forEach((pl, j) => this.pill(ctx, slotX(N - oldF.length + j), cy, C.pillW, h, pl, 1)); return; }
+    oldF.forEach((pl, j) => {
+      const s0 = N - oldF.length + j, s = s0 - p;
+      const fade = s < 0 ? clamp01(1 + s * 2) : 1;
+      if (fade <= 0) return;
+      ctx.save(); ctx.globalAlpha *= fade;
+      this.pill(ctx, x + C.form + s * (C.pillW + C.pillGap), cy, C.pillW, h, pl, 1);
+      ctx.restore();
+    });
+    this.pill(ctx, slotX(N - 1), cy, C.pillW, h, newF[newF.length - 1], easeOutBack((tt - 2.2) / 0.35, 2.6));
+  },
   /* rows: see App.buildIntro / App.onOver. st: { tt: seconds since this screen started, post: animate the match result, alpha } */
   draw(ctx, rows, title, sub, st) {
     const SX = 510, tt = st.tt, post = st.post;
@@ -705,11 +741,13 @@ const LeagueTable = {
     ctx.restore();
     outlinedText(ctx, sub, SX, 282, `600 30px ${FONT_UI}`, 'rgba(255,255,255,0.65)', null, 0);
     const head = `600 22px ${FONT_UI}`, hc = 'rgba(255,255,255,0.5)', hy = top - 18;
-    outlinedText(ctx, 'TEAM', X0 + 112, hy, head, hc, null, 0, 'left');
-    outlinedText(ctx, 'P', X0 + 470, hy, head, hc, null, 0);
-    outlinedText(ctx, 'GD', X0 + 545, hy, head, hc, null, 0);
-    if (post) outlinedText(ctx, 'MATCH', X0 + 690, hy, head, hc, null, 0);
-    outlinedText(ctx, 'PTS', X0 + 835, hy, head, hc, null, 0);
+    const C = this.COL, formW = CONFIG.FORM_COUNT * C.pillW + (CONFIG.FORM_COUNT - 1) * C.pillGap;
+    outlinedText(ctx, 'TEAM', X0 + C.dot - 16, hy, head, hc, null, 0, 'left');
+    outlinedText(ctx, 'P', X0 + C.p, hy, head, hc, null, 0);
+    outlinedText(ctx, 'GD', X0 + C.gd, hy, head, hc, null, 0);
+    if (post) outlinedText(ctx, 'MATCH', X0 + C.match, hy, head, hc, null, 0);
+    outlinedText(ctx, 'PTS', X0 + C.pts, hy, head, hc, null, 0);
+    if (CONFIG.FORM_COUNT > 0) outlinedText(ctx, `LAST ${CONFIG.FORM_COUNT}`, X0 + C.form + formW / 2, hy, head, hc, null, 0);
     const maxPlace = Math.max(1, ...rows.map(r => r.place || 0));
     const countP = post ? easeOutCubic((tt - 1.9) / 0.8) : 1;
     const moveP = post ? easeInOutCubic((tt - 3.1) / 1.0) : 0;
@@ -727,40 +765,41 @@ const LeagueTable = {
       else if (r.out) { ctx.lineWidth = 4; ctx.strokeStyle = this.RED; ctx.stroke(); }          // relegated
       ctx.fillStyle = r.c1; roundRect(ctx, x, y + 3, 12, rh - 6, 6); ctx.fill();
       const rank = Math.round(pos) + 1;
-      outlinedText(ctx, String(rank), x + 52, cy + 2, `${Math.round(rh * 0.56)}px ${FONT_BIG}`, '#ffffff', null, 0);
+      outlinedText(ctx, String(rank), x + C.rank, cy + 2, `${Math.round(rh * 0.56)}px ${FONT_BIG}`, '#ffffff', null, 0);
       /* ▲ / ▼ once the rows have settled */
       if (post && tt > 4.1 && r.newRank !== r.oldRank) {
         const k = easeOutBack((tt - 4.1) / 0.3, 2.5);
-        ctx.save(); ctx.translate(x + 92, cy); ctx.scale(k, k);
+        ctx.save(); ctx.translate(x + C.arrow, cy); ctx.scale(k, k);
         outlinedText(ctx, r.newRank < r.oldRank ? '▲' : '▼', 0, 0, `${Math.round(rh * 0.3)}px ${FONT_UI}`, r.newRank < r.oldRank ? this.GREEN : this.RED, null, 0);
         ctx.restore();
       }
       const dr = Math.min(16, rh * 0.22);
-      ctx.beginPath(); ctx.arc(x + 128, cy, dr, 0, TAU); ctx.fillStyle = r.c1; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = r.c2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(x + C.dot, cy, dr, 0, TAU); ctx.fillStyle = r.c1; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = r.c2; ctx.stroke();
       let fs = Math.min(44, Math.round(rh * 0.55)); ctx.font = `${fs}px ${FONT_BIG}`;
-      while (ctx.measureText(upTR(r.name)).width > 262 && fs > 22) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
-      outlinedText(ctx, upTR(r.name), x + 156, cy + 2, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
+      while (ctx.measureText(upTR(r.name)).width > C.nameW && fs > 22) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
+      outlinedText(ctx, upTR(r.name), x + C.name, cy + 2, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
       const small = `600 ${Math.max(20, Math.round(rh * 0.38))}px ${FONT_UI}`, dim = 'rgba(255,255,255,0.75)';
-      outlinedText(ctx, String(r.played - (post && r.dPlayed && countP < 0.5 ? r.dPlayed : 0)), x + 470, cy + 1, small, dim, null, 0);
+      outlinedText(ctx, String(r.played - (post && r.dPlayed && countP < 0.5 ? r.dPlayed : 0)), x + C.p, cy + 1, small, dim, null, 0);
       const gd = Math.round(lerp(r.oldGd, r.newGd, countP));
-      outlinedText(ctx, (gd > 0 ? '+' : '') + gd, x + 545, cy + 1, small, dim, null, 0);
+      outlinedText(ctx, (gd > 0 ? '+' : '') + gd, x + C.gd, cy + 1, small, dim, null, 0);
       /* this match: place + "+pts" (green) / "+0" (red) */
       if (post && r.place) {
         const start = 1.0 + (maxPlace - r.place) * 0.1;
         const k = easeOutBack((tt - start) / 0.35, 2.6);
         if (k > 0.01) {
-          ctx.save(); ctx.translate(x + 690, cy); ctx.scale(k, k);
+          ctx.save(); ctx.translate(x + C.match, cy); ctx.scale(k, k);
           const win = r.place === 1;
-          outlinedText(ctx, ordinal(r.place), -40, 1, `${Math.round(rh * 0.5)}px ${FONT_BIG}`, win ? '#FFD54F' : '#ffffff', 'rgba(0,0,0,0.6)', 5, 'center');
+          outlinedText(ctx, ordinal(r.place), -36, 1, `${Math.round(rh * 0.5)}px ${FONT_BIG}`, win ? '#FFD54F' : '#ffffff', 'rgba(0,0,0,0.6)', 5, 'center');
           if (r.delta !== null) {
             const col = r.delta > 0 ? this.GREEN : this.RED;
-            outlinedText(ctx, `+${r.delta}`, 42, 1, `${Math.round(rh * 0.62)}px ${FONT_BIG}`, col, 'rgba(0,0,0,0.75)', 6, 'center');
+            outlinedText(ctx, `+${r.delta}`, 38, 1, `${Math.round(rh * 0.62)}px ${FONT_BIG}`, col, 'rgba(0,0,0,0.75)', 6, 'center');
           }
           ctx.restore();
         }
       }
       const pts = Math.round(lerp(r.oldPts, r.newPts, countP));
-      outlinedText(ctx, String(pts), x + 835, cy + 2, `${Math.round(rh * 0.7)}px ${FONT_BIG}`, '#ffffff', null, 0);
+      outlinedText(ctx, String(pts), x + C.pts, cy + 2, `${Math.round(rh * 0.7)}px ${FONT_BIG}`, '#ffffff', null, 0);
+      if (CONFIG.FORM_COUNT > 0) this.form(ctx, x, cy, Math.round(Math.min(46, rh * 0.56)), r, tt, post);
       ctx.restore();
     }
     ctx.restore();

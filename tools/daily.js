@@ -63,8 +63,11 @@ function writeLeague(d) {
   fs.renameSync(tmp, leagueFile);
 }
 
-/* rankIds: the table order from the app itself (League.ranking), so the tie-break rules live in one place only */
-function standingsMd(d, rankIds) {
+/* rank: the table order and last-match places from the app itself (League.ranking / League.formOf), so the rules live in one place only */
+function standingsMd(d, rank) {
+  const rankIds = rank.map(x => x.id), formOf = Object.fromEntries(rank.map(x => [x.id, x.form || []]));
+  const ord = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th'));
+  const formTxt = (id) => formOf[id].length ? formOf[id].map(ord).join(' ') : '–';
   const row = (id) => d.table[id] || { played: 0, pts: 0, wins: 0, gf: 0, ga: 0 };
   const rk = rankIds.map(id => d.teams.find(t => t.id === id)).filter(Boolean).map(t => ({ t, r: row(t.id) }));
   const code = (id) => (d.teams.find(t => t.id === id) || {}).code || id;
@@ -72,9 +75,9 @@ function standingsMd(d, rankIds) {
   L.push('# Satisfying Lig — Aktif lig', '');
   L.push(`Sezon **${d.season || 1}** · sıradaki: **Hafta ${d.week} / ${d.seasonLength}**, grup maçı ${d.weekMatch} · bu sezon oynanan maç: **${d.history.length}**`, '');
   L.push(`_Son güncelleme: ${now.date} ${istanbul().time} (İstanbul)_`, '');
-  L.push('| # | Takım | O | P | 1. | AG | YG | AV |', '|---:|---|---:|---:|---:|---:|---:|---:|');
-  rk.forEach((x, i) => { const r = x.r, av = r.gf - r.ga; L.push(`| ${i + 1} | ${x.t.name} | ${r.played} | **${r.pts}** | ${r.wins} | ${r.gf} | ${r.ga} | ${av > 0 ? '+' : ''}${av} |`); });
-  L.push('', 'O: oynanan · P: puan · 1.: birincilik · AG: atılan gol · YG: yenilen gol · AV: averaj', '');
+  L.push('| # | Takım | O | P | 1. | AG | YG | AV | Son maçlar |', '|---:|---|---:|---:|---:|---:|---:|---:|---|');
+  rk.forEach((x, i) => { const r = x.r, av = r.gf - r.ga; L.push(`| ${i + 1} | ${x.t.name} | ${r.played} | **${r.pts}** | ${r.wins} | ${r.gf} | ${r.ga} | ${av > 0 ? '+' : ''}${av} | ${formTxt(x.t.id)} |`); });
+  L.push('', 'O: oynanan · P: puan · 1.: birincilik · AG: atılan gol · YG: yenilen gol · AV: averaj · Son maçlar: son maçlardaki sırası (eskiden yeniye, en sağdaki en yeni)', '');
   const last = d.history.slice(-9).reverse();
   if (last.length) {
     L.push('## Son maçlar', '', '| Maç | Hafta · grup | Sıralama (gol) | Tema | Süre | Tarih |', '|---:|---|---|---|---:|---|');
@@ -104,7 +107,7 @@ function standingsMd(d, rankIds) {
   await page.addInitScript(([key, val]) => { try { localStorage.clear(); if (val) localStorage.setItem(key, val); } catch (e) { /* ignore */ } }, [STORAGE_KEY, saved]);
   let sink = null;
   await page.exposeFunction('__sink', (kind, b64) => { if (sink) sink(kind, Buffer.from(b64, 'base64')); });
-  await page.goto('file://' + html);
+  await page.goto('file://' + html + '?studio');   // the studio (league in localStorage), not the live site
   await page.waitForFunction(() => typeof Offline !== 'undefined' && typeof App !== 'undefined' && App.setup, null, { timeout: 30000 });
   await page.evaluate(() => document.fonts.ready);
   const fontsOK = await page.evaluate(() => document.fonts.check('80px "Bebas Neue"') && document.fonts.check('700 30px Inter'));
@@ -168,10 +171,10 @@ function standingsMd(d, rankIds) {
       log(`📦 Sezon ${archived.season} arşivlendi; Sezon ${d.season} başladı.`);
     }
   } finally {
-    let rankIds = null;
-    try { rankIds = await page.evaluate(() => League.ranking().map(x => x.t.id)); } catch (e) { /* page gone */ }
+    let rank = null;
+    try { rank = await page.evaluate(() => League.ranking().map(x => ({ id: x.t.id, form: League.formOf(x.t.id) }))); } catch (e) { /* page gone */ }
     await browser.close();
-    if (d && !dry && rankIds) fs.writeFileSync(path.join(dataDir, 'STANDINGS.md'), standingsMd(d, rankIds));
+    if (d && !dry && rank) fs.writeFileSync(path.join(dataDir, 'STANDINGS.md'), standingsMd(d, rank));
     if (!process.env.KEEP_TMP) fs.rmSync(tmpDir, { recursive: true, force: true });
     const summary = { league, dryRun: dry, date: now.date, videos, seasonArchived: archived ? archived.season : null,
       next: d ? { season: d.season, week: d.week, weekMatch: d.weekMatch } : null };

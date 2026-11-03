@@ -84,9 +84,19 @@ const League = {
     }
   },
   save() {
+    if (Live.on) return;                       // the live league is never stored as the studio league (07_live.js keeps its own cache)
     try { localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(this.data)); this.storageOK = true; }
     catch (e) { this.storageOK = false; }
     UI.storageWarn(!this.storageOK);
+  },
+  /* a club's places in its last n matches of this season (oldest first, newest last), e.g. [1, 2, 3] */
+  formOf(id, history = this.data.history, n = CONFIG.FORM_COUNT) {
+    const out = [];
+    for (let i = history.length - 1; i >= 0 && out.length < n; i--) {
+      const r = Array.isArray(history[i].result) && history[i].result.find(x => x.id === id);
+      if (r && r.place) out.unshift(r.place);
+    }
+    return out;
   },
   rowOf(table, id) { return table[id] || { played: 0, pts: 0, wins: 0, gf: 0, ga: 0, places: [0, 0, 0, 0, 0, 0] }; },
   /* the season's tie-break draw: a random order of the clubs, drawn once when the season starts and stored with the league
@@ -95,7 +105,7 @@ const League = {
     const d = this.data, ids = d.teams.map(t => t.id);
     const have = Array.isArray(d.tieOrder) ? d.tieOrder.filter(id => ids.includes(id)) : [];
     if (Array.isArray(d.tieOrder) && d.tieOrder.length === ids.length && have.length === ids.length && new Set(have).size === ids.length) return d.tieOrder;
-    const rng = new RNG(randomSeed());
+    const rng = new RNG(pickSeed('tie', d.season || 1));
     d.tieOrder = have.concat(rng.shuffle(ids.filter(id => !have.includes(id))));
     return d.tieOrder;
   },
@@ -144,6 +154,21 @@ const League = {
     this.save();
     return archive;
   },
+  /* write a finished match into the league: table, history, next group match / week. Returns true when a new week began.
+     Used by the browser (App.onOver) and by the live league's catch-up (07_live.js), so both give the same league. */
+  record(s, res, winnerId) {
+    const d = this.data;
+    this.applyTo(d.table, res);
+    d.history.push({ matchNo: s.matchNo, week: s.week, weekMatch: s.weekMatch, mode: 'arena', seed: s.seed, theme: res.theme, date: s.date || new Date().toISOString(),
+      teams: res.teams.map(t => t.id), winner: winnerId, duration: res.duration,
+      result: res.teams.map(t => ({ id: t.id, code: t.code, place: t.place, gf: t.gf, ga: t.ga, saves: t.saves, score: t.score })) });
+    d.matchNo++;
+    d.weekMatch++;
+    let newWeek = false;
+    if (d.weekMatch > s.perWeek) { d.week++; d.weekMatch = 1; newWeek = true; }
+    this.save();
+    return newWeek;
+  },
   applyTo(table, res) {
     for (const tm of res.teams) {
       if (!this.data.teams.some(t => t.id === tm.id)) continue;
@@ -155,9 +180,19 @@ const League = {
     }
   },
 };
+/* panel: last-matches badges (empty slots as dashes), e.g. 1st 2nd 1st */
+function formHtml(form) {
+  const pad = Array(Math.max(0, CONFIG.FORM_COUNT - form.length)).fill('<i class="fp fe">–</i>');
+  return pad.concat(form.map(p => `<i class="fp f${Math.min(p, 5)}">${ordinal(p).toLowerCase()}</i>`)).join('');
+}
 function validColor(c, def) { return /^#[0-9a-fA-F]{6}$/.test(String(c || '')) ? String(c).toUpperCase() : def; }
 /* every match gets its own random 32-bit seed (never shown, never stored ahead of the match; played matches keep theirs in the history) */
 function randomSeed() {
+  return randomSeedRaw();
+}
+/* live league (07_live.js): every seed is derived from the season / week / match, so every browser plays the same matches */
+function pickSeed(...parts) { return Live.on ? Live.seed(parts) : randomSeed(); }
+function randomSeedRaw() {
   try { const a = new Uint32Array(1); crypto.getRandomValues(a); if (a[0]) return a[0]; } catch (e) { /* no crypto: fall back below */ }
   return 1 + Math.floor(Math.random() * 4294967295);
 }
@@ -346,8 +381,8 @@ const UI = {
       } else note.innerHTML = `🏁 Sezonun son haftası. Haftanın maçlarından sonra tablonun lideri şampiyon olur; son ${CONFIG.RELEGATE_COUNT} takım ligden çıkar.`;
     } else note.classList.add('hidden');
     const rk = League.ranking();
-    $('leagueTable').innerHTML = `<table><thead><tr><th>#</th><th>Takım</th><th title="Oynanan">O</th><th title="Puan">P</th><th title="Birincilik">1st</th><th title="Atılan gol">AG</th><th title="Yenilen gol">YG</th><th title="Averaj">AV</th></tr></thead><tbody>` +
-      rk.map((x, i) => { const av = x.r.gf - x.r.ga; return `<tr><td>${i + 1}</td><td class="tn"><span class="dot" style="background:${x.t.c1};border-color:${x.t.c2}"></span>${esc(x.t.name)}</td><td>${x.r.played}</td><td><b>${x.r.pts}</b></td><td>${x.r.wins}</td><td>${x.r.gf}</td><td>${x.r.ga}</td><td>${av > 0 ? '+' : ''}${av}</td></tr>`; }).join('') +
+    $('leagueTable').innerHTML = `<table><thead><tr><th>#</th><th>Takım</th><th title="Oynanan">O</th><th title="Puan">P</th><th title="Birincilik">1st</th><th title="Atılan gol">AG</th><th title="Yenilen gol">YG</th><th title="Averaj">AV</th><th title="Son ${CONFIG.FORM_COUNT} maçtaki sırası (eskiden yeniye)">Son ${CONFIG.FORM_COUNT}</th></tr></thead><tbody>` +
+      rk.map((x, i) => { const av = x.r.gf - x.r.ga; return `<tr><td>${i + 1}</td><td class="tn"><span class="dot" style="background:${x.t.c1};border-color:${x.t.c2}"></span>${esc(x.t.name)}</td><td>${x.r.played}</td><td><b>${x.r.pts}</b></td><td>${x.r.wins}</td><td>${x.r.gf}</td><td>${x.r.ga}</td><td>${av > 0 ? '+' : ''}${av}</td><td class="form">${formHtml(League.formOf(x.t.id))}</td></tr>`; }).join('') +
       `</tbody></table>` + (d.champions.length ? `<div class="hint">🏆 Şampiyonlar: ${d.champions.map(c => `${esc(c.name)} (sezon ${c.season || '?'})`).join(', ')}</div>` : '');
     this.status();
   },
@@ -373,6 +408,7 @@ const UI = {
     }
   },
   toast(msg) {
+    if (Live.on) return;                       // the live site has no panel messages
     const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
     document.body.appendChild(t); setTimeout(() => t.classList.add('show'), 10);
     setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 2600);
@@ -447,7 +483,7 @@ const App = {
     const p = d.seasonPlan, season = d.season || 1;
     if (p && p.season === season && p.key === key && p.size === CONFIG.GROUP_SIZE && p.weeks.length >= d.seasonLength) return p;
     if (!League.validTeamCount(ids.length)) return null;
-    const rng = new RNG(randomSeed());
+    const rng = new RNG(pickSeed('plan', season));
     /* normally the season has not begun yet. A save from an older version (weekly plans) may be mid-season:
        then the weeks already passed stay as they were played and the current week keeps its played groups */
     const fixed = [];
@@ -480,7 +516,7 @@ const App = {
   },
   buildSetup() {
     const d = League.data, s = d.settings;
-    const seed = randomSeed();                 // a fresh hidden seed for every match setup
+    const seed = pickSeed('match', d.season || 1, d.week, d.weekMatch);   // a fresh hidden seed for every match setup (live league: derived from the fixture)
     const srng = new RNG((seed ^ 0x5BD1E995) >>> 0);
     /* every match is the next group match of the season fixture */
     let teams = [], err = null;
@@ -496,7 +532,8 @@ const App = {
     if (theme === 'auto') theme = srng.pick(THEME_IDS);
     else if (!THEME_DEFS[theme]) theme = 'classic';
     const title = `WEEK ${d.week} · GROUP MATCH ${d.weekMatch}`;
-    return { err, title, mode: 'arena', week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(), matchNo: d.matchNo, seed, theme, test: s.testMatch,
+    return { err, title, mode: 'arena', week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(), matchNo: d.matchNo, seed, theme, test: Live.on ? false : s.testMatch,
+      date: Live.on ? Live.kickoffISO(d.liveCount || 0) : null,
       opts: { mode: 'arena', teams: teams.map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false } };
   },
   /* what the video shows before the match: today's matches (played ones with their results, the rest as fixtures) */
@@ -573,7 +610,8 @@ const App = {
         oldPts: League.rowOf(before, t.id).pts, newPts: League.rowOf(after, t.id).pts,
         played: League.rowOf(after, t.id).played, dPlayed: tm ? 1 : 0,
         oldGd: gdOf(before, t.id), newGd: gdOf(after, t.id),
-        place: tm ? tm.place : null, delta: tm ? League.pointsFor(res, tm) : null };
+        place: tm ? tm.place : null, delta: tm ? League.pointsFor(res, tm) : null,
+        oldForm: League.formOf(t.id, d.history), newForm: League.formOf(t.id, tm ? d.history.concat([{ result: [{ id: t.id, place: tm.place }] }]) : d.history) };
     });
     const leaderBefore = rkB[0] && rkB[0].r.played ? rkB[0].t.id : null;
     const leaderAfter = rkA[0].t;
@@ -591,14 +629,7 @@ const App = {
     this.endT = 0;
     /* persist */
     if (!s.test) {
-      d.table = after;
-      d.history.push({ matchNo: s.matchNo, week: s.week, weekMatch: s.weekMatch, mode: 'arena', seed: s.seed, theme: res.theme, date: new Date().toISOString(),
-        teams: res.teams.map(t => t.id), winner: W.id, duration: res.duration,
-        result: res.teams.map(t => ({ id: t.id, code: t.code, place: t.place, gf: t.gf, ga: t.ga, saves: t.saves, score: t.score })) });
-      d.matchNo++;
-      d.weekMatch++;
-      if (d.weekMatch > s.perWeek) { d.week++; d.weekMatch = 1; setTimeout(() => UI.toast(`📅 Hafta ${d.week} başladı.`), 300); }
-      League.save();
+      if (League.record(s, res, W.id)) setTimeout(() => UI.toast(`📅 Hafta ${d.week} başladı.`), 300);
       /* last group match of the season: the table leader is the champion, the last teams will be relegated */
       if (d.week > d.seasonLength) {
         const ch = League.seasonChange();
@@ -737,6 +768,7 @@ function fitCanvas() {
 
 async function boot() {
   Renderer.init($('c'));
+  if (Live.on) return Live.boot();             // the public site: the live league plays itself on schedule (07_live.js)
   League.load();
   UI.init();
   League.save();

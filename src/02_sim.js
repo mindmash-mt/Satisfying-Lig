@@ -8,7 +8,7 @@ function buildGeo(kind, verts, sideTeams, cx, cy, goalInfo, netDepth, goalFrac, 
   for (let j = 0; j < N; j++) {
     const a = verts[j], b = verts[(j + 1) % N];
     const dx = b.x - a.x, dy = b.y - a.y;
-    const L = Math.hypot(dx, dy);
+    const L = DM.hypot(dx, dy);
     if (L < 0.5) continue;                       // collapsed side (during morph)
     const tx = dx / L, ty = dy / L;
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
@@ -116,13 +116,13 @@ class Game {
   }
   /* regular polygon stretched vertically (centred on cy) to fill the 9:16 frame; goals share the mean side length */
   polyGeo(va, R, rot, sides) {
-    const raw = va.map(a => ({ x: R * Math.cos(a + rot), y: R * Math.sin(a + rot) }));
+    const raw = va.map(a => ({ x: R * DM.cos(a + rot), y: R * DM.sin(a + rot) }));
     let y0 = Infinity, y1 = -Infinity;
     for (const v of raw) { if (v.y < y0) y0 = v.y; if (v.y > y1) y1 = v.y; }
     const sy = Math.max(1, 2 * CONFIG.ARENA_HALF_H / Math.max(1, y1 - y0)), ym = (y0 + y1) / 2;
     const verts = raw.map(v => ({ x: this.cx + v.x, y: this.cy + (v.y - ym) * sy }));
     let per = 0, n = 0;
-    for (let i = 0; i < verts.length; i++) { const a = verts[i], b = verts[(i + 1) % verts.length], L = Math.hypot(b.x - a.x, b.y - a.y); if (L >= 0.5) { per += L; n++; } }
+    for (let i = 0; i < verts.length; i++) { const a = verts[i], b = verts[(i + 1) % verts.length], L = DM.hypot(b.x - a.x, b.y - a.y); if (L >= 0.5) { per += L; n++; } }
     return buildGeo('poly', verts, sides, this.cx, this.cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH, CONFIG.GOAL_FRAC, n ? per / n : 0);
   }
   /* centre line of the rectangular final-duel pitch: shifted down a little so it clears the scoreboard */
@@ -145,7 +145,7 @@ class Game {
     return this.polyGeo(va, R, this.rot, this.sides);
   }
   insidePoint(geo, x, y, margin) {   // nearest safe point inside the inscribed circle
-    const gx = geo.cx, gy = geo.cy, dx = x - gx, dy = y - gy, d = Math.hypot(dx, dy);
+    const gx = geo.cx, gy = geo.cy, dx = x - gx, dy = y - gy, d = DM.hypot(dx, dy);
     const lim = Math.max(0, geo.inR - margin);
     let maxOut = -Infinity;
     for (const s of geo.sides) { const o = (x - s.mx) * s.nx + (y - s.my) * s.ny; if (o > maxOut) maxOut = o; }
@@ -158,7 +158,7 @@ class Game {
   /* ---------- setup ---------- */
   makePlayer(team, x, y, captain) {
     const h = this.rng.range(0, TAU);
-    return { team, x, y, h, turn: 0, turnTarget: 0, turnT: 0, vx: Math.cos(h) * CONFIG.PLAYER_SPEED, vy: Math.sin(h) * CONFIG.PLAYER_SPEED,
+    return { team, x, y, h, turn: 0, turnTarget: 0, turnT: 0, vx: DM.cos(h) * CONFIG.PLAYER_SPEED, vy: DM.sin(h) * CONFIG.PLAYER_SPEED,
       alive: true, captain: !!captain };
   }
   /* final duel: where a team's second (non-captain) player stands — in its own half, on the other flank from x */
@@ -202,9 +202,9 @@ class Game {
   headingToRivalGoal(b, team) {
     const g = this.geo.goals.find(gg => gg.team !== team && !gg.closed);
     if (!g) return false;
-    const dx = g.mx - b.x, dy = g.my - b.y, d = Math.hypot(dx, dy), v = Math.hypot(b.vx, b.vy);
+    const dx = g.mx - b.x, dy = g.my - b.y, d = DM.hypot(dx, dy), v = DM.hypot(b.vx, b.vy);
     if (d < 1e-6 || v < 1e-6) return false;
-    return (dx * b.vx + dy * b.vy) / (d * v) > Math.cos(CONFIG.CAPTAIN_AIM_DEG * DEG);
+    return (dx * b.vx + dy * b.vy) / (d * v) > DM.cos(CONFIG.CAPTAIN_AIM_DEG * DEG);
   }
   ballSpeedTarget(b) { return this.targetSpeed() * b.boost * (b.shot ? CONFIG.CAPTAIN_SHOT_MULT : 1); }
   endShot(b) {
@@ -227,7 +227,7 @@ class Game {
       x = ox + this.rng.range(-70, 70); y = oy + this.rng.range(-70, 70);
     }
     const a = this.rng.range(0, TAU), sp = this.targetSpeed();
-    const b = { id: this.ballId++, x, y, px: x, py: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, sp, boost: 1, wallT: -9,
+    const b = { id: this.ballId++, x, y, px: x, py: y, vx: DM.cos(a) * sp, vy: DM.sin(a) * sp, sp, boost: 1, wallT: -9,
       lastTouch: -1, state: 'live', born: initial ? -10 : this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0, shot: false, shotTeam: -1 };
     this.balls.push(b);
     this.spawnBlock = this.t + 0.35;
@@ -354,11 +354,11 @@ class Game {
     const d2 = dx * dx + dy * dy;
     if (d2 >= rad * rad) return;
     let d = Math.sqrt(d2);
-    if (d < 1e-6) { dx = this.cx - p.x; dy = this.cy - p.y; d = Math.hypot(dx, dy) || 1; }
+    if (d < 1e-6) { dx = this.cx - p.x; dy = this.cy - p.y; d = DM.hypot(dx, dy) || 1; }
     const nx = dx / d, ny = dy / d;
     p.x = qx + nx * rad; p.y = qy + ny * rad;
     const vn = (p.vx - wvx) * nx + (p.vy - wvy) * ny;
-    if (vn < 0) { p.vx -= 2 * vn * nx; p.vy -= 2 * vn * ny; p.h = Math.atan2(p.vy, p.vx); }
+    if (vn < 0) { p.vx -= 2 * vn * nx; p.vy -= 2 * vn * ny; p.h = DM.atan2(p.vy, p.vx); }
   }
   updatePlayers(dt) {
     const R = CONFIG.PLAYER_R, sp = CONFIG.PLAYER_SPEED;
@@ -369,7 +369,7 @@ class Game {
       if (p.turnT <= 0) { p.turnT = this.rng.range(0.3, 0.9); p.turnTarget = this.rng.range(-2.4, 2.4); }
       p.turn += (p.turnTarget - p.turn) * Math.min(1, dt * 3);
       p.h += p.turn * dt;
-      p.vx = Math.cos(p.h) * sp; p.vy = Math.sin(p.h) * sp;
+      p.vx = DM.cos(p.h) * sp; p.vy = DM.sin(p.h) * sp;
       p.x += p.vx * dt; p.y += p.vy * dt;
       for (const s of this.geo.sides) {
         closestOnSeg(p.x, p.y, s.ax, s.ay, s.bx, s.by);
@@ -391,8 +391,8 @@ class Game {
         if (d2 >= 4 * R * R) continue;
         const d = Math.sqrt(d2) || 1, nx = dx / d, ny = dy / d, ov = (2 * R - d) / 2;
         a.x -= nx * ov; a.y -= ny * ov; b.x += nx * ov; b.y += ny * ov;
-        const van = a.vx * nx + a.vy * ny; if (van > 0) { a.vx -= 2 * van * nx; a.vy -= 2 * van * ny; a.h = Math.atan2(a.vy, a.vx); }
-        const vbn = b.vx * nx + b.vy * ny; if (vbn < 0) { b.vx -= 2 * vbn * nx; b.vy -= 2 * vbn * ny; b.h = Math.atan2(b.vy, b.vx); }
+        const van = a.vx * nx + a.vy * ny; if (van > 0) { a.vx -= 2 * van * nx; a.vy -= 2 * van * ny; a.h = DM.atan2(a.vy, a.vx); }
+        const vbn = b.vx * nx + b.vy * ny; if (vbn < 0) { b.vx -= 2 * vbn * nx; b.vy -= 2 * vbn * ny; b.h = DM.atan2(b.vy, b.vx); }
       }
     }
   }
@@ -407,7 +407,7 @@ class Game {
     let d = Math.sqrt(d2), nx, ny;
     if (wrongSide) { nx = inx; ny = iny; }
     else {
-      if (d < 1e-6) { dx = this.cx - b.x; dy = this.cy - b.y; d = Math.hypot(dx, dy) || 1; }
+      if (d < 1e-6) { dx = this.cx - b.x; dy = this.cy - b.y; d = DM.hypot(dx, dy) || 1; }
       nx = dx / d; ny = dy / d;
     }
     b.x = qx + nx * (rad + 0.05); b.y = qy + ny * (rad + 0.05);
@@ -416,9 +416,9 @@ class Game {
     if (vn >= 0) return false;
     rvx -= 2 * vn * nx; rvy -= 2 * vn * ny;
     if (dev) {
-      const a = this.rng.range(-this.theme.dev, this.theme.dev) * DEG, c = Math.cos(a), s = Math.sin(a);
+      const a = this.rng.range(-this.theme.dev, this.theme.dev) * DEG, c = DM.cos(a), s = DM.sin(a);
       const ox = rvx * c - rvy * s, oy = rvx * s + rvy * c;
-      if (ox * nx + oy * ny > 0.15 * Math.hypot(ox, oy)) { rvx = ox; rvy = oy; }
+      if (ox * nx + oy * ny > 0.15 * DM.hypot(ox, oy)) { rvx = ox; rvy = oy; }
     }
     b.vx = rvx + wvx; b.vy = rvy + wvy;
     if (kind) this.emit(kind, { x: b.x - nx * CONFIG.BALL_R, y: b.y - ny * CONFIG.BALL_R, speed: -vn, nx, ny, id: b.id });
@@ -437,7 +437,7 @@ class Game {
     if (vn < 0) { b.vx -= 2 * vn * nx; b.vy -= 2 * vn * ny; }
     b.vx += 0.6 * p.vx; b.vy += 0.6 * p.vy;
     vn = b.vx * nx + b.vy * ny;
-    const m = Math.hypot(b.vx, b.vy) || 1;
+    const m = DM.hypot(b.vx, b.vy) || 1;
     if (vn < 0.25 * m) { const add = 0.25 * m - vn; b.vx += nx * add; b.vy += ny * add; }
     const fresh = this.t - b.hitP > 0.12;
     b.lastTouch = p.team; b.hitP = this.t;
@@ -474,7 +474,7 @@ class Game {
   }
   updateNetBall(b, dt) {
     b.netT += dt;
-    const n = b.nl, damp = Math.exp(-7 * dt);
+    const n = b.nl, damp = DM.exp(-7 * dt);
     n.vo *= damp; n.va *= damp;
     n.o += n.vo * dt; n.a += n.va * dt;
     const g = this.geo.goals.find(gg => gg.team === b.netTeam);
@@ -532,9 +532,9 @@ class Game {
             interior ? -w.nx : undefined, interior ? -w.ny : undefined)) this.wallBoost(b);
         }
       }
-      const m = Math.hypot(b.vx, b.vy);
+      const m = DM.hypot(b.vx, b.vy);
       if (m > 1e-6) { b.vx *= b.sp / m; b.vy *= b.sp / m; }
-      else { const a = this.rng.range(0, TAU); b.vx = Math.cos(a) * b.sp; b.vy = Math.sin(a) * b.sp; }
+      else { const a = this.rng.range(0, TAU); b.vx = DM.cos(a) * b.sp; b.vy = DM.sin(a) * b.sp; }
     }
     for (const b of live) {
       if (b.state !== 'live') continue;
@@ -546,7 +546,7 @@ class Game {
         if (this.debugEscape) this.debugEscape(b, maxOut);
         this.endShot(b);
         b.x = b.px = geo.cx; b.y = b.py = geo.cy;
-        const a = this.rng.range(0, TAU); b.vx = Math.cos(a) * b.sp; b.vy = Math.sin(a) * b.sp;
+        const a = this.rng.range(0, TAU); b.vx = DM.cos(a) * b.sp; b.vy = DM.sin(a) * b.sp;
       }
     }
     if (this.balls.some(b => b.state === 'dead')) this.balls = this.balls.filter(b => b.state !== 'dead');
@@ -748,7 +748,7 @@ class Game {
         y = geo.cy + this.rng.range(-1, 1) * (this.H / 2 - M);
       } else {
         const r = Math.sqrt(this.rng.next()) * Math.max(0, geo.inR - M), a = this.rng.range(0, TAU);
-        x = this.cx + Math.cos(a) * r; y = this.cy + Math.sin(a) * r;
+        x = this.cx + DM.cos(a) * r; y = this.cy + DM.sin(a) * r;
       }
       let ok = true;
       for (const p of this.powerups) if ((p.x - x) ** 2 + (p.y - y) ** 2 < 90 * 90) ok = false;
@@ -794,13 +794,13 @@ class Game {
         const cap = CONFIG.MAX_BALLS <= 1 ? 1 : (this.finalDuel ? 1 : CONFIG.MAX_BALLS) + 1;
         text = '➕ SPLIT BALL!';
         if (live < cap) {
-          const a = Math.atan2(b.vy, b.vx), sp = b.sp;
-          const px = -Math.sin(a), py = Math.cos(a);
+          const a = DM.atan2(b.vy, b.vx), sp = b.sp;
+          const px = -DM.sin(a), py = DM.cos(a);
           const nb = { id: this.ballId++, x: b.x + px * 17, y: b.y + py * 17, px: b.x, py: b.y,
-            vx: Math.cos(a + 0.4) * sp, vy: Math.sin(a + 0.4) * sp, sp, boost: b.boost, wallT: -9, lastTouch: b.lastTouch, state: 'live',
+            vx: DM.cos(a + 0.4) * sp, vy: DM.sin(a + 0.4) * sp, sp, boost: b.boost, wallT: -9, lastTouch: b.lastTouch, state: 'live',
             born: this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0, shot: false, shotTeam: -1 };
           b.x -= px * 17; b.y -= py * 17;
-          b.vx = Math.cos(a - 0.4) * sp; b.vy = Math.sin(a - 0.4) * sp;
+          b.vx = DM.cos(a - 0.4) * sp; b.vy = DM.sin(a - 0.4) * sp;
           this.balls.push(nb);
         }
         break;
