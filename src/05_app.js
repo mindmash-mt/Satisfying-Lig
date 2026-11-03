@@ -533,7 +533,7 @@ const App = {
     else if (!THEME_DEFS[theme]) theme = 'classic';
     const title = `WEEK ${d.week} · GROUP MATCH ${d.weekMatch}`;
     return { err, title, mode: 'arena', week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(), matchNo: d.matchNo, seed, theme, test: Live.on ? false : s.testMatch,
-      date: Live.on ? Live.kickoffISO(d.liveCount || 0) : null,
+      date: Live.on ? new Date(Live.nextStart()).toISOString() : null,
       opts: { mode: 'arena', teams: teams.map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false } };
   },
   /* what the video shows before the match: today's matches (played ones with their results, the rest as fixtures) */
@@ -551,6 +551,8 @@ const App = {
       } else if (j === s.weekMatch) matches.push({ label, status: 'now', teams: s.opts.teams.map(t => tObj(t)) });
       else matches.push({ label, status: 'later', teams: (week[j - 1] || []).map(tm).filter(Boolean).map(t => tObj(t)) });
     }
+    /* the live league plays a week in a few hours, not one a day */
+    if (Live.on) return { title: s.title, heading: `WEEK ${s.week} MATCHES`, sub: `SEASON ${d.season || 1}`, later: 'COMING UP', matches };
     return { title: s.title, sub: `WEEK ${s.week}`, matches };
   },
   prepare() {

@@ -35,10 +35,15 @@ const CONFIG = {
   FORM_COUNT: 3,       // league table: each club's last N match places (1ST 2ND …), shown in the rightmost column
   RELEGATE_COUNT: 3,   // at the end of a season the last N teams leave the league and the next N from the reserve queue join
   HARD_TIME_LIMIT: 300,
-  /* the public site's live league (07_live.js): one group match at each of these times (Istanbul, UTC+3 all year), from `start`.
-     3 times a day = one week a day. Changing the times only moves future kick-offs; the matches themselves follow from
-     `salt` (seeds) and the simulation code — change those and the whole live league (also past results) is replayed differently. */
-  LIVE: { start: '2026-11-04', times: ['12:00', '18:00', '21:00'], utcOffset: 3, salt: 'satisfying-lig-live-1' },
+  /* the public site's live league (07_live.js), a league that never stops. Istanbul time (UTC+3 all year).
+     bands: from each `from` until the next band, one group match every `every` minutes (a day = 308 matches).
+     The first match is at `start` + the first band's time. gap: seconds between a match that ran over and the next one.
+     Changing start / bands / gap / salt (or the simulation) starts a NEW live league: all browsers drop their saved state. */
+  LIVE: {
+    start: '2026-11-04',
+    bands: [{ from: '05:00', every: 5 }, { from: '09:00', every: 10 }, { from: '19:00', every: 3 }],
+    utcOffset: 3, gap: 10, salt: 'satisfying-lig-live-1', keepChampions: 50,
+  },
 };
 const DT = 1 / CONFIG.STEP_HZ;
 
