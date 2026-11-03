@@ -73,13 +73,17 @@ console.log(`${N} maç + sezon fikstürü, Math kütüphanesi bozulmuşken: ${sa
   };
   const sane = (log, gap) => log.every((x, i) => x.start >= x.slot && (i === 0 || x.start >= log[i - 1].end + gap * 1000) && x.end > x.start);
   {
-    const { Live } = loadLive(), c = (n) => Live.clock(Live.slot(n));
+    const { Live, CONFIG } = loadLive(), c = (n) => Live.clock(Live.slot(n));
+    CONFIG.LIVE.start = '2026-11-04'; Live._slots = null;
     ok(Live.slots().length === 308 && c(0) === '05:00' && c(47) === '08:55' && c(48) === '09:00' && c(107) === '18:50' && c(108) === '19:00' && c(307) === '04:57' && c(308) === '05:00' && Live.slot(308) - Live.slot(0) === 864e5,
       'Takvim: günde 308 maç · 05:00 / 08:55→09:00 / 18:50→19:00 / 04:57→05:00 (ertesi gün)');
+    CONFIG.LIVE.start = '2026-11-04T00:31'; Live._slots = null;
+    ok(c(0) === '00:33' && c(1) === '00:36' && c(88) === '04:57' && c(89) === '05:00' && Live.slot(308) - Live.slot(0) === 864e5,
+      'Saatli başlangıç: 00:31 → ilk maç 00:33 (sıradaki 3 dk aralığı) · 04:57→05:00 bant geçişi');
   }
   {
     const L = loadLive();
-    L.CONFIG.LIVE.bands = [{ from: '05:00', every: 1 }, { from: '06:00', every: 3 }]; L.Live._slots = null;
+    L.CONFIG.LIVE.start = '2026-11-04'; L.CONFIG.LIVE.bands = [{ from: '05:00', every: 1 }, { from: '06:00', every: 3 }]; L.Live._slots = null;
     const log = await runUntil(L, L.Live.slot(0) + 4 * 3600e3);
     const late = log.map(x => x.start - x.slot), back = log.findIndex((x, i) => i > 60 && x.start === x.slot);
     ok(sane(log, L.CONFIG.LIVE.gap) && log.length > 60 && back > 0,
@@ -87,6 +91,7 @@ console.log(`${N} maç + sezon fikstürü, Math kütüphanesi bozulmuşken: ${sa
   }
   if (process.argv.includes('--long')) {
     const L = loadLive(), t0 = Date.now();
+    L.CONFIG.LIVE.start = '2026-11-04'; L.Live._slots = null;
     const log = await runUntil(L, L.Live.slot(0) + 48 * 3600e3);
     const d = L.League.data, late = log.filter(x => x.start > x.slot).length, longest = Math.max(...log.map(x => x.end - x.start)) / 1000;
     ok(sane(log, L.CONFIG.LIVE.gap) && log.length === 616 && d.season >= 12 && d.champions.length <= L.CONFIG.LIVE.keepChampions,
