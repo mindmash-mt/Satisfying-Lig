@@ -760,7 +760,8 @@ function frame(now) {
 
 function fitCanvas() {
   const c = Renderer.canvas, wrap = $('stage');
-  const W = wrap.clientWidth - 16, H = wrap.clientHeight - 16;
+  const pad = document.body.classList.contains('live') ? 112 : 0;   // live site: room for the tab bar (top) and the sound bar (bottom)
+  const W = wrap.clientWidth - 16, H = wrap.clientHeight - 16 - pad;
   let h = H, w = h * 9 / 16;
   if (w > W) { w = W; h = w * 16 / 9; }
   c.style.width = Math.floor(w) + 'px'; c.style.height = Math.floor(h) + 'px';

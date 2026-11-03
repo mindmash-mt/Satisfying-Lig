@@ -47,7 +47,12 @@ const Live = {
   count() { return League.data.liveCount || 0; },
 
   /* --- league state ------------------------------------------------------ */
-  freshLeague() { const d = League.normalize(null); d.liveCount = 0; return d; },
+  freshLeague() { const d = League.normalize(null); d.liveCount = 0; d.liveSeasonStart = 0; return d; },
+  /* live match number of a season's group match (for its kick-off time) */
+  matchIndex(week, wm) {
+    const d = League.data;
+    return (d.liveSeasonStart || 0) + (week - 1) * App.perWeek() + (wm - 1);
+  },
   /* one match without drawing; identical to watching it (same Game steps, same League.record) */
   playHeadless() {
     const s = App.buildSetup();
@@ -60,8 +65,10 @@ const Live = {
   /* after a match: season over → champion, relegation, new season; then the next live match */
   closeMatch() {
     const d = League.data;
-    if (d.week > d.seasonLength) League.endSeason();
+    const ended = d.week > d.seasonLength;
+    if (ended) League.endSeason();
     d.liveCount = (d.liveCount || 0) + 1;
+    if (ended) d.liveSeasonStart = d.liveCount;
   },
   /* only called between matches, so a saved state is always "after liveCount matches" (also used by tools/live-state.js) */
   saveCache() {
@@ -84,7 +91,7 @@ const Live = {
   async loadState(target) {
     const pick = [this.readCache(), await this.readCheckpoint()].filter(d => d && (d.liveCount || 0) <= target)
       .sort((a, b) => (b.liveCount || 0) - (a.liveCount || 0))[0];
-    League.data = pick ? Object.assign(League.normalize(pick), { liveCount: pick.liveCount || 0 }) : this.freshLeague();
+    League.data = pick ? Object.assign(League.normalize(pick), { liveCount: pick.liveCount || 0, liveSeasonStart: pick.liveSeasonStart || 0 }) : this.freshLeague();
   },
   /* simulate the missing matches, in small slices so the page stays responsive */
   async catchUp(target) {
@@ -102,7 +109,8 @@ const Live = {
   /* --- boot / loop ---------------------------------------------------------- */
   async boot() {
     const q = new URLSearchParams(location.search).get('now');
-    if (q && !isNaN(Date.parse(q))) this.offset = Date.parse(q) - Date.now();
+    /* only the past can be replayed: a future ?now would show results before their kick-off */
+    if (q && !isNaN(Date.parse(q))) this.offset = Math.min(0, Date.parse(q) - Date.now());
     document.body.classList.add('live');
     League.data = this.freshLeague();
     UI.init();
@@ -122,6 +130,13 @@ const Live = {
     this.phase = 'wait';
   },
   ui() {
+    const tabs = document.createElement('nav');
+    tabs.id = 'liveTabs';
+    tabs.innerHTML = `<button data-tab="live" class="on">⚽ Canlı</button><button data-tab="table">Lig tablosu</button><button data-tab="fixture">Fikstür</button>`;
+    const pane = document.createElement('div');
+    pane.id = 'livePane'; pane.className = 'hidden';
+    $('stage').appendChild(tabs); $('stage').appendChild(pane);
+    tabs.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) this.showTab(b.dataset.tab); });
     const bar = document.createElement('div');
     bar.id = 'liveBar';
     bar.innerHTML = `<button id="liveSound">🔇 Ses kapalı</button><span id="liveInfo"></span>`;
@@ -133,6 +148,25 @@ const Live = {
       AudioSys.muted = !this.sound; AudioSys.apply && AudioSys.ctx && AudioSys.apply();
       $('liveSound').textContent = this.sound ? '🔊 Ses açık' : '🔇 Ses kapalı';
     });
+  },
+  tab: 'live', paneKey: '',
+  showTab(tab) {
+    this.tab = tab; this.paneKey = '';
+    document.querySelectorAll('#liveTabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    $('livePane').classList.toggle('hidden', tab === 'live');
+    this.renderPane();
+    if (tab === 'fixture') { const cur = document.querySelector('#livePane .fx-week.cur'); if (cur) cur.scrollIntoView({ block: 'start' }); }
+    else $('livePane').scrollTop = 0;
+  },
+  /* the open tab is redrawn only when the league changes (a match ends, a new one starts) */
+  renderPane() {
+    if (this.tab === 'live' || this.phase === 'loading') return;
+    const d = League.data, s = App.setup;
+    const live = this.phase === 'match' && s && !d.history.some(h => h.week === s.week && h.weekMatch === s.weekMatch) ? `${s.week}-${s.weekMatch}` : '';
+    const key = [this.tab, d.season, d.history.length, this.count(), live].join('|');
+    if (key === this.paneKey) return;
+    this.paneKey = key;
+    $('livePane').innerHTML = `<div class="lp-in">${this.tab === 'table' ? LivePages.table() : LivePages.fixture(live)}</div>`;
   },
   /* start the match whose kick-off was at this.kick and bring it to the current moment */
   startMatch() {
@@ -173,13 +207,15 @@ const Live = {
       }
       if (this.phase === 'match') this.advanceMatch(now);
     } catch (e) { console.error(e); this.phase = 'error'; this.err = String(e && e.message || e); }
-    if (this.phase === 'match' && App.game) Renderer.draw(App.game, App);
+    this.renderPane();
+    if (this.tab !== 'live') { /* a tab covers the stream: the match keeps running in sync, nothing to draw */ }
+    else if (this.phase === 'match' && App.game) Renderer.draw(App.game, App);
     else LiveScreen.draw(Renderer.ctx, this, now);
     requestAnimationFrame((tt) => this.frame(tt));
   },
 };
 
-/* between matches: the league table (next match's clubs highlighted) and the countdown to the next kick-off */
+/* between matches: the league table and the countdown to the next kick-off */
 const LiveScreen = {
   draw(ctx, L, now) {
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
@@ -193,10 +229,9 @@ const LiveScreen = {
     }
     const d = League.data, n = L.count(), next = L.kickoff(n);
     const plan = App.seasonPlan(), ids = plan && d.week <= d.seasonLength ? ((plan.weeks[d.week - 1] || [])[d.weekMatch - 1] || []) : [];
-    const nextSet = new Set(ids);
     const rows = League.ranking().map((x, i) => {
       const f = League.formOf(x.t.id), gd = x.r.gf - x.r.ga;
-      return { id: x.t.id, name: x.t.name, c1: x.t.c1, c2: x.t.c2, today: nextSet.has(x.t.id), oldRank: i, newRank: i,
+      return { id: x.t.id, name: x.t.name, c1: x.t.c1, c2: x.t.c2, today: false, oldRank: i, newRank: i,
         oldPts: x.r.pts, newPts: x.r.pts, played: x.r.played, dPlayed: 0, oldGd: gd, newGd: gd, place: null, delta: null, oldForm: f, newForm: f };
     });
     const last = d.champions.length ? d.champions[d.champions.length - 1] : null;
@@ -214,5 +249,54 @@ const LiveScreen = {
     outlinedText(ctx, 'STARTS IN', X0 + 30, y + 128, `600 24px ${FONT_UI}`, 'rgba(255,255,255,0.6)', null, 0, 'left');
     const codes = ids.map(id => (d.teams.find(t => t.id === id) || {}).code).filter(Boolean).join(' · ');
     outlinedText(ctx, codes, X0 + W / 2, y + 180, `600 24px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
+  },
+};
+
+/* the "Lig tablosu" and "Fikstür" tabs (HTML, Turkish like the rest of the site's controls) */
+const LivePages = {
+  MONTHS: ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'],
+  DAYS: ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'],
+  local(ms) { return new Date(ms + Live.cfg().utcOffset * 3600e3); },
+  day(ms) { const t = this.local(ms); return `${t.getUTCDate()} ${this.MONTHS[t.getUTCMonth()]} ${this.DAYS[t.getUTCDay()]}`; },
+  dot(t) { return `<span class="dot" style="background:${t.c1};border-color:${t.c2}"></span>`; },
+  champ() {
+    const c = League.data.champions, last = c[c.length - 1];
+    return last ? `<div class="lp-note">🏆 Sezon ${last.season} şampiyonu: <b>${esc(last.name)}</b></div>` : '';
+  },
+  table() {
+    const d = League.data, rk = League.ranking(), out = rk.length - Math.min(CONFIG.RELEGATE_COUNT, d.reserve.length);
+    const rows = rk.map((x, i) => {
+      const av = x.r.gf - x.r.ga;
+      return `<tr class="${i >= out ? 'rel' : ''}"><td>${i + 1}</td><td class="tn">${this.dot(x.t)}${esc(x.t.name)}</td><td>${x.r.played}</td><td><b>${x.r.pts}</b></td>` +
+        `<td class="opt">${x.r.wins}</td><td class="opt">${x.r.gf}</td><td class="opt">${x.r.ga}</td><td>${av > 0 ? '+' : ''}${av}</td><td class="form">${formHtml(League.formOf(x.t.id))}</td></tr>`;
+    }).join('');
+    return `<h2>Lig tablosu</h2><div class="lp-sub">Sezon ${d.season} · ${d.history.length} / ${d.seasonLength * App.perWeek()} maç oynandı</div>${this.champ()}
+      <table class="lp-table"><thead><tr><th>#</th><th>Takım</th><th title="Oynanan">O</th><th title="Puan">P</th><th class="opt" title="Birincilik">1.</th><th class="opt" title="Atılan gol">AG</th><th class="opt" title="Yenilen gol">YG</th><th title="Averaj">AV</th><th title="Son ${CONFIG.FORM_COUNT} maçtaki sırası (en sağdaki en yeni)">Son ${CONFIG.FORM_COUNT}</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="lp-legend">Puan: ${d.points.slice(0, CONFIG.GROUP_SIZE).map((p, i) => `${i + 1}. → ${p}`).join(' · ')} · Kırmızı çizgili son ${CONFIG.RELEGATE_COUNT} takım sezon sonunda ligden düşer.</div>`;
+  },
+  fixture(live) {
+    const d = League.data, plan = App.seasonPlan();
+    if (!plan) return '<h2>Fikstür</h2>';
+    const team = (id) => d.teams.find(t => t.id === id) || d.reserve.find(t => t.id === id);
+    const per = App.perWeek();
+    const weeks = plan.weeks.slice(0, d.seasonLength).map((groups, wi) => {
+      const w = wi + 1, cur = w === Math.min(d.week, d.seasonLength);
+      const ms0 = Live.kickoff(Live.matchIndex(w, 1));
+      const matches = groups.slice(0, per).map((ids, mi) => {
+        const m = mi + 1, ko = Live.kickoff(Live.matchIndex(w, m));
+        const h = d.history.find(x => x.week === w && x.weekMatch === m);
+        const isLive = live === `${w}-${m}`;
+        const badge = h ? '<span class="b done">Bitti</span>' : isLive ? '<span class="b live">● CANLI</span>' : '';
+        let body;
+        if (h) body = h.result.slice().sort((a, b) => a.place - b.place).map(r => {
+          const t = team(r.id) || { name: r.code, c1: '#888', c2: '#fff' }, pts = d.points[r.place - 1] || 0;
+          return `<li><i class="fp f${Math.min(r.place, 5)}">${ordinal(r.place).toLowerCase()}</i>${this.dot(t)}<span class="nm">${esc(t.name)}</span><span class="pt ${pts ? 'g' : 'r'}">+${pts}</span></li>`;
+        }).join('');
+        else body = ids.map(id => { const t = team(id); return t ? `<li>${this.dot(t)}<span class="nm">${esc(t.name)}</span></li>` : ''; }).join('');
+        return `<div class="fx-match${h ? ' done' : ''}${isLive ? ' live' : ''}"><div class="fx-head"><b>Grup maçı ${m}</b><span>${this.day(ko).split(' ').slice(0, 2).join(' ')} · ${Live.clock(ko)}</span>${badge}</div><ol class="${h ? 'res' : 'teams'}">${body}</ol></div>`;
+      }).join('');
+      return `<section class="fx-week${cur ? ' cur' : ''}"><h3>Hafta ${w}<span>${this.day(ms0)}</span></h3>${matches}</section>`;
+    }).join('');
+    return `<h2>Sezon ${d.season} fikstürü</h2><div class="lp-sub">${d.seasonLength} hafta · her gün ${Live.cfg().times.join(' · ')} (TSİ) · her takım haftada bir maç</div>${this.champ()}${weeks}`;
   },
 };
