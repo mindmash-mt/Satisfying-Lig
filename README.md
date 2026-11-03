@@ -16,7 +16,8 @@ Kendi kendine oynayan **canlı bir "satisfying" futbol ligi**: maçlar her gün 
 Site adresi (GitHub Pages): `https://<kullanıcı>.github.io/<repo>/`. Siteyi açan kişi şunları görür:
 
 - **Maç saatinde:** maçın kendisi. Geç gelen kişi maçı baştan değil, **kaldığı yerden** izler (ör. 12:00:40'ta giren, maçın 40. saniyesini görür). Maçtan önce `TODAY'S MATCHES` ekranı, maçtan sonra animasyonlu lig tablosu gelir.
-- **Maç yokken:** güncel lig tablosu (sıradaki maçın takımları vurgulu) ve bir sonraki maça **geri sayım**.
+- **Maç yokken:** güncel lig tablosu ve bir sonraki maça **geri sayım**.
+- Üstteki sekmeler: **⚽ Canlı** (yayın), **Lig tablosu** (O, P, 1., AG, YG, AV, son 3 maç; düşme hattındaki son 3 takım kırmızı çizgili) ve **Fikstür** (sezonun bütün haftaları, her maçın günü ve saati; oynananlar sıralama ve puanlarla, oynanan maç `● CANLI` etiketiyle). Fikstür açılınca bu haftaya kayar. Sekmeler açıkken yayın arka planda saate göre ilerlemeye devam eder.
 - Ses tarayıcı kuralları gereği kapalı başlar; alttaki **🔇 Ses kapalı** düğmesiyle açılır.
 
 **Maç saatleri:** her gün İstanbul saatiyle **12:00 · 18:00 · 21:00**. Her saatte bir grup maçı oynanır, yani her gün bir hafta (3 grup maçı) tamamlanır. Lig **4 Kasım 2026**'da 1. haftayla başlar. 17 gün sonra sezon biter: şampiyon belirlenir, son 3 takım düşer, yedeklerden 3 kulüp gelir ve yeni sezon ertesi maçta kendiliğinden başlar.
@@ -43,7 +44,9 @@ Simülasyon deterministiktir: aynı seed + aynı takımlar = birebir aynı maç.
 
 > ⚠️ Simülasyon kodunu (`src/01_core.js`, `02_sim.js`, `05_app.js`, `07_live.js`) değiştirmek geçmiş maçların sonucunu da değiştirir, çünkü herkes ligi baştan yeniden hesaplar. Denge ayarı gibi bir değişiklikten sonra `CONFIG.LIVE.start`'ı ileri bir tarihe alıp yeni sezonla başlamak en temizidir. Yalnızca görünümü değiştiren dosyalar (`03_fx_audio.js`, `04_render.js`, `00_head.html`) sonuçları etkilemez.
 
-**Önizleme / deneme:** `index.html?now=2026-11-04T12:00:30+03:00` siteyi o andaki hâliyle gösterir (yalnızca o tarayıcıda; lig değişmez).
+**Geçmişi izleme:** `index.html?now=2026-11-04T12:00:30+03:00` siteyi geçmişteki o anki hâliyle gösterir (yalnızca o tarayıcıda; lig değişmez). Gelecek bir an verilirse yok sayılır, aksi halde sonuçlar maçtan önce görülebilirdi.
+
+**Sonuçlar önceden hesaplanabilir mi?** Evet, teknik bilgisi olan biri için mümkün. Site tek bir HTML dosyasıdır; ziyaretçinin tarayıcısı bütün kodu indirir (sağ tık → Kaynağı görüntüle). Maçlar yalnızca bu koddan ve saatten türediği için biri dosyayı indirip bilgisayarının saatini (ya da tarayıcı geliştirici araçlarında `Date.now`'u) ileri alırsa gelecekteki maçları görebilir. Bunu tamamen engellemenin yolu, her maçın seed'ini gizli tutup maç saatinde yayımlamaktır. Bu da maç saatlerinde güvenilir çalışan bir sunucu ya da zamanlanmış iş gerektirir.
 
 ---
 
