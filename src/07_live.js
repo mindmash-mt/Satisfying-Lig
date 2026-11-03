@@ -1,37 +1,55 @@
 /* =====================================================================
-   LIVE LEAGUE  (the public site: matches play themselves at fixed times, every visitor sees the same match)
-   No server: the simulation is deterministic (seeded RNG + DM math, see 01_core.js), and every seed is derived
-   from the season / week / group match. So each browser computes the league by itself:
-     • the past matches are simulated without drawing (cached in localStorage; live-state.json on the site,
-       built by the Pages workflow, is a ready-made checkpoint so first visits are quick),
-     • the match whose kick-off has passed is fast-forwarded to "now" and then plays in real time,
+   LIVE LEAGUE  (the public site: a league that never stops — matches play themselves on a fixed timetable,
+   every visitor sees the same match at the same moment)
+   No server: the simulation is deterministic (seeded RNG + DM math, see 01_core.js) and every seed is derived
+   from the season / week / group match, so each browser computes the league by itself:
+     • finished matches are simulated without drawing (cached in localStorage; live-state.json on the site,
+       refreshed every 15 minutes by the Pages workflow, is a ready-made checkpoint so first visits are quick),
+     • the match that is on is fast-forwarded to "now" and then plays in real time,
      • between matches: the league table and a countdown to the next kick-off.
-   Kick-off times: CONFIG.LIVE.times (Istanbul time) from CONFIG.LIVE.start; match n of the live league is the
-   n-th kick-off. The studio (old panel: preview, recording, videos) is at ?studio.
-   Debug: ?now=2026-11-04T12:00:30+03:00 shows the site as at that moment.
+   Timetable (CONFIG.LIVE.bands, Istanbul time): 05–09 every 5 min, 09–19 every 10 min, 19–05 every 3 min.
+   A match starts at its slot, or GAP seconds after the previous match ended if that one ran over (never seen
+   in 3000 test matches, but it can never jam: the overrun is absorbed by the next slots). A match's length
+   on screen is computed from its own simulation, so every browser agrees on it too.
+   The studio (old panel: preview, recording, videos) is at ?studio. Debug: ?now=<past ISO time>.
    ===================================================================== */
 const Live = {
   on: !/[?&]studio\b/.test(location.search),
-  CACHE_KEY: 'arenaLive_v1',
-  HOLD: 4,                       // seconds the final table stays after the end screen before the countdown returns
-  STALE: 900,                    // a kick-off longer ago than this (s) is surely over (match ≤ HARD_TIME_LIMIT game seconds + screens)
-  offset: 0, phase: 'loading', progress: null, kick: 0, st: null, simT: 0, sound: false,
+  CACHE_KEY: 'arenaLive_v2',
+  HOLD: 4,                  // seconds the final table stays after the end screen
+  RESYNC_GAP: 60e3,         // the page slept longer than this (ms): reload from the newest saved state
+  offset: 0, skew: 0, phase: 'loading', progress: null, cur: null, pending: null, st: null, simT: 0,
+  sound: false, lastClean: null, lastFrame: 0,
 
-  /* --- schedule ------------------------------------------------------- */
+  /* --- timetable ---------------------------------------------------------- */
   cfg() { return CONFIG.LIVE; },
-  times() { return this.cfg().times.map(t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; }).sort((a, b) => a - b); },
-  dayStartUTC(day) { const [y, mo, d] = this.cfg().start.split('-').map(Number); return Date.UTC(y, mo - 1, d + day) - this.cfg().utcOffset * 3600e3; },
-  kickoff(n) { const T = this.times(), day = Math.floor(n / T.length); return this.dayStartUTC(day) + T[n % T.length] * 60e3; },
-  kickoffISO(n) { return new Date(this.kickoff(n)).toISOString(); },
-  /* number of kick-offs at or before time t */
-  startedBy(t) {
-    const T = this.times(), day = Math.floor((t - this.dayStartUTC(0)) / 864e5);
-    if (day < 0) return 0;
-    let n = day * T.length;
-    while (this.kickoff(n) <= t) n++;
-    return n;
+  mins(hm) { const [h, m] = hm.split(':').map(Number); return h * 60 + m; },
+  /* the day's slots in minutes after the first band starts (a "day" runs from bands[0].from to the next one) */
+  slots() {
+    if (this._slots) return this._slots;
+    const B = this.cfg().bands, b0 = this.mins(B[0].from), out = [];
+    B.forEach((b, i) => {
+      const from = (this.mins(b.from) - b0 + 1440) % 1440, to = i + 1 < B.length ? (this.mins(B[i + 1].from) - b0 + 1440) % 1440 : 1440;
+      for (let m = from; m < to; m += b.every) out.push(m);
+    });
+    return (this._slots = out);
   },
-  now() { return Date.now() + this.offset; },
+  dayStartUTC(day) {
+    const [y, mo, d] = this.cfg().start.split('-').map(Number), b0 = this.mins(this.cfg().bands[0].from);
+    return Date.UTC(y, mo - 1, d + day, 0, b0) - this.cfg().utcOffset * 3600e3;
+  },
+  /* planned kick-off of live match n */
+  slot(n) { const S = this.slots(), day = Math.floor(n / S.length); return this.dayStartUTC(day) + S[n - day * S.length] * 60e3; },
+  /* actual kick-off of the next match: its slot, or GAP after the previous match if that one ran over */
+  nextStart() { return Math.max(this.slot(this.count()), (League.data.liveLastEnd || 0) + this.cfg().gap * 1000); },
+  /* minutes between matches at time t */
+  every(t) {
+    const B = this.cfg().bands, loc = Math.floor((t + this.cfg().utcOffset * 3600e3) / 60e3) % 1440;
+    let e = B[B.length - 1].every;
+    for (const b of B.slice().sort((a, c) => this.mins(a.from) - this.mins(c.from))) if (this.mins(b.from) <= loc) e = b.every;
+    return e;
+  },
+  now() { return Date.now() + this.offset + this.skew; },
   clock(ms) { return new Date(ms + this.cfg().utcOffset * 3600e3).toISOString().slice(11, 16); },
 
   /* --- determinism ------------------------------------------------------ */
@@ -42,68 +60,89 @@ const Live = {
     h ^= h >>> 16; h = Math.imul(h, 0x85EBCA6B); h ^= h >>> 13;
     return (h >>> 0) || 1;
   },
-  /* caches are only valid for the same simulation code and league start (build.sh fills BUILD_SIM_HASH) */
-  hash() { return [typeof BUILD_SIM_HASH !== 'undefined' ? BUILD_SIM_HASH : 'dev', this.cfg().salt, this.cfg().start].join(':'); },
+  /* saved states are only valid for the same results (BUILD_SIM_HASH = fingerprint of the simulation, see build.sh)
+     and the same league start / timetable */
+  hash() {
+    const c = this.cfg();
+    return [typeof BUILD_SIM_HASH !== 'undefined' ? BUILD_SIM_HASH : 'dev', c.salt, c.start, c.bands.map(b => b.from + '/' + b.every).join(','), c.gap].join(':');
+  },
   count() { return League.data.liveCount || 0; },
 
   /* --- league state ------------------------------------------------------ */
-  freshLeague() { const d = League.normalize(null); d.liveCount = 0; d.liveSeasonStart = 0; return d; },
-  /* live match number of a season's group match (for its kick-off time) */
-  matchIndex(week, wm) {
-    const d = League.data;
-    return (d.liveSeasonStart || 0) + (week - 1) * App.perWeek() + (wm - 1);
+  freshLeague() { const d = League.normalize(null); d.liveCount = 0; d.liveSeasonStart = 0; d.liveLastEnd = 0; return d; },
+  /* live match number of a season's group match */
+  matchIndex(week, wm) { return (League.data.liveSeasonStart || 0) + (week - 1) * App.perWeek() + (wm - 1); },
+  /* a match's length on screen (s): intro, the match at its time scale (slow motion), end table, hold.
+     Steps the game to its end, frame by frame at 60 fps exactly like the live player. */
+  timeGame(g) {
+    const rdt = 1 / 60;
+    let n = Math.ceil(CONFIG.INTRO_DURATION * 60), acc = 0;
+    while (!g.over) {
+      acc += rdt * g.timeScale();
+      let k = 0;
+      while (acc >= DT && k < 200) { g.step(DT); acc -= DT; k++; if (g.over) break; }
+      if (k >= 200) acc = 0;
+      n++;
+    }
+    return n / 60 + CONFIG.END_DURATION + this.HOLD;
   },
-  /* one match without drawing; identical to watching it (same Game steps, same League.record) */
-  playHeadless() {
-    const s = App.buildSetup();
+  /* the next match computed without drawing: its setup, the finished game, start and length */
+  computeNext() {
+    const start = this.nextStart(), s = App.buildSetup();
     if (s.err) throw new Error(s.err);
     const g = new Game(s.opts);
-    while (!g.over) g.step(DT);
-    League.record(s, g.getResult(), g.teams[g.winner].id);
-    this.closeMatch();
+    return { n: this.count(), start, s, g, dur: this.timeGame(g) };
   },
+  /* write a computed match into the league (identical to watching it: same steps, same League.record) */
+  record(m) { League.record(m.s, m.g.getResult(), m.g.teams[m.g.winner].id); this.closeMatch(m); },
   /* after a match: season over → champion, relegation, new season; then the next live match */
-  closeMatch() {
-    const d = League.data;
-    const ended = d.week > d.seasonLength;
-    if (ended) League.endSeason();
+  closeMatch(m) {
+    const d = League.data, ended = d.week > d.seasonLength;
+    if (ended) { League.endSeason(); d.champions = d.champions.slice(-this.cfg().keepChampions); }
     d.liveCount = (d.liveCount || 0) + 1;
+    d.liveLastEnd = m.start + Math.round(m.dur * 1000);
     if (ended) d.liveSeasonStart = d.liveCount;
+    this.pending = null;
+    this.snapshot();
   },
-  /* only called between matches, so a saved state is always "after liveCount matches" (also used by tools/live-state.js) */
-  saveCache() {
-    this.lastClean = JSON.stringify({ hash: this.hash(), savedAt: new Date(this.now()).toISOString(), data: League.data });
-    try { localStorage.setItem(this.CACHE_KEY, this.lastClean); } catch (e) { /* storage full / blocked: recompute next time */ }
-  },
-  readCache() {
-    try { const c = JSON.parse(localStorage.getItem(this.CACHE_KEY) || 'null'); return c && c.hash === this.hash() && c.data ? c.data : null; } catch (e) { return null; }
-  },
+  /* a state "after liveCount matches", taken only between matches (cache, checkpoint, resync) */
+  snapshot() { this.lastClean = JSON.stringify({ hash: this.hash(), savedAt: new Date(this.now()).toISOString(), data: League.data }); },
+  saveCache() { if (!this.lastClean) this.snapshot(); try { localStorage.setItem(this.CACHE_KEY, this.lastClean); } catch (e) { /* full / blocked: recompute next time */ } },
+  parseState(txt) { try { const c = typeof txt === 'string' ? JSON.parse(txt) : txt; return c && c.hash === this.hash() && c.data ? c.data : null; } catch (e) { return null; } },
+  readCache() { try { return this.parseState(localStorage.getItem(this.CACHE_KEY)); } catch (e) { return null; } },
+  /* the site's checkpoint; its HTTP Date header also corrects a wrong device clock */
   async readCheckpoint() {
-    if (location.protocol === 'file:') return null;
+    if (location.protocol !== 'http:' && location.protocol !== 'https:') return null;
     try {
-      const r = await fetch('live-state.json', { cache: 'no-cache' });
-      if (!r.ok) return null;
-      const c = await r.json();
-      return c && c.hash === this.hash() && c.data ? c.data : null;
+      const t0 = Date.now(), r = await fetch('live-state.json', { cache: 'no-cache' }), t1 = Date.now();
+      const sd = Date.parse(r.headers.get('Date') || '');
+      if (!isNaN(sd)) { const sk = sd + 500 - (t0 + t1) / 2; this.skew = Math.abs(sk) > 2000 ? sk : 0; }
+      return r.ok ? this.parseState(await r.json()) : null;
     } catch (e) { return null; }
   },
-  /* best starting point: the furthest saved state that does not pass `target` matches */
-  async loadState(target) {
-    const pick = [this.readCache(), await this.readCheckpoint()].filter(d => d && (d.liveCount || 0) <= target)
-      .sort((a, b) => (b.liveCount || 0) - (a.liveCount || 0))[0];
-    League.data = pick ? Object.assign(League.normalize(pick), { liveCount: pick.liveCount || 0, liveSeasonStart: pick.liveSeasonStart || 0 }) : this.freshLeague();
+  /* best starting point for time t: the furthest saved state whose last match had ended by t */
+  async loadState(t) {
+    const cands = [this.parseState(this.lastClean), this.readCache(), await this.readCheckpoint()];
+    t = this.now();
+    const pick = cands.filter(d => d && (d.liveLastEnd || 0) <= t).sort((a, b) => (b.liveCount || 0) - (a.liveCount || 0))[0];
+    League.data = pick ? Object.assign(League.normalize(pick), { liveCount: pick.liveCount || 0, liveSeasonStart: pick.liveSeasonStart || 0, liveLastEnd: pick.liveLastEnd || 0 }) : this.freshLeague();
+    this.snapshot();
   },
-  /* simulate the missing matches, in small slices so the page stays responsive */
-  async catchUp(target) {
+  /* play every match that has ended by now; returns the match that is on (computed), or null.
+     budgetMs > 0: yields to the page between slices (browser); 0: runs straight through (Node tools) */
+  async catchUp(budgetMs = 40, nowFn = () => this.now()) {
     const from = this.count();
-    while (this.count() < target) {
-      const until = performance.now() + 40;
-      while (this.count() < target && performance.now() < until) this.playHeadless();
-      this.progress = { done: this.count() - from, total: target - from };
+    for (;;) {
+      const until = performance.now() + budgetMs;
+      do {
+        if (this.nextStart() > nowFn()) return null;
+        const m = this.computeNext();
+        if (m.start + m.dur * 1000 > nowFn()) return m;          // still on
+        this.record(m);
+      } while (!budgetMs || performance.now() < until);
+      this.progress = { done: this.count() - from };
       await new Promise(r => setTimeout(r, 0));
     }
-    this.progress = null;
-    this.saveCache();
   },
 
   /* --- boot / loop ---------------------------------------------------------- */
@@ -123,11 +162,19 @@ const Live = {
         new Promise(r => setTimeout(r, 2500)),
       ]);
     } catch (e) { /* fonts optional */ }
-    /* everything up to the latest kick-off is played without drawing; that match itself is fast-forwarded (it may still be on) */
-    const target = Math.max(0, this.startedBy(this.now()) - 1);
-    await this.loadState(target);
-    await this.catchUp(target);
-    this.phase = 'wait';
+    await this.sync();
+  },
+  /* (re)build the league up to now and join the current match; used at start and after the page slept */
+  async sync() {
+    this.phase = 'loading'; this.progress = null; this.pending = null;
+    App.game = null; App.end = null; App.running = false;
+    try {
+      await this.loadState(this.now());
+      const m = await this.catchUp();
+      this.saveCache();
+      if (m) this.startMatch(m); else this.phase = 'wait';
+    } catch (e) { console.error(e); this.phase = 'error'; this.err = String(e && e.message || e); }
+    this.lastFrame = this.now();
   },
   ui() {
     const tabs = document.createElement('nav');
@@ -141,13 +188,21 @@ const Live = {
     bar.id = 'liveBar';
     bar.innerHTML = `<button id="liveSound">🔇 Ses kapalı</button><span id="liveInfo"></span>`;
     $('stage').appendChild(bar);
-    $('liveInfo').textContent = `Maç saatleri: ${this.cfg().times.join(' · ')} (TSİ)`;
     $('liveSound').addEventListener('click', () => {
       this.sound = !this.sound;
       if (this.sound) { AudioSys.init(); AudioSys.resume(); }
-      AudioSys.muted = !this.sound; AudioSys.apply && AudioSys.ctx && AudioSys.apply();
+      AudioSys.muted = !this.sound; if (AudioSys.ctx) AudioSys.apply();
       $('liveSound').textContent = this.sound ? '🔊 Ses açık' : '🔇 Ses kapalı';
     });
+  },
+  /* bottom bar: how often matches are now, and the next kick-off */
+  info(now) {
+    if (this.phase === 'loading' || this.phase === 'error') return 'Lig yükleniyor…';
+    const next = this.phase === 'match' && this.cur
+      ? Math.max(this.slot(this.cur.n + 1), this.cur.start + Math.round(this.cur.dur * 1000) + this.cfg().gap * 1000)
+      : this.nextStart();
+    if (!this.count() && this.phase === 'wait') return `Lig ${LivePages.day(next).split(' ').slice(0, 2).join(' ')} ${this.clock(next)}'te başlıyor`;
+    return `Her ${this.every(now)} dk'da bir maç · sıradaki ${this.clock(next)}`;
   },
   tab: 'live', paneKey: '',
   showTab(tab) {
@@ -168,46 +223,54 @@ const Live = {
     this.paneKey = key;
     $('livePane').innerHTML = `<div class="lp-in">${this.tab === 'table' ? LivePages.table() : LivePages.fixture(live)}</div>`;
   },
-  /* start the match whose kick-off was at this.kick and bring it to the current moment */
-  startMatch() {
+  /* join a computed match that is on: replay it from its kick-off up to now */
+  startMatch(m) {
     App.prepare();
-    if (!App.game) { this.phase = 'error'; return; }
+    if (!App.game) { this.phase = 'error'; this.err = App.setup && App.setup.err || ''; return; }
     App.running = true; App.paused = false;
-    this.st = { acc: 0 }; this.simT = 0;
+    this.cur = m; this.st = { acc: 0 }; this.simT = 0;
     this.phase = 'match';
   },
-  /* fixed 60 fps steps up to the wall clock (so every viewer stays in sync, also after the tab slept) */
+  /* fixed 60 fps steps up to the wall clock (so every viewer stays in sync); the match ends at its computed length */
   advanceMatch(now) {
-    const target = (now - this.kick) / 1000, rdt = 1 / 60;
-    const behind = target - this.simT > 0.5;
+    const m = this.cur, target = Math.min((now - m.start) / 1000, m.dur), rdt = 1 / 60;
     const enabled = AudioSys.enabled;
-    if (behind) AudioSys.enabled = false;          // no burst of sounds while fast-forwarding
+    if (target - this.simT > 0.5) AudioSys.enabled = false;      // no burst of sounds while fast-forwarding
     try {
-      while (this.simT + rdt <= target) {
-        Offline.stepFrame(this.st, rdt);
-        this.simT += rdt;
-        if (App.end && App.endT >= CONFIG.END_DURATION + this.HOLD) { this.finishMatch(); return; }
-      }
+      while (this.simT + rdt <= target) { Offline.stepFrame(this.st, rdt); this.simT += rdt; }
     } finally { AudioSys.enabled = enabled; }
+    if ((now - m.start) / 1000 >= m.dur) this.finishMatch();
   },
   finishMatch() {
-    this.closeMatch();
-    App.game = null; App.end = null; App.running = false;
+    const g = App.game;
+    if (g && !App.end) { while (!g.over) g.step(DT); App.onOver(); }   // safety: the result is always recorded
+    this.closeMatch(this.cur);
+    this.cur = null; App.game = null; App.end = null; App.running = false;
     this.saveCache();
     this.phase = 'wait';
   },
   frame(t) {
     const now = this.now();
     try {
-      if (this.phase === 'wait') {
-        const n = this.count();
-        if (this.kickoff(n + 1) <= now) { this.playHeadless(); this.saveCache(); }   // a later match has started too: skip ahead
-        else if (this.kickoff(n) <= now - this.STALE * 1000) { this.playHeadless(); this.saveCache(); }   // long over: no need to replay it frame by frame
-        else if (this.kickoff(n) <= now) { this.kick = this.kickoff(n); this.startMatch(); }
+      if (this.phase !== 'loading' && this.lastFrame && now - this.lastFrame > this.RESYNC_GAP) {
+        this.lastFrame = now; this.sync();                         // the tab slept: rebuild from the newest saved state
+      } else {
+        if (this.phase !== 'loading') this.lastFrame = now;
+        if (this.phase === 'wait' && this.nextStart() <= now) {
+          if (!this.pending || this.pending.n !== this.count()) this.pending = this.computeNext();
+          const m = this.pending;
+          if (m.start + m.dur * 1000 <= now) { this.record(m); this.saveCache(); }   // already over
+          else this.startMatch(m);
+        } else if (this.phase === 'wait' && !this.pending && !this.prepTimer) {
+          /* use the quiet time between matches to compute the next one (no hitch at kick-off) */
+          this.prepTimer = setTimeout(() => { this.prepTimer = null; try { if (this.phase === 'wait' && !this.pending) this.pending = this.computeNext(); } catch (e) { /* retried at kick-off */ } }, 300);
+        }
+        if (this.phase === 'match') this.advanceMatch(now);
       }
-      if (this.phase === 'match') this.advanceMatch(now);
     } catch (e) { console.error(e); this.phase = 'error'; this.err = String(e && e.message || e); }
     this.renderPane();
+    const info = this.info(now);
+    if (info !== this._info && $('liveInfo')) { this._info = info; $('liveInfo').textContent = info; }
     if (this.tab !== 'live') { /* a tab covers the stream: the match keeps running in sync, nothing to draw */ }
     else if (this.phase === 'match' && App.game) Renderer.draw(App.game, App);
     else LiveScreen.draw(Renderer.ctx, this, now);
@@ -223,11 +286,11 @@ const LiveScreen = {
     Renderer.background(THEMES.classic);
     if (L.phase === 'loading' || L.phase === 'error') {
       outlinedText(ctx, L.phase === 'error' ? 'SOMETHING WENT WRONG' : 'LOADING LEAGUE…', 510, 900, `90px ${FONT_BIG}`, '#ffffff', null, 0);
-      const p = L.progress, sub = L.phase === 'error' ? (L.err || '') : p ? `${p.done} / ${p.total} MATCHES` : '';
+      const p = L.progress, sub = L.phase === 'error' ? (L.err || '') : p ? `${p.done} MATCHES` : '';
       if (sub) outlinedText(ctx, sub, 510, 990, `600 34px ${FONT_UI}`, 'rgba(255,255,255,0.7)', null, 0);
       return;
     }
-    const d = League.data, n = L.count(), next = L.kickoff(n);
+    const d = League.data, next = L.nextStart();
     const plan = App.seasonPlan(), ids = plan && d.week <= d.seasonLength ? ((plan.weeks[d.week - 1] || [])[d.weekMatch - 1] || []) : [];
     const rows = League.ranking().map((x, i) => {
       const f = League.formOf(x.t.id), gd = x.r.gf - x.r.ga;
@@ -263,6 +326,18 @@ const LivePages = {
     const c = League.data.champions, last = c[c.length - 1];
     return last ? `<div class="lp-note">🏆 Sezon ${last.season} şampiyonu: <b>${esc(last.name)}</b></div>` : '';
   },
+  champs() {
+    const c = League.data.champions.slice(-10).reverse();
+    return c.length ? `<h3 class="lp-h3">Son şampiyonlar</h3><ol class="lp-champs">${c.map(x => `<li><span>Sezon ${x.season}</span><b>${esc(x.name)}</b><span>${x.pts} puan</span></li>`).join('')}</ol>` : '';
+  },
+  /* kick-off of a season's group match: the actual one once played (or next), the planned slot otherwise */
+  kickoff(w, m) {
+    const d = League.data, n = Live.matchIndex(w, m), h = d.history.find(x => x.week === w && x.weekMatch === m);
+    if (h && h.date) { const t = Date.parse(h.date); return { t, late: t - Live.slot(n) > 1000 }; }
+    if (n === Live.count()) { const t = Live.nextStart(); return { t, late: t - Live.slot(n) > 1000 }; }
+    return { t: Live.slot(n), late: false };
+  },
+  bandsText() { return Live.cfg().bands.map((b, i, B) => `${b.from}–${B[(i + 1) % B.length].from} her ${b.every} dk`).join(' · '); },
   table() {
     const d = League.data, rk = League.ranking(), out = rk.length - Math.min(CONFIG.RELEGATE_COUNT, d.reserve.length);
     const rows = rk.map((x, i) => {
@@ -272,7 +347,7 @@ const LivePages = {
     }).join('');
     return `<h2>Lig tablosu</h2><div class="lp-sub">Sezon ${d.season} · ${d.history.length} / ${d.seasonLength * App.perWeek()} maç oynandı</div>${this.champ()}
       <table class="lp-table"><thead><tr><th>#</th><th>Takım</th><th title="Oynanan">O</th><th title="Puan">P</th><th class="opt" title="Birincilik">1.</th><th class="opt" title="Atılan gol">AG</th><th class="opt" title="Yenilen gol">YG</th><th title="Averaj">AV</th><th title="Son ${CONFIG.FORM_COUNT} maçtaki sırası (en sağdaki en yeni)">Son ${CONFIG.FORM_COUNT}</th></tr></thead><tbody>${rows}</tbody></table>
-      <div class="lp-legend">Puan: ${d.points.slice(0, CONFIG.GROUP_SIZE).map((p, i) => `${i + 1}. → ${p}`).join(' · ')} · Kırmızı çizgili son ${CONFIG.RELEGATE_COUNT} takım sezon sonunda ligden düşer.</div>`;
+      <div class="lp-legend">Puan: ${d.points.slice(0, CONFIG.GROUP_SIZE).map((p, i) => `${i + 1}. → ${p}`).join(' · ')} · Kırmızı çizgili son ${CONFIG.RELEGATE_COUNT} takım sezon sonunda ligden düşer.</div>${this.champs()}`;
   },
   fixture(live) {
     const d = League.data, plan = App.seasonPlan();
@@ -281,9 +356,9 @@ const LivePages = {
     const per = App.perWeek();
     const weeks = plan.weeks.slice(0, d.seasonLength).map((groups, wi) => {
       const w = wi + 1, cur = w === Math.min(d.week, d.seasonLength);
-      const ms0 = Live.kickoff(Live.matchIndex(w, 1));
+      const k0 = this.kickoff(w, 1).t, k1 = this.kickoff(w, Math.min(per, groups.length)).t;
       const matches = groups.slice(0, per).map((ids, mi) => {
-        const m = mi + 1, ko = Live.kickoff(Live.matchIndex(w, m));
+        const m = mi + 1, K = this.kickoff(w, m), ko = K.t;
         const h = d.history.find(x => x.week === w && x.weekMatch === m);
         const isLive = live === `${w}-${m}`;
         const badge = h ? '<span class="b done">Bitti</span>' : isLive ? '<span class="b live">● CANLI</span>' : '';
@@ -293,10 +368,10 @@ const LivePages = {
           return `<li><i class="fp f${Math.min(r.place, 5)}">${ordinal(r.place).toLowerCase()}</i>${this.dot(t)}<span class="nm">${esc(t.name)}</span><span class="pt ${pts ? 'g' : 'r'}">+${pts}</span></li>`;
         }).join('');
         else body = ids.map(id => { const t = team(id); return t ? `<li>${this.dot(t)}<span class="nm">${esc(t.name)}</span></li>` : ''; }).join('');
-        return `<div class="fx-match${h ? ' done' : ''}${isLive ? ' live' : ''}"><div class="fx-head"><b>Grup maçı ${m}</b><span>${this.day(ko).split(' ').slice(0, 2).join(' ')} · ${Live.clock(ko)}</span>${badge}</div><ol class="${h ? 'res' : 'teams'}">${body}</ol></div>`;
+        return `<div class="fx-match${h ? ' done' : ''}${isLive ? ' live' : ''}"><div class="fx-head"><b>Grup maçı ${m}</b><span>${Live.clock(ko)}${K.late ? ' · ertelendi' : ''}</span>${badge}</div><ol class="${h ? 'res' : 'teams'}">${body}</ol></div>`;
       }).join('');
-      return `<section class="fx-week${cur ? ' cur' : ''}"><h3>Hafta ${w}<span>${this.day(ms0)}</span></h3>${matches}</section>`;
+      return `<section class="fx-week${cur ? ' cur' : ''}"><h3>Hafta ${w}<span>${this.day(k0)} · ${Live.clock(k0)}–${Live.clock(k1)}</span></h3>${matches}</section>`;
     }).join('');
-    return `<h2>Sezon ${d.season} fikstürü</h2><div class="lp-sub">${d.seasonLength} hafta · her gün ${Live.cfg().times.join(' · ')} (TSİ) · her takım haftada bir maç</div>${this.champ()}${weeks}`;
+    return `<h2>Sezon ${d.season} fikstürü</h2><div class="lp-sub">${d.seasonLength} hafta · her takım haftada bir maç · maç saatleri (TSİ): ${this.bandsText()}</div>${this.champ()}${weeks}`;
   },
 };

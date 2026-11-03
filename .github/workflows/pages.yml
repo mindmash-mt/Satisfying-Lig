@@ -1,14 +1,16 @@
 name: GitHub Pages
 
-# main dalına her gönderimde (ve 6 saatte bir) tek dosyalık uygulamayı GitHub Pages'te yayınlar.
-# Site, canlı ligi kendi kendine oynatır (src/07_live.js); 6 saatlik yayın yalnızca live-state.json
-# checkpoint'ini tazeler, böylece siteye ilk girenler geçmiş maçları baştan hesaplamak zorunda kalmaz.
+# Tek dosyalık uygulamayı GitHub Pages'te yayınlar: main dalına her gönderimde ve 15 dakikada bir.
+# Site, canlı ligi kendi kendine oynatır (src/07_live.js). 15 dakikalık yayın yalnızca live-state.json
+# checkpoint'ini tazeler: siteye ilk girenler en fazla son birkaç maçı kendileri hesaplar.
+# Checkpoint tarayıcısız üretilir (Node, ~15 sn) ve yayındaki son checkpoint'ten devam eder.
+# Repo herkese açık olduğu için Actions dakikaları ücretsizdir.
 # Depo ayarlarında: Settings → Pages → Source: "GitHub Actions" seçilmelidir.
 on:
   push:
     branches: [main]
   schedule:
-    - cron: '23 */6 * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -23,25 +25,26 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - name: Derle
         run: |
           mkdir -p dist
           ./build.sh dist/index.html
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - id: pages
+        uses: actions/configure-pages@v5
       - name: Canlı lig checkpoint'i (yalnızca hızlandırır; başarısız olursa site yine çalışır)
         continue-on-error: true
-        run: |
-          npm install --no-save --no-package-lock playwright@1.48.2
-          npx playwright install --with-deps chromium
-          node tools/live-state.js dist/live-state.json
-      - uses: actions/configure-pages@v5
+        env:
+          LIVE_URL: ${{ steps.pages.outputs.base_url }}/
+        run: node tools/live-state.js dist/live-state.json
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

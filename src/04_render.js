@@ -826,7 +826,7 @@ const IntroScreen = {
     ctx.globalAlpha *= clamp01(tt / 0.25);
     const ts = easeOutBack(tt / 0.4, 2);
     ctx.save(); ctx.translate(SX, 215); ctx.scale(ts, ts);
-    outlinedText(ctx, list.length > 1 ? "TODAY'S MATCHES" : "TODAY'S MATCH", 0, 0, `104px ${FONT_BIG}`, '#ffffff', null, 0);
+    outlinedText(ctx, intro.heading || (list.length > 1 ? "TODAY'S MATCHES" : "TODAY'S MATCH"), 0, 0, `104px ${FONT_BIG}`, '#ffffff', null, 0);
     ctx.restore();
     outlinedText(ctx, intro.sub, SX, 282, `600 30px ${FONT_UI}`, 'rgba(255,255,255,0.65)', null, 0);
     const top = 345, avail = 1300, gap = 26;
@@ -842,7 +842,7 @@ const IntroScreen = {
       ctx.fillStyle = now ? 'rgba(0,200,83,0.15)' : 'rgba(255,255,255,0.07)'; ctx.fill();
       if (now) { ctx.lineWidth = 4; ctx.strokeStyle = '#00E676'; ctx.stroke(); }
       outlinedText(ctx, m.label, X0 + 30, y + 38, `46px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
-      const badge = done ? 'FULL TIME' : now ? 'PLAYING NOW' : 'LATER TODAY';
+      const badge = done ? 'FULL TIME' : now ? 'PLAYING NOW' : (intro.later || 'LATER TODAY');
       outlinedText(ctx, badge, X0 + W - 30, y + 38, `600 24px ${FONT_UI}`, now ? '#00E676' : 'rgba(255,255,255,0.55)', null, 0, 'right');
       const rows = Math.ceil(m.teams.length / 2), rowH = Math.min(72, (ch - 70 - 12) / rows);
       m.teams.forEach((t, j) => {

@@ -4,13 +4,17 @@
   1) DM (src/01_core.js) fonksiyonlarının doğruluğu: Math.sin/cos/atan2/exp ile karşılaştırır.
   2) Simülasyonun motorun matematik kütüphanesinden bağımsız olduğu: Math.sin/cos/atan2/hypot/exp/pow/log
      bozulmuşken (farklı bir tarayıcıyı taklit eder) oynanan maçlar normal sonuçlarla bit bit aynı olmalı.
-  Kullanım: node tools/live-check.js [maç sayısı]
+  3) Takvim: günde 308 maç, bant geçişleri (05:00 / 09:00 / 19:00) doğru saatte.
+  4) Taşma kuralı: aralık zorla 1 dakikaya indirilir (maçlar sığmaz) → maçlar asla üst üste binmez, hiçbir maç
+     planlı saatinden önce başlamaz, takvim kilitlenmez ve normal aralığa dönülünce gecikme erir.
+  5) --long: gerçek takvimle 48 saatlik hızlandırılmış koşu (gün ve bant geçişleri, ~13 sezon, şampiyon sınırı).
+  Kullanım: node tools/live-check.js [maç sayısı] [--long]
 */
 const fs = require('fs'), path = require('path');
 const src = (f) => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8');
 const load = () => { const m = { exports: {} }; new Function('module', src('01_core.js') + '\n' + src('02_sim.js') +
   '\nmodule.exports = { CONFIG, DEFAULT_TEAMS, Game, RNG, DT, THEME_IDS, DM, planSeason };')(m); return m.exports; };
-const N = +(process.argv[2] || 20);
+const N = +(process.argv.find(a => /^\d+$/.test(a)) || 20);
 let fail = 0;
 
 /* 1) accuracy */
@@ -55,4 +59,38 @@ Object.assign(Math, keep);
 const same = normal === poisoned;
 if (!same) fail++;
 console.log(`${N} maç + sezon fikstürü, Math kütüphanesi bozulmuşken: ${same ? 'birebir aynı ✅' : 'FARKLI ❌ (simülasyon hâlâ Math.sin/cos/… kullanıyor)'}`);
-process.exit(fail ? 1 : 0);
+
+/* 3–5) timetable, overrun rule, long run (the real engine: src/07_live.js through tools/live-node.js) */
+(async () => {
+  const { loadLive } = require('./live-node.js');
+  const ok = (cond, msg) => { if (!cond) fail++; console.log(`${msg} ${cond ? '✅' : '❌'}`); };
+  /* run the league until time t, logging every match's [planned slot, start, end] */
+  const runUntil = async (L, t) => {
+    const log = [], close = L.Live.closeMatch.bind(L.Live);
+    L.Live.closeMatch = (m) => { log.push({ n: m.n, slot: L.Live.slot(m.n), start: m.start, end: m.start + Math.round(m.dur * 1000) }); close(m); };
+    await L.Live.catchUp(0, () => t);
+    return log;
+  };
+  const sane = (log, gap) => log.every((x, i) => x.start >= x.slot && (i === 0 || x.start >= log[i - 1].end + gap * 1000) && x.end > x.start);
+  {
+    const { Live } = loadLive(), c = (n) => Live.clock(Live.slot(n));
+    ok(Live.slots().length === 308 && c(0) === '05:00' && c(47) === '08:55' && c(48) === '09:00' && c(107) === '18:50' && c(108) === '19:00' && c(307) === '04:57' && c(308) === '05:00' && Live.slot(308) - Live.slot(0) === 864e5,
+      'Takvim: günde 308 maç · 05:00 / 08:55→09:00 / 18:50→19:00 / 04:57→05:00 (ertesi gün)');
+  }
+  {
+    const L = loadLive();
+    L.CONFIG.LIVE.bands = [{ from: '05:00', every: 1 }, { from: '06:00', every: 3 }]; L.Live._slots = null;
+    const log = await runUntil(L, L.Live.slot(0) + 4 * 3600e3);
+    const late = log.map(x => x.start - x.slot), back = log.findIndex((x, i) => i > 60 && x.start === x.slot);
+    ok(sane(log, L.CONFIG.LIVE.gap) && log.length > 60 && back > 0,
+      `Taşma kuralı (05–06 arası her 1 dk, maçlar sığmıyor): ${log.length} maç, üst üste binen yok, en büyük gecikme ${Math.round(Math.max(...late) / 60e3)} dk, normal aralıkta ${log[back] ? L.Live.clock(log[back].start) : '—'}'de saatine döndü`);
+  }
+  if (process.argv.includes('--long')) {
+    const L = loadLive(), t0 = Date.now();
+    const log = await runUntil(L, L.Live.slot(0) + 48 * 3600e3);
+    const d = L.League.data, late = log.filter(x => x.start > x.slot).length, longest = Math.max(...log.map(x => x.end - x.start)) / 1000;
+    ok(sane(log, L.CONFIG.LIVE.gap) && log.length === 616 && d.season >= 12 && d.champions.length <= L.CONFIG.LIVE.keepChampions,
+      `48 saat: ${log.length} maç, ${d.season - 1} sezon bitti, ertelenen maç ${late}, en uzun maç ${longest.toFixed(0)} sn (${((Date.now() - t0) / 1000).toFixed(0)} sn'de hesaplandı)`);
+  }
+  process.exit(fail ? 1 : 0);
+})();
