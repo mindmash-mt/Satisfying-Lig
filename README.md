@@ -1,6 +1,6 @@
 # Satisfying Lig ⚽
 
-Instagram Reels, TikTok ve YouTube Shorts için **"satisfying" futbol simülasyonu videoları** üreten tek dosyalık bir tarayıcı uygulaması.
+Kendi kendine oynayan **canlı bir "satisfying" futbol ligi**: maçlar her gün belli saatlerde başlar; o saatte siteye giren herkes aynı maçı aynı anda izler. Tek dosyalık bir tarayıcı uygulamasıdır; sunucu gerekmez. Ayrıca Reels/TikTok/Shorts videosu üreten bir **stüdyo** modu vardır (`?studio`).
 
 Çokgen bir arenanın her kenarında dünyanın önde gelen bir futbol kulübünün kalesi var. Top duvarlara çarptıkça hızlanır, kaleciler topu takip eder. Gol yiyen takım elenir, kalesi kapanır. **Son kalan takım kazanır** ve aldığı puanlar kalıcı bir **lig tablosuna** işlenir.
 
@@ -11,9 +11,47 @@ Instagram Reels, TikTok ve YouTube Shorts için **"satisfying" futbol simülasyo
 
 ---
 
-## Hızlı başlangıç
+## Canlı lig (site)
 
-1. `index.html` dosyasını güncel **Google Chrome** (masaüstü) ile açın.
+Site adresi (GitHub Pages): `https://<kullanıcı>.github.io/<repo>/`. Siteyi açan kişi şunları görür:
+
+- **Maç saatinde:** maçın kendisi. Geç gelen kişi maçı baştan değil, **kaldığı yerden** izler (ör. 12:00:40'ta giren, maçın 40. saniyesini görür). Maçtan önce `TODAY'S MATCHES` ekranı, maçtan sonra animasyonlu lig tablosu gelir.
+- **Maç yokken:** güncel lig tablosu (sıradaki maçın takımları vurgulu) ve bir sonraki maça **geri sayım**.
+- Ses tarayıcı kuralları gereği kapalı başlar; alttaki **🔇 Ses kapalı** düğmesiyle açılır.
+
+**Maç saatleri:** her gün İstanbul saatiyle **12:00 · 18:00 · 21:00**. Her saatte bir grup maçı oynanır, yani her gün bir hafta (3 grup maçı) tamamlanır. Lig **4 Kasım 2026**'da 1. haftayla başlar. 17 gün sonra sezon biter: şampiyon belirlenir, son 3 takım düşer, yedeklerden 3 kulüp gelir ve yeni sezon ertesi maçta kendiliğinden başlar.
+
+Saatler `src/01_core.js` dosyasındaki `CONFIG.LIVE` ayarındadır:
+
+```js
+LIVE: { start: '2026-11-04', times: ['12:00', '18:00', '21:00'], utcOffset: 3, salt: 'satisfying-lig-live-1' },
+```
+
+- `times`: maç saatleri (istenen sayıda olabilir; 3 saat = günde bir hafta). Saatleri değiştirmek yalnızca **gelecekteki** maçların saatini kaydırır; maçların kendisi değişmez.
+- `start`: ligin ilk gün. `salt`: maç seed'lerinin tohumu. Bunlardan birini değiştirirseniz canlı lig baştan, farklı maçlarla kurulur.
+
+### Nasıl çalışıyor (sunucusuz)
+
+Simülasyon deterministiktir: aynı seed + aynı takımlar = birebir aynı maç. Canlı ligde her maçın seed'i rastgele değil, **sezon / hafta / grup maçından** (ve `salt`'tan) türetilir. Sezon fikstürü ile eşitlik kurası da aynı şekilde belirlenir. Böylece siteyi açan her tarayıcı ligi kendisi hesaplar ve herkes aynı sonucu bulur:
+
+1. Son başlama saatine kadarki bütün maçlar çizilmeden simüle edilir (bir maç ~0,1 sn).
+2. Başlama saati geçmiş maç, saate göre ileri sarılır ve oradan gerçek zamanlı oynar. Sekme arka plana atılıp geri gelince de saate yetişir, böylece herkes senkron kalır.
+3. Hesaplanan lig tarayıcıda saklanır (`localStorage`, `arenaLive_v1`); bir sonraki ziyarette yalnızca yeni maçlar hesaplanır.
+4. Siteye ilk kez girenler için GitHub Pages iş akışı her yayında ve 6 saatte bir ligin o anki durumunu `live-state.json` olarak yayınlar (`tools/live-state.js`). Bu dosya yalnızca açılışı hızlandırır; yoksa ya da eskiyse tarayıcı aynı sonucu kendisi hesaplar.
+
+**Tarayıcılar arası aynılık:** `Math.sin/cos/atan2/hypot/exp/pow` tarayıcıdan tarayıcıya son basamakta farklı sonuç verebilir; kaotik bir simülasyonda bu, Safari ile Chrome'da farklı maçlar demektir. Bu yüzden simülasyon yalnızca IEEE 754'te birebir tanımlı işlemlerle (`+ − × ÷ √`) yazılmış kendi fonksiyonlarını (`DM`, `src/01_core.js`) kullanır. `node tools/live-check.js` bunu doğrular: tarayıcının matematik kütüphanesi bozulmuşken bile maçlar birebir aynı çıkmalı.
+
+> ⚠️ Simülasyon kodunu (`src/01_core.js`, `02_sim.js`, `05_app.js`, `07_live.js`) değiştirmek geçmiş maçların sonucunu da değiştirir, çünkü herkes ligi baştan yeniden hesaplar. Denge ayarı gibi bir değişiklikten sonra `CONFIG.LIVE.start`'ı ileri bir tarihe alıp yeni sezonla başlamak en temizidir. Yalnızca görünümü değiştiren dosyalar (`03_fx_audio.js`, `04_render.js`, `00_head.html`) sonuçları etkilemez.
+
+**Önizleme / deneme:** `index.html?now=2026-11-04T12:00:30+03:00` siteyi o andaki hâliyle gösterir (yalnızca o tarayıcıda; lig değişmez).
+
+---
+
+## Stüdyo (video üretimi) — `?studio`
+
+`index.html?studio` eski kontrol panelini açar. Bu moddaki lig, canlı ligden tamamen ayrıdır (tarayıcıda `arenaLeague_v1`), maç seed'leri rastgeledir.
+
+1. `index.html?studio` adresini güncel **Google Chrome** (masaüstü) ile açın.
 2. Sağdaki panelden **▶ Başlat**'a basın (veya **Boşluk** tuşu). Maç önizleme olarak oynar.
 3. Video almak için **● Kaydet ve Başlat**: maç sıfırdan 1x hızda oynar, bitiş ekranından sonra video dosyası otomatik iner.
 4. Bitişte paneldeki **Açıklama metni** kutusu dolar; **📋 Kopyala** ile alıp paylaşımınıza yapıştırın.
@@ -44,7 +82,7 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 - **Gol sayacı:** Her takımın kalesinin arkasında, takım adının dışında, o maçta attığı her gol için bir mini futbol topu belirir (gol anında büyüyerek çıkar, takım renginde halka yayar). Çok gol atılırsa toplar küçülür ve ikinci sıraya geçer. Elenen takımın topları da kalır; sayı bitiş ekranındaki `⚽` gol sütunuyla aynıdır (kendi kalesine atılan goller sayılmaz).
 - **Maç öncesi (~3,4 sn, `INTRO_DURATION`):** **`TODAY'S MATCHES`** ekranı: o gün (hafta) oynanmış grup maçları sonuçlarıyla (`FULL TIME`, her takımın sırası ve `+puan`), sıradaki maç (`PLAYING NOW`, hangi takımların oynayacağı) ve oynanacak maçlar (`LATER TODAY`) fikstür olarak listelenir. Ardından maç ekranı açılır.
 - **Maç sonu (~7 sn, `END_DURATION`):** tek ekranda **güncel tüm puan durumu**. Önce her takımın o maçtaki sırası (`1ST`, `2ND`…) ve aldığı puan çıkar: puan alanlar yeşil `+4`, alamayanlar kırmızı `+0`. Sonra puanlar sayarak güncellenir ve takımlar yeni sıralarına kayar (▲/▼). Video bu tabloda biter. Eski kazanan kartı, maç sonucu ve ilk 8 tablosu kaldırıldı. Sezonun son maçında şampiyon altın, ligden çıkacak son 3 takım kırmızı çerçeveyle işaretlenir ve başlıkta şampiyon yazar.
-- **Tablo sütunları:** sıra, takım, `P` (oynanan), `GD` (averaj), maçtaki sıra + puan, `PTS`.
+- **Tablo sütunları:** sıra, takım, `P` (oynanan), `GD` (averaj), maçtaki sıra + puan, `PTS` ve en sağda **`LAST 3`**: takımın bu sezonki son 3 maçtaki sırası (`1ST`, `2ND`, `3RD`…; eskiden yeniye, en sağdaki en yeni). 1. altın, 2. gümüş, 3. bronz, 4. gri, puan alınamayan 5.–6. kırmızı; henüz oynanmamış maçlar boş (`–`) kalır. Maçı oynayan takımlarda eski sonuçlar sola kayar, yeni sıra sağdan belirir. Sayı `CONFIG.FORM_COUNT` ile değiştirilebilir.
 - **Gol** yiyen takım elenir:
   - Kalesi takım renginde parlayan bir duvarla **kapanır** (kapanan kale duvar gibi davranır).
   - Kalesinin arkasında **adı yazmaya devam eder** (her temada okunsun diye düz beyaz harfler, koyu çerçeveli), önünde **sırası ve aldığı puan** belirir (ör. `6TH · +2 PTS`).
@@ -87,7 +125,7 @@ Ad, 3 harfli kod ve renkler panelden **✏️ Takımları düzenle** ile değiş
 |---|---|---|---|---|---|---|
 | Puan | 4 | 3 | 2 | 1 | 0 | 0 |
 
-İlk 4 puan alır, 5. ve 6. sıra `+0 PTS` alır. Bütün gruplar 6 takımlık olduğu için her maçın beklenen puanı her takım için aynıdır. Puanlar panelden değiştirilebilir; eski varsayılan 10-7-5-4-3-2-1 ile kaydedilmiş bir lig açılışta yeni varsayılana geçer. Tablo sıralaması: **Puan → birincilik sayısı → ikincilik sayısı → üçüncülük sayısı → dördüncülük sayısı → atılan gol (AG) → sezonluk kura**. Averaj (AV) sütunu bilgi amaçlı gösterilir ama sıralamada kullanılmaz: yenilen gol zaten maçtaki bitiş sırasına bağlı olduğundan (ör. finalde yenilen ikinci 2 gol yer) sırayı iki kez sayardı. Hâlâ eşit kalan takımlar için ad sırası yerine, her sezon başında bir kez çekilen ve `league.json`'da (`tieOrder`) saklanan rastgele kura sırası kullanılır; böylece alfabede önde olmak avantaj sağlamaz. Tablo sütunları: O, P, 1st, AG, YG, AV.
+İlk 4 puan alır, 5. ve 6. sıra `+0 PTS` alır. Bütün gruplar 6 takımlık olduğu için her maçın beklenen puanı her takım için aynıdır. Puanlar panelden değiştirilebilir; eski varsayılan 10-7-5-4-3-2-1 ile kaydedilmiş bir lig açılışta yeni varsayılana geçer. Tablo sıralaması: **Puan → birincilik sayısı → ikincilik sayısı → üçüncülük sayısı → dördüncülük sayısı → atılan gol (AG) → sezonluk kura**. Averaj (AV) sütunu bilgi amaçlı gösterilir ama sıralamada kullanılmaz: yenilen gol zaten maçtaki bitiş sırasına bağlı olduğundan (ör. finalde yenilen ikinci 2 gol yer) sırayı iki kez sayardı. Hâlâ eşit kalan takımlar için ad sırası yerine, her sezon başında bir kez çekilen ve `league.json`'da (`tieOrder`) saklanan rastgele kura sırası kullanılır; böylece alfabede önde olmak avantaj sağlamaz. Tablo sütunları: O, P, 1st, AG, YG, AV, Son 3 (son 3 maçtaki sırası, en sağdaki en yeni).
 
 ### Sezon sonu: şampiyon ve takım değişimi
 Sezonun son haftası (varsayılan 17) oynanınca **final maçı yoktur**: tabloda **1. olan takım şampiyon** olur ve kaydedilir. Ardından:
@@ -107,20 +145,23 @@ Sezonun son haftası (varsayılan 17) oynanınca **final maçı yoktur**: tablod
 
 ## Otomatik günlük maç günü
 
+> Canlı lig (site) videosuz çalışır. Bu bölüm stüdyo ligi için video üretimini anlatır ve isteğe bağlıdır.
+
 Aktif ligin videoları tarayıcıyı açmadan üretilir: `tools/daily.js` uygulamayı ekransız Chrome'da çalıştırır, haftanın kalan grup maçlarını oynatır ve her maç için ayrı bir **MP4** (1080×1920, 60 FPS, H.264 + AAC) üretir. Maç gerçek zamanlı oynatılıp ekrandan kaydedilmez; her kare tek tek çizilip kodlanır, sesler de dosyaya sentezlenir. Bu yüzden video, makinenin hızından bağımsız olarak akıcıdır. 1 dakikalık bir maç yaklaşık 2 dakikada hazırlanır.
 
 ```bash
-node tools/daily.js active                  # haftanın kalan maçları (normalde 3 video) — her sabah görev çalıştırır
+node tools/daily.js active --max 1          # sıradaki tek grup maçı (1 video) — zamanlanmış görev günde 3 kez çalıştırır
+node tools/daily.js active                  # haftanın kalan maçları (normalde 3 video) tek seferde
 node tools/daily.js --dry-run --max 1       # deneme: 1 video üretir, lig verisine dokunmaz
 ```
 
 ### Aktif lig
 
-Sosyal medyada paylaşılan lig `data/active/` klasöründedir. Her gün otomatik olarak bir hafta (3 grup maçı) oynanır. `node tools/daily.js active` komutunu elle çalıştırmayın; lig bir hafta ilerler. Denemeler tarayıcıda (lig tablosuna yazılmaz) ya da `--dry-run` ile yapılır.
+Sosyal medyada paylaşılan lig `data/active/` klasöründedir. Her gün otomatik olarak bir hafta (3 grup maçı) oynanır; her grup maçı günün ayrı bir saatinde. `node tools/daily.js active` komutunu elle çalıştırmayın; lig ilerler. Denemeler tarayıcıda (lig tablosuna yazılmaz) ya da `--dry-run` ile yapılır.
 
 Klasörde:
 - `league.json`: lig verisi. Biçimi paneldeki **⬇ Tabloyu dışa aktar** dosyasıyla aynıdır; **⬆ Tabloyu içe aktar** ile tarayıcıya yüklenebilir.
-- `STANDINGS.md`: GitHub'da doğrudan okunabilen lig tablosu ve son maçlar.
+- `STANDINGS.md`: GitHub'da doğrudan okunabilen lig tablosu (her takımın son maçlardaki sırasıyla) ve son maçlar.
 - `seasons/season-N.json`: biten sezonların arşivi (son tablo, şampiyon, maç geçmişi).
 
 Sezonun son haftası (varsayılan 17. hafta) oynandığında final maçı yoktur; **tabloda 1. olan şampiyon** olur (son maçın videosunda ve açıklama metninde duyurulur). Aynı çalıştırmada sezon arşivlenir, son 3 takım ligden çıkar, yedek kuyruğundaki 3 kulüp gelir ve yeni sezon 1. haftadan başlar (bkz. [Sezon sonu](#sezon-sonu-şampiyon-ve-takım-değişimi)).
@@ -129,7 +170,7 @@ Videolar ve açıklama metinleri `out/active/<tarih>/` klasörüne yazılır (`-
 
 ### Zamanlanmış görev
 
-Aktif lig, Claude Code'da tanımlı zamanlanmış bir görevle her gün İstanbul saatiyle 04:00'e kadar oynatılır. Görev her sabah yeni bir oturum açar, `main` dalında `node tools/daily.js active` çalıştırır, videoları ve açıklama metinlerini Claude uygulamasına bildirimle gönderir, `data/active/` değişikliklerini `main`'e kaydeder.
+Eskiden aktif lig, Claude Code'da tanımlı bir zamanlanmış görevle her gece oynatılıp videoları gönderiliyordu. Canlı siteye geçildiği için bu görev **durduruldu** (silinmedi; Claude uygulamasındaki zamanlanmış görevler listesinden yeniden açılabilir). Görev `main` dalında `node tools/daily.js active` çalıştırır, videoları Claude uygulamasına gönderir, `data/active/` değişikliklerini `main`'e kaydeder.
 
 ---
 
@@ -168,6 +209,8 @@ Varsayılan ayarlarla (6 takımlık grup maçı, 1 can) testlerde ortalama maç 
 | `KEEPER_GAIN` / `KEEPER_READ` | 3 / 0.3 | Kalecinin tepki hızı / topun yolunu okuma oranı |
 | `OT_AT` | 45 | `GOAL_GROW` açıkken son elemeden kaç sn sonra uzatma başlar |
 | `DEFAULT_LIVES` | 1 | Takım başına can |
+| `FORM_COUNT` | 3 | Lig tablosunun en sağındaki son maç sırası sayısı (`LAST 3`) |
+| `LIVE` | 12:00 · 18:00 · 21:00 | Canlı ligin başlangıç günü, maç saatleri ve seed tohumu (bkz. [Canlı lig](#canlı-lig-site)) |
 
 ---
 
@@ -184,9 +227,12 @@ src/
   04_render.js      Canvas çizimi, HUD ve bitiş ekranı
   05_app.js         Lig, kayıt, kontrol paneli, denge testi, ana döngü
   06_offline.js     Ekransız video üretimi (kare kare çizim, WebCodecs H.264, OfflineAudioContext)
+  07_live.js        Canlı lig: maç saatleri, seed türetme, geçmiş maçları hesaplama, saate senkron oynatma, geri sayım ekranı
 tools/
   balance.js        Terminalden denge testi (Node.js)
-  daily.js          Günlük maç günü: maçları oynatır, MP4 üretir, lig verisini günceller
+  live-check.js     Canlı lig determinizm testi (DM doğruluğu, tarayıcıdan bağımsızlık)
+  live-state.js     live-state.json checkpoint'ini üretir (Pages iş akışı çalıştırır)
+  daily.js          Stüdyo ligi: maçları oynatır, MP4 üretir, lig verisini günceller
 data/
   active/           Aktif lig (league.json, STANDINGS.md, seasons/)
 ```
@@ -203,6 +249,7 @@ Terminalden denge testi (Node.js 18+):
 
 ```bash
 node tools/balance.js          # 6 takımlık grup maçı, 1 can, 100 maç
+node tools/live-check.js       # canlı lig: maçlar her tarayıcıda birebir aynı mı
 node tools/balance.js 1 200    # can, maç sayısı
 CFG='{"BALL_SPEED":650,"WALL_ACCEL":0.08}' node tools/balance.js   # ayar denemek için
 ```

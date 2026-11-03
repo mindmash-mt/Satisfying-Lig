@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <!--
-  FOOTBALL ARENA LEAGUE — kullanım:
+  FOOTBALL ARENA LEAGUE
+  Varsayılan: CANLI LİG — maçlar CONFIG.LIVE saatlerinde kendi kendine oynar, siteye giren herkes aynı maçı izler (src/07_live.js).
+  index.html?studio → aşağıdaki stüdyo (kontrol paneli, önizleme, video kaydı). Stüdyo kullanımı:
   1) Maç başlatma: Sağdaki panelden mod/ayarları seçin, "▶ Başlat" (veya Boşluk tuşu). Her maç rastgele bir seed ile kurulur (görünmez; oynanan maçların seed'i maç geçmişinde saklanır).
   2) Kayıt alma: "● Kaydet ve Başlat" maçı sıfırdan 1x hızda oynatır, bitiş ekranından sonra video dosyasını otomatik indirir (sekme açık/görünür kalmalı).
   3) Hafta: Başlıkta "WEEK 3 · GROUP MATCH 2" yazar. Haftanın son grup maçı kaydedilince hafta kendiliğinden ilerler; "📅 Yeni hafta" ile elle de geçilir.
@@ -67,6 +69,10 @@
   th:nth-child(2), td.tn { text-align: left; }
   th:first-child, td:first-child { text-align: left; color: var(--muted); }
   .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid #fff; margin-right: 7px; vertical-align: -1px; }
+  td.form { white-space: nowrap; }
+  .fp { display: inline-block; min-width: 25px; margin-left: 2px; padding: 1px 0; border-radius: 4px; text-align: center; font-style: normal; font-size: 10.5px; font-weight: 700; }
+  .fp.f1 { background: #FFD54F; color: #2a2100; } .fp.f2 { background: #CFD8DC; color: #1c2328; } .fp.f3 { background: #D9915A; color: #2b1606; }
+  .fp.f4 { background: #2b3a55; color: #e8eefc; } .fp.f5 { background: #4a2228; color: #ffb3b3; } .fp.fe { color: var(--muted); border: 1px solid var(--border); }
   table.mini td, table.mini th { padding: 3px 4px; font-size: 11.5px; }
   .fixture { max-height: 260px; overflow-y: auto; background: #0e131c; border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; margin: 6px 0 10px; font-size: 12px; }
   .fixture .wk { margin: 3px 0; color: var(--text); }
@@ -90,6 +96,13 @@
   .modal-box footer { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
   .toast { position: fixed; bottom: 22px; left: 50%; transform: translate(-50%, 20px); background: #1d2638; border: 1px solid var(--border); padding: 10px 16px; border-radius: 10px; opacity: 0; transition: all .3s; z-index: 30; font-weight: 600; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  /* live site: no panel, the match fills the screen */
+  body.live #panel { display: none; }
+  body.live #app { height: 100vh; height: 100dvh; flex-direction: row; }
+  body.live #stage { height: 100%; }
+  #liveBar { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; background: rgba(10,14,22,.78); border: 1px solid var(--border); border-radius: 99px; padding: 5px 6px 5px 6px; font-size: 12.5px; color: var(--muted); white-space: nowrap; z-index: 5; }
+  #liveBar button { border-radius: 99px; padding: 6px 12px; }
+  #liveBar span { padding-right: 10px; }
   @media (max-width: 900px) {
     #app { flex-direction: column; height: auto; }
     #stage { height: 82vh; }

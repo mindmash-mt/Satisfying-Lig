@@ -32,8 +32,13 @@ const CONFIG = {
   /* before the match: today's group matches (results / fixtures) → match. After it: one animated league table (held until the video ends) */
   INTRO_DURATION: 3.4,
   END_DURATION: 7.0,
+  FORM_COUNT: 3,       // league table: each club's last N match places (1ST 2ND …), shown in the rightmost column
   RELEGATE_COUNT: 3,   // at the end of a season the last N teams leave the league and the next N from the reserve queue join
   HARD_TIME_LIMIT: 300,
+  /* the public site's live league (07_live.js): one group match at each of these times (Istanbul, UTC+3 all year), from `start`.
+     3 times a day = one week a day. Changing the times only moves future kick-offs; the matches themselves follow from
+     `salt` (seeds) and the simulation code — change those and the whole live league (also past results) is replayed differently. */
+  LIVE: { start: '2026-11-04', times: ['12:00', '18:00', '21:00'], utcOffset: 3, salt: 'satisfying-lig-live-1' },
 };
 const DT = 1 / CONFIG.STEP_HZ;
 
@@ -141,11 +146,73 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp01 = (v) => clamp(v, 0, 1);
 const easeOutCubic = (t) => 1 - Math.pow(1 - clamp01(t), 3);
-const easeInOutCubic = (t) => { t = clamp01(t); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+const easeInOutCubic = (t) => { t = clamp01(t); if (t < 0.5) return 4 * t * t * t; const u = 2 - 2 * t; return 1 - u * u * u / 2; };   // no Math.pow: used by the simulation (see DM)
 const easeOutBack = (t, s = 1.70158) => { t = clamp01(t); const c3 = s + 1; return 1 + c3 * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2); };
 const easeOutElastic = (t) => { t = clamp01(t); if (t === 0 || t === 1) return t; return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * (TAU / 3)) + 1; };
 /* spring pop: grows past 1, settles back (used for "grow then shrink" text) */
 const springPop = (t) => { t = Math.max(0, t); return 1 + Math.exp(-6 * t) * Math.sin(t * 18) * 0.35 - Math.exp(-14 * t) * 1; };
+
+/* =====================================================================
+   DM — deterministic math for the simulation. The live league (07_live.js) lets every visitor's browser compute the
+   same matches from the same seeds, so the physics must give bit-identical results in Chrome, Safari and Firefox.
+   Math.sin / cos / atan2 / hypot / exp / pow are NOT guaranteed to be identical across engines (only + − × ÷ and
+   Math.sqrt are exactly specified by IEEE 754), so the simulation uses these versions built from those operations
+   (fdlibm kernels; accuracy ~1e-16, checked by tools/live-check.js).
+   ===================================================================== */
+const DM = (() => {
+  const INV_PIO2 = 6.36619772367581382433e-01, P1 = 1.57079632673412561417e+00, P2 = 6.07710050650619224932e-11, P3 = 2.02226624879595063154e-21;
+  const S1 = -1.66666666666666324348e-01, S2 = 8.33333333332248946124e-03, S3 = -1.98412698298579493134e-04,
+    S4 = 2.75573137070700676789e-06, S5 = -2.50507602534068634195e-08, S6 = 1.58969099521155010221e-10;
+  const C1 = 4.16666666666666019037e-02, C2 = -1.38888888888741095749e-03, C3 = 2.48015872894767294178e-05,
+    C4 = -2.75573143513906633035e-07, C5 = 2.08757232129817482790e-09, C6 = -1.13596475577881948265e-11;
+  const ksin = (x) => { const z = x * x; return x + x * z * (S1 + z * (S2 + z * (S3 + z * (S4 + z * (S5 + z * S6))))); };
+  const kcos = (x) => { const z = x * x; return 1 - 0.5 * z + z * z * (C1 + z * (C2 + z * (C3 + z * (C4 + z * (C5 + z * C6))))); };
+  /* x = n·π/2 + r, |r| ≤ π/4 (Cody–Waite, 3-part π/2; plenty for the angles of a match) */
+  const reduce = (x) => { const n = Math.round(x * INV_PIO2); return [n & 3, ((x - n * P1) - n * P2) - n * P3]; };
+  function sin(x) { const [q, r] = reduce(x); return q === 0 ? ksin(r) : q === 1 ? kcos(r) : q === 2 ? -ksin(r) : -kcos(r); }
+  function cos(x) { const [q, r] = reduce(x); return q === 0 ? kcos(r) : q === 1 ? -ksin(r) : q === 2 ? -kcos(r) : ksin(r); }
+  const ATH = [4.63647609000806093515e-01, 7.85398163397448278999e-01, 9.82793723247329054082e-01, 1.57079632679489655800e+00];
+  const ATL = [2.26987774529616870924e-17, 3.06161699786838301793e-17, 1.39033110312309984516e-17, 6.12323399573676603587e-17];
+  const AT = [3.33333333333329318027e-01, -1.99999999998764832476e-01, 1.42857142725034663711e-01, -1.11111104054623557880e-01,
+    9.09088713343650656196e-02, -7.69187620504482999495e-02, 6.66107313738753120669e-02, -5.83357013379057348645e-02,
+    4.97687799461593236017e-02, -3.65315727442169155270e-02, 1.62858201153657823623e-02];
+  function atan(x) {
+    const neg = x < 0; let ax = neg ? -x : x, id = -1;
+    if (ax !== ax) return x;
+    if (ax > 1e17) return neg ? -ATH[3] : ATH[3];
+    if (ax >= 0.4375) {
+      if (ax < 1.1875) { if (ax < 0.6875) { id = 0; ax = (2 * ax - 1) / (2 + ax); } else { id = 1; ax = (ax - 1) / (ax + 1); } }
+      else if (ax < 2.4375) { id = 2; ax = (ax - 1.5) / (1 + 1.5 * ax); }
+      else { id = 3; ax = -1 / ax; }
+    }
+    const z = ax * ax, w = z * z;
+    const s1 = z * (AT[0] + w * (AT[2] + w * (AT[4] + w * (AT[6] + w * (AT[8] + w * AT[10])))));
+    const s2 = w * (AT[1] + w * (AT[3] + w * (AT[5] + w * (AT[7] + w * AT[9]))));
+    const r = id < 0 ? ax - ax * (s1 + s2) : ATH[id] - ((ax * (s1 + s2) - ATL[id]) - ax);
+    return neg ? -r : r;
+  }
+  const PI = 3.14159265358979311600e+00, PIO2 = 1.57079632679489655800e+00;
+  function atan2(y, x) {
+    if (x === 0) return y > 0 ? PIO2 : y < 0 ? -PIO2 : 0;
+    const a = atan(y / x);
+    if (x > 0) return a;
+    return y >= 0 ? a + PI : a - PI;
+  }
+  const hypot = (x, y) => Math.sqrt(x * x + y * y);
+  const LN2H = 6.93147180369123816490e-01, LN2L = 1.90821492927058770002e-10, INV_LN2 = 1.44269504088896338700e+00;
+  function exp(x) {
+    if (x !== x) return x;
+    if (x > 709) return Infinity;
+    if (x < -745) return 0;
+    const k = Math.round(x * INV_LN2), r = (x - k * LN2H) - k * LN2L;
+    let term = 1, sum = 1;                         // Taylor series: |r| ≤ ln2/2, 20 terms ≫ double precision
+    for (let i = 1; i <= 20; i++) { term = term * r / i; sum += term; }
+    let p = 1, b = k < 0 ? 0.5 : 2;                 // 2^k by exact multiplications of powers of two
+    for (let e = k < 0 ? -k : k; e > 0; e >>= 1) { if (e & 1) p *= b; b *= b; }
+    return sum * p;
+  }
+  return { sin, cos, atan, atan2, hypot, exp };
+})();
 
 /* closest point on segment — result in _qx/_qy (avoids allocation in hot loop) */
 let _qx = 0, _qy = 0;
@@ -241,13 +308,13 @@ function planSeasonRun(ids, weeks, size, rng, fixed) {
   }
   /* annealing over the whole season (cooling from T0 to T1), then a last greedy pass */
   if (free > 0 && K > 1) {
-    const iters = 25000 * free, T0 = 2, T1 = 0.1;
+    const iters = 25000 * free, T0 = 2, LN_T1_T0 = -2.99573227355399099344;   // T1 = 0.1, ln(T1 / T0) = ln 0.05
     for (let it = 0; it < iters; it++) {
       const g = W[Math.floor(rng.next() * free)];
       const a = Math.floor(rng.next() * n), b = Math.floor(rng.next() * n);
       if (g[a] === g[b]) continue;
-      const d = delta(g, a, b), T = T0 * Math.pow(T1 / T0, it / iters);
-      if (d <= 0 || rng.next() < Math.exp(-d / T)) swap(g, a, b);
+      const d = delta(g, a, b), T = T0 * DM.exp(LN_T1_T0 * it / iters);   // = T0·(T1/T0)^(it/iters), deterministic (see DM)
+      if (d <= 0 || rng.next() < DM.exp(-d / T)) swap(g, a, b);
     }
     for (const g of W) for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) if (g[a] !== g[b] && delta(g, a, b) < 0) swap(g, a, b);
   }
