@@ -29,7 +29,7 @@ Site adresi: https://mindmash-mt.github.io/Satisfying-Lig/ — **hiç durmayan b
 | 19:00 – 05:00 | 3 dk | 200 |
 | **Toplam** | | **308** |
 
-Lig **4 Kasım 2026 05:00**'te başlar. Bir sezon 17 hafta × 3 grup maçı = 51 maçtır, yani günde ~6 sezon biter: şampiyon belirlenir, son 3 takım düşer, yedeklerden 3 kulüp gelir ve yeni sezon bir sonraki maçta başlar. Şampiyonlar listesinde son 50 sezon tutulur.
+Lig **4 Kasım 2026 00:36**'de başladı. Bir sezon 17 hafta × 3 grup maçı = 51 maçtır, yani günde ~6 sezon biter: şampiyon belirlenir, son 3 takım düşer, yedeklerden 3 kulüp gelir ve yeni sezon bir sonraki maçta başlar. Şampiyonlar listesinde son 50 sezon tutulur.
 
 **Taşma kuralı (kilitlenme olmaz):** bir maç, ekranları dahil sıradaki maçın saatine kadar bitmezse sıradaki maç önceki bitince 10 sn sonra başlar (`gap`). Gecikme birikmez, sonraki aralıklarda erir. 3000 test maçında en uzun maç (giriş + maç + bitiş tablosu) 165 sn sürdü, yani 3 dakikalık aralığa her zaman sığdı. Kural yalnızca güvence için var. `node tools/live-check.js` aralığı zorla 1 dakikaya indirip maçların üst üste binmediğini ve takvimin kendini toparladığını test eder.
 
@@ -37,7 +37,7 @@ Ayar `src/01_core.js` dosyasındaki `CONFIG.LIVE`:
 
 ```js
 LIVE: {
-  start: '2026-11-04',
+  start: '2026-11-04T00:36',   // 'YYYY-MM-DD' (o gün ilk bandın saati) ya da 'YYYY-MM-DDTHH:MM'
   bands: [{ from: '05:00', every: 5 }, { from: '09:00', every: 10 }, { from: '19:00', every: 3 }],
   utcOffset: 3, gap: 10, salt: 'satisfying-lig-live-1', keepChampions: 50,
 },

@@ -34,12 +34,22 @@ const Live = {
     });
     return (this._slots = out);
   },
-  dayStartUTC(day) {
-    const [y, mo, d] = this.cfg().start.split('-').map(Number), b0 = this.mins(this.cfg().bands[0].from);
-    return Date.UTC(y, mo - 1, d + day, 0, b0) - this.cfg().utcOffset * 3600e3;
+  /* the league starts at CONFIG.LIVE.start ('YYYY-MM-DD' = that day at the first band's time, or 'YYYY-MM-DDTHH:MM'):
+     match 0 is the first slot at or after it; slots then follow the daily timetable */
+  sched() {
+    if (this._sched && this._sched.slots === this.slots()) return this._sched;
+    const c = this.cfg(), off = c.utcOffset * 3600e3, S = this.slots(), b0 = this.mins(c.bands[0].from);
+    const [ds, ts] = c.start.split('T'), [y, mo, d] = ds.split('-').map(Number), tm = this.mins(ts || c.bands[0].from);
+    const startMs = Date.UTC(y, mo - 1, d, 0, tm) - off;
+    const day = Math.floor((startMs + off - b0 * 60e3) / 864e5), base0 = day * 864e5 + b0 * 60e3 - off;
+    let n0 = 0; while (n0 < S.length && base0 + S[n0] * 60e3 < startMs) n0++;
+    return (this._sched = { slots: S, base0, n0 });
   },
   /* planned kick-off of live match n */
-  slot(n) { const S = this.slots(), day = Math.floor(n / S.length); return this.dayStartUTC(day) + S[n - day * S.length] * 60e3; },
+  slot(n) {
+    const { slots: S, base0, n0 } = this.sched(), k = n + n0, day = Math.floor(k / S.length);
+    return base0 + day * 864e5 + S[k - day * S.length] * 60e3;
+  },
   /* actual kick-off of the next match: its slot, or GAP after the previous match if that one ran over */
   nextStart() { return Math.max(this.slot(this.count()), (League.data.liveLastEnd || 0) + this.cfg().gap * 1000); },
   /* minutes between matches at time t */
