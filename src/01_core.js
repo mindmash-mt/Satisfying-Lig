@@ -25,29 +25,37 @@ const CONFIG = {
   CAPTAIN_SHOT_MULT: 2, CAPTAIN_AIM_DEG: 55,
   PU_R: 26, PU_LIFE: 8, PU_MIN: 6, PU_MAX: 10, PU_MAX_COUNT: 2, PU_WALL_MARGIN: 80,
   DEFAULT_LIVES: 1, DEFAULT_SPEED_MULT: 1.0,
-  /* every match is a group match of exactly GROUP_SIZE clubs; the league size must be a multiple of it so all groups are equal */
-  GROUP_SIZE: 6,
-  POINTS: [4, 3, 2, 1, 0, 0, 0, 0, 0, 0], SEASON_LENGTH: 17,
-  STORAGE_KEY: 'arenaLeague_v1',
-  /* before the match: today's group matches (results / fixtures) → match. After it: one animated league table (held until the video ends) */
-  INTRO_DURATION: 3.4,
-  END_DURATION: 7.0,
-  FORM_COUNT: 3,       // league table: each club's last N match places (1ST 2ND …), shown in the rightmost column
+  /* every match is a 1v1 league match: two clubs on the duel pitch (keeper + captain + one team-mate each) for MATCH_TIME seconds.
+     The clock runs on screen time (slow-motion moments count too), so a match is MATCH_TIME seconds long on screen.
+     A draw is a draw in the league; a promotion playoff match that is level goes to a golden goal (at most GOLDEN_TIME seconds)
+     and then to a penalty shoot-out (PEN_P: chance a penalty goes in, PEN_STEP: seconds per penalty on screen). */
+  MATCH_TIME: 60, GOLDEN_TIME: 30, PEN_P: 0.75, PEN_STEP: 0.9,
+  GROUP_SIZE: 2,
+  /* league points: win, draw, loss. A season is a single round robin: every club meets every other club once (17 weeks with
+     18 clubs, 9 matches a week); a longer season repeats it with home and away swapped. */
+  POINTS: [3, 1, 0], SEASON_LENGTH: 17,
+  STORAGE_KEY: 'arenaLeague_v2',
+  /* before the match: this week's matches (results / fixtures) → match. After it: one animated league table (held until the video ends) */
+  INTRO_DURATION: 5.0,
+  END_DURATION: 9.0,
+  FORM_COUNT: 3,       // league table: each club's last N results (W D L), shown in the rightmost column
   RELEGATE_COUNT: 3,   // at the end of a season the last N teams leave the league and N clubs of the pool come in
-  /* promotion playoff: after the group matches of the season the pool clubs play a single-leg knockout (see League.cupShape);
+  /* promotion playoff: after the league matches of the season the pool clubs play a single-leg knockout (see League.cupShape);
      champion, runner-up and the third-place winner go up. It needs exactly CUP_SIZE clubs in the pool and RELEGATE_COUNT 3;
      with any other pool the first RELEGATE_COUNT clubs of the pool queue come in instead. */
   CUP_SIZE: 12,
   HARD_TIME_LIMIT: 300,
   /* the public site's live league (07_live.js), a league that never stops. Istanbul time (UTC+3 all year).
-     bands: from each `from` until the next band, one group match every `every` minutes (a day = 308 matches).
-     The first match is at `start` + the first band's time. gap: seconds between a match that ran over and the next one.
+     bands: from each `from` until the next band, one match every `every` minutes (one band, every 3 minutes: 480 matches a day).
+     The first match is at `start`. On the site `start` is set by the first deploy of a new salt (tools/live-start.js →
+     BUILD_START: the league starts a few minutes after it goes live); `start` here is only the fallback for local builds.
+     gap: seconds between a match that ran over and the next one.
      Changing start / bands / gap / salt starts a NEW live league: all browsers drop their saved state.
      Changing the simulation (results, scoring, balance) does NOT: the league is frozen as it stands and the new rules play on from there (tools/live-base.js). */
   LIVE: {
-    start: '2026-11-04T00:36',   // 'YYYY-MM-DD' (that day at the first band's time) or 'YYYY-MM-DDTHH:MM'
-    bands: [{ from: '05:00', every: 5 }, { from: '09:00', every: 10 }, { from: '19:00', every: 3 }],
-    utcOffset: 3, gap: 10, salt: 'satisfying-lig-live-1', keepChampions: 50,
+    start: '2026-11-04T22:00',   // 'YYYY-MM-DD' (that day at the first band's time) or 'YYYY-MM-DDTHH:MM' — overridden by BUILD_START
+    bands: [{ from: '00:00', every: 3 }],
+    utcOffset: 3, gap: 10, salt: 'satisfying-lig-live-2', keepChampions: 50,
   },
 };
 const DT = 1 / CONFIG.STEP_HZ;
@@ -73,7 +81,7 @@ const DEFAULT_TEAMS = [
   { name: 'Beşiktaş',           code: 'BJK', c1: '#111111', c2: '#FFFFFF' },
   { name: 'Galatasaray',        code: 'GAL', c1: '#A90432', c2: '#FDB912' },
 ];
-/* the pool of clubs outside the league: after the group matches they play the promotion playoff and its top 3 take the
+/* the pool of clubs outside the league: after the league matches they play the promotion playoff and its top 3 take the
    place of the league's last RELEGATE_COUNT teams, who join the pool (the pool order only matters for the fallback queue) */
 const RESERVE_TEAMS = [
   { name: 'Napoli',        code: 'NAP', c1: '#12A0D7', c2: '#FFFFFF' },
@@ -249,96 +257,46 @@ function luminance(h) { const [r, g, b] = hexToRgb(h); return (0.299 * r + 0.587
 
 /* =====================================================================
    SEASON FIXTURE (used by LEAGUE)
-   The whole season's group plan is built once, when the season starts, and is not changed until it ends.
-   Every week the clubs are split into equal groups of `size` (the league size is a multiple of it), so every
-   club plays exactly once a week and the same number of matches in the season.
-   Goal: every pair of clubs shares a group as equally often as possible. Cost = Σ (meetings of a pair)²;
-   with a fixed total number of meetings this is lowest when the meetings are spread evenly.
-   Seeded: a greedy week-by-week start, then simulated annealing with swaps inside a week
-   (two clubs from different groups of the same week trade places, so every week stays a valid split).
-   fixed: weeks already decided (e.g. played before a migration) — kept as they are and only counted.
+   A season is a round robin of 1v1 matches, built once when the season starts and not changed until it ends:
+   every week every club plays exactly one match (n clubs → n/2 matches a week), and in n-1 weeks every club has met
+   every other club exactly once. A longer season repeats the round robin with home and away swapped.
+   Circle method on a seeded order of the clubs: club 0 stays put, the others rotate one place a week. Home / away are balanced
+   so that every club is at home (top goal) in about half of its matches.
+   A week is a list of matches; a match is [home, away].
    ===================================================================== */
-function planSeason(ids, weeks, size, rng, fixed = []) {
-  if (!ids.length || ids.length % size !== 0) throw new Error(`Takım sayısı (${ids.length}) ${size}'nın katı olmalı.`);
-  /* several independent seeded runs (4, or up to 10 while pairs still differ by more than 2 meetings);
-     keep the one whose pair meetings are spread the narrowest */
-  let best = null, bestKey = Infinity;
-  for (let r = 0; r < 10 && (r < 4 || bestKey >= 3e9); r++) {
-    const plan = planSeasonRun(ids, weeks, size, rng, fixed), st = fixtureMeetings(ids, fixed.concat(plan));
-    const key = (st.max - st.min) * 1e9 + st.sq;
-    if (key < bestKey) { bestKey = key; best = plan; }
+function planRoundRobin(ids, weeks, rng) {
+  const n = ids.length;
+  if (n < 2 || n % 2 !== 0) throw new Error(`Takım sayısı (${n}) çift olmalı.`);
+  const order = rng.shuffle(ids), R = n - 1, base = [];
+  /* home / away: the club with fewer home matches so far is at home; if equal, the one that was away last week; then the slot */
+  const home = new Map(ids.map(id => [id, 0])), last = new Map();
+  for (let r = 0; r < R; r++) {
+    const ring = [order[0]];
+    for (let k = 0; k < R; k++) ring.push(order[1 + ((k + r) % R)]);
+    const wk = [];
+    for (let k = 0; k < n / 2; k++) {
+      const a = ring[k], b = ring[n - 1 - k];
+      const ha = home.get(a), hb = home.get(b), la = last.get(a) === 'h', lb = last.get(b) === 'h';
+      const aHome = ha !== hb ? ha < hb : la !== lb ? lb : (k + r) % 2 === 0;
+      const [h, w] = aHome ? [a, b] : [b, a];
+      home.set(h, home.get(h) + 1); last.set(h, 'h'); last.set(w, 'a');
+      wk.push([h, w]);
+    }
+    base.push(rng.shuffle(wk));                   // the order of a week's matches is drawn too
   }
-  return best;
+  const out = [];
+  for (let w = 0; w < weeks; w++) {
+    const leg = Math.floor(w / R), wk = base[w % R];
+    out.push(leg % 2 ? wk.map(([h, a]) => [a, h]) : wk.map(m => m.slice()));
+  }
+  return out;
 }
-function planSeasonRun(ids, weeks, size, rng, fixed) {
-  const n = ids.length, K = n / size;
-  const C = new Int32Array(n * n), idx = new Map(ids.map((id, i) => [id, i]));
-  const meet = (members, d) => {
-    for (let x = 0; x < members.length; x++) for (let y = x + 1; y < members.length; y++) {
-      const a = members[x], b = members[y]; C[a * n + b] += d; C[b * n + a] += d;
-    }
-  };
-  for (const wk of fixed) for (const grp of wk) meet(grp.map(id => idx.get(id)).filter(i => i !== undefined), 1);
-  const free = Math.max(0, weeks - fixed.length);
-  const W = [];                                   // W[w][club] = group index of the club in free week w
-  const members = (g, gi) => { const m = []; for (let i = 0; i < n; i++) if (g[i] === gi) m.push(i); return m; };
-  /* cost change if clubs a (group A) and b (group B) trade places in a week with assignment g */
-  const delta = (g, a, b) => {
-    const A = g[a], B = g[b];
-    let d = 0;
-    for (let x = 0; x < n; x++) {
-      if (x === a || x === b) continue;
-      if (g[x] === A) d += 2 * (C[b * n + x] - C[a * n + x]) + 2;        // (c+1)² - c² and (c-1)² - c²
-      else if (g[x] === B) d += 2 * (C[a * n + x] - C[b * n + x]) + 2;
-    }
-    return d;
-  };
-  const swap = (g, a, b) => {
-    const A = g[a], B = g[b];
-    for (let x = 0; x < n; x++) {
-      if (x === a || x === b) continue;
-      if (g[x] === A) { C[a * n + x]--; C[x * n + a]--; C[b * n + x]++; C[x * n + b]++; }
-      else if (g[x] === B) { C[b * n + x]--; C[x * n + b]--; C[a * n + x]++; C[x * n + a]++; }
-    }
-    g[a] = B; g[b] = A;
-  };
-  /* greedy start: each week a random split, improved by swaps against the meetings so far */
-  for (let w = 0; w < free; w++) {
-    const perm = rng.shuffle([...Array(n).keys()]), g = new Int32Array(n);
-    perm.forEach((club, p) => { g[club] = Math.floor(p / size); });
-    for (let gi = 0; gi < K; gi++) meet(members(g, gi), 1);
-    let improved = true;
-    while (improved) {
-      improved = false;
-      for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) {
-        if (g[a] !== g[b] && delta(g, a, b) < 0) { swap(g, a, b); improved = true; }
-      }
-    }
-    W.push(g);
-  }
-  /* annealing over the whole season (cooling from T0 to T1), then a last greedy pass */
-  if (free > 0 && K > 1) {
-    const iters = 25000 * free, T0 = 2, LN_T1_T0 = -2.99573227355399099344;   // T1 = 0.1, ln(T1 / T0) = ln 0.05
-    for (let it = 0; it < iters; it++) {
-      const g = W[Math.floor(rng.next() * free)];
-      const a = Math.floor(rng.next() * n), b = Math.floor(rng.next() * n);
-      if (g[a] === g[b]) continue;
-      const d = delta(g, a, b), T = T0 * DM.exp(LN_T1_T0 * it / iters);   // = T0·(T1/T0)^(it/iters), deterministic (see DM)
-      if (d <= 0 || rng.next() < DM.exp(-d / T)) swap(g, a, b);
-    }
-    for (const g of W) for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) if (g[a] !== g[b] && delta(g, a, b) < 0) swap(g, a, b);
-  }
-  return W.map(g => Array.from({ length: K }, (_, gi) => members(g, gi).map(i => ids[i])));
-}
-/* how many times each pair has shared a group in a list of weeks (stats for the panel and tests) */
-function fixtureMeetings(ids, weekList) {
-  const M = new Map(), key = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
-  for (const wk of weekList) for (const grp of wk) for (let i = 0; i < grp.length; i++) for (let j = i + 1; j < grp.length; j++) {
-    const k = key(grp[i], grp[j]); M.set(k, (M.get(k) || 0) + 1);
-  }
-  let min = Infinity, max = 0, sq = 0;
-  for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
-    const c = M.get(key(ids[i], ids[j])) || 0; if (c < min) min = c; if (c > max) max = c; sq += c * c;
-  }
-  return { min: isFinite(min) ? min : 0, max, sq };
+/* stats of a fixture (panel and tests): how often each pair met (min / max) and home matches per club (min / max) */
+function fixtureStats(ids, weekList) {
+  const M = new Map(), H = new Map(ids.map(id => [id, 0])), key = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
+  for (const wk of weekList) for (const [h, a] of wk) { M.set(key(h, a), (M.get(key(h, a)) || 0) + 1); H.set(h, (H.get(h) || 0) + 1); }
+  let min = Infinity, max = 0;
+  for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) { const c = M.get(key(ids[i], ids[j])) || 0; if (c < min) min = c; if (c > max) max = c; }
+  const hs = [...H.values()];
+  return { min: isFinite(min) ? min : 0, max, homeMin: Math.min(...hs), homeMax: Math.max(...hs) };
 }

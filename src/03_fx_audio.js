@@ -101,9 +101,21 @@ const FX = {
         this.shake(0.25, 18);
         const cols = S && !d.own ? [S.c1, S.c2, '#ffffff'] : ['#ffffff', T.c1, '#FFD54F'];
         this.confetti(d.x, d.y, d.nx, d.ny, 40, cols);
-        AudioSys.goal(); if (d.own) AudioSys.wahwah();
+        AudioSys.goal(); if (d.own && !g.timed) AudioSys.wahwah();
+        if (g.timed) {
+          /* 1v1 match: "+ ARSENAL GOAL" and under it the new score. Every goal is the other club's goal (a keeper's deflection
+             into its own net is common in a 1v1, so it is not called an own goal on screen) */
+          const B = this.team(d.benefit), [A0, A1] = g.teams;
+          const goal = { text: `${upTR(B.name)} GOAL`, c1: B.c1, c2: B.c2, plus: true };
+          this.announce({ kind: 'elim', text: `${A0.code} ${d.score[0]} – ${d.score[1]} ${A1.code}${d.golden ? ' · GOLDEN GOAL' : ''}`, color: B.c1, goal, dur: 1.9 });
+        }
         break;
       }
+      case 'kickoff': AudioSys.whistle(0.5, 0.22); break;
+      case 'countdown': AudioSys.tick(d.n <= 3 ? 1 : 0.6); break;
+      case 'goldenGoal': this.announce({ kind: 'big', text: 'GOLDEN GOAL!', color: '#FFB300', dur: 1.8 }); AudioSys.whistle(0.6, 0.24); break;
+      case 'penalties': this.announce({ kind: 'big', text: 'PENALTIES!', color: '#FFB300', dur: 1.6 }); AudioSys.whistle(1.0, 0.24); break;
+      case 'penKick': if (d.goal) AudioSys.goal(); else AudioSys.save(); break;
       case 'eliminate': {
         const T = this.team(d.team);
         /* the only on-screen text during play (above the pitch): the goal that did it ("+ ARSENAL GOAL", green plus),
@@ -266,6 +278,8 @@ const AudioSys = {
     if (!this.ready() || !this.limit('shot', 2, 0.08)) return;
     this.tone('sawtooth', 260, 0.16, 0.16, { f2: 1250, lp: 2600 }); this.tone('sine', 140, 0.12, 0.4, { f2: 60 });
   },
+  /* last 10 seconds of a match: a short clock tick (louder for the last 3) */
+  tick(k) { if (!this.ready() || !this.limit('tick', 1, 0.3)) return; this.tone('square', 1700, 0.035, 0.07 * k, { lp: 3000 }); this.tone('sine', 880, 0.05, 0.08 * k); },
   pop(k) { if (!this.ready() || !this.limit('pop', 2, 0.08)) return; this.tone('sine', 520, 0.08, 0.13 * k, { f2: 980 }); },
   whistle(dur, gain, delay) {
     if (!this.ready()) return;

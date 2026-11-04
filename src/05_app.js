@@ -1,7 +1,7 @@
 /* =====================================================================
    LEAGUE  (persistent table in localStorage, JSON import/export)
    ===================================================================== */
-/* promotion playoff: the 12 pool clubs are drawn into slots s0..s11 when the season's group matches are over; s0–s3 get a
+/* promotion playoff: the 12 pool clubs are drawn into slots s0..s11 when the season's league matches are over; s0–s3 get a
    bye. Single leg, played in this order (one match at a time). 'w<key>' / 'l<key>' = winner / loser of that match.
    Champion, runner-up and the third-place match's winner go up. */
 const CUP_SHAPE = [
@@ -58,24 +58,19 @@ const League = {
     out.table = (d.table && typeof d.table === 'object') ? d.table : {};
     for (const id of Object.keys(out.table)) {
       const r = out.table[id] || {};
-      const pl = Array.isArray(r.places) ? r.places.slice(0, 6).map(x => +x || 0) : [];
-      while (pl.length < 6) pl.push(0);
-      if (!Array.isArray(r.places)) pl[0] = +r.wins || 0;   // older tables only knew the wins
-      out.table[id] = { played: +r.played || 0, pts: +r.pts || 0, wins: +r.wins || 0, gf: +r.gf || 0, ga: +r.ga || 0, places: pl };
+      out.table[id] = { played: +r.played || 0, pts: +r.pts || 0, w: +(r.w !== undefined ? r.w : r.wins) || 0, d: +r.d || 0, l: +r.l || 0, gf: +r.gf || 0, ga: +r.ga || 0 };
     }
     out.week = Math.max(1, +d.week || 1); out.weekMatch = Math.max(1, +d.weekMatch || 1); out.matchNo = Math.max(1, +d.matchNo || 1);
     delete out.day;
-    delete out.derbyWinPoints;               // the derby mode was removed: every match is a group match
+    delete out.derbyWinPoints;               // the derby mode was removed: every match is a 1v1 league match
     out.season = Math.max(1, +d.season || 1);
     out.seasonPlan = this.validPlanShape(d.seasonPlan) ? d.seasonPlan : null;
     out.tieOrder = Array.isArray(d.tieOrder) ? d.tieOrder.map(String) : null;
     out.cup = d.cup && typeof d.cup === 'object' && Array.isArray(d.cup.draw) && d.cup.res && typeof d.cup.res === 'object'
       ? { season: Math.max(1, +d.cup.season || 1), draw: d.cup.draw.map(String), res: d.cup.res } : null;
     out.seasonLength = Math.max(1, +d.seasonLength || CONFIG.SEASON_LENGTH);
-    out.points = Array.isArray(d.points) && d.points.length ? d.points.map(x => +x || 0) : CONFIG.POINTS.slice();
-    while (out.points.length < 10) out.points.push(0);
-    /* the old default scoring (10-7-5-4-3-2-1) becomes the new default (4-3-2-1); custom scoring is kept */
-    if (out.points.join(',') === '10,7,5,4,3,2,1,0,0,0') out.points = CONFIG.POINTS.slice();
+    /* win / draw / loss points (older leagues scored finishing places: they get the default) */
+    out.points = Array.isArray(d.points) && d.points.length === 3 ? d.points.map(x => +x || 0) : CONFIG.POINTS.slice();
     out.teamsVersion = 3;
     out.history = Array.isArray(d.history) ? d.history : [];
     out.champions = Array.isArray(d.champions) ? d.champions : [];
@@ -110,16 +105,22 @@ const League = {
     catch (e) { this.storageOK = false; }
     UI.storageWarn(!this.storageOK);
   },
-  /* a club's places in its last n matches of this season (oldest first, newest last), e.g. [1, 2, 3] */
+  /* a match's result for a club: 'W' / 'D' / 'L' (null if it did not play in it) */
+  resultOf(h, id) {
+    const r = Array.isArray(h.result) ? h.result : [], me = r.find(x => x.id === id), op = r.find(x => x.id !== id);
+    if (!me || !op) return null;
+    return me.score > op.score ? 'W' : me.score < op.score ? 'L' : 'D';
+  },
+  /* a club's results in its last n matches of this season (oldest first, newest last), e.g. ['W', 'D', 'L'] */
   formOf(id, history = this.data.history, n = CONFIG.FORM_COUNT) {
     const out = [];
     for (let i = history.length - 1; i >= 0 && out.length < n; i--) {
-      const r = Array.isArray(history[i].result) && history[i].result.find(x => x.id === id);
-      if (r && r.place) out.unshift(r.place);
+      const r = this.resultOf(history[i], id);
+      if (r) out.unshift(r);
     }
     return out;
   },
-  rowOf(table, id) { return table[id] || { played: 0, pts: 0, wins: 0, gf: 0, ga: 0, places: [0, 0, 0, 0, 0, 0] }; },
+  rowOf(table, id) { return table[id] || { played: 0, pts: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 }; },
   /* the season's tie-break draw: a random order of the clubs, drawn once when the season starts and stored with the league
      (so it is the same on every screen and in the repo files). It only decides a tie that nothing else separates. */
   tieOrderFor() {
@@ -130,37 +131,63 @@ const League = {
     d.tieOrder = have.concat(rng.shuffle(ids.filter(id => !have.includes(id))));
     return d.tieOrder;
   },
-  /* table order: points → 1st places → 2nd places → 3rd places → 4th places → goals scored (own goals excluded) → the season's draw.
-     Goal difference is deliberately not used: a club's goals against follow its finishing place, so it would only count the placing twice. */
-  ranking(table = this.data.table) {
+  /* table order: points → goal difference → goals scored → head to head (points, then goal difference, in the matches between
+     the tied clubs this season) → the season's draw */
+  ranking(table = this.data.table, history = this.data.history) {
     const draw = this.tieOrderFor(), pos = (id) => draw.indexOf(id);
-    return this.data.teams.map(t => ({ t, r: this.rowOf(table, t.id) })).sort((a, b) => {
+    const list = this.data.teams.map(t => ({ t, r: this.rowOf(table, t.id) }));
+    const key = (x) => `${x.r.pts}|${x.r.gf - x.r.ga}|${x.r.gf}`;
+    const groups = new Map();
+    for (const x of list) { const k = key(x); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); }
+    const h2h = new Map();                        // id → [points, goal difference] against the clubs it is tied with
+    for (const g of groups.values()) {
+      if (g.length < 2) continue;
+      const ids = new Set(g.map(x => x.t.id));
+      for (const id of ids) h2h.set(id, [0, 0]);
+      for (const h of history) {
+        const r = Array.isArray(h.result) ? h.result : [];
+        if (r.length !== 2 || !ids.has(r[0].id) || !ids.has(r[1].id)) continue;
+        for (const [me, op] of [[r[0], r[1]], [r[1], r[0]]]) {
+          const v = h2h.get(me.id), pts = this.data.points;
+          v[0] += me.score > op.score ? pts[0] : me.score === op.score ? pts[1] : pts[2];
+          v[1] += me.score - op.score;
+        }
+      }
+    }
+    return list.sort((a, b) => {
       if (b.r.pts !== a.r.pts) return b.r.pts - a.r.pts;
-      const pa = a.r.places || [], pb = b.r.places || [];
-      for (let i = 0; i < 4; i++) if ((pb[i] || 0) !== (pa[i] || 0)) return (pb[i] || 0) - (pa[i] || 0);
-      return b.r.gf - a.r.gf || pos(a.t.id) - pos(b.t.id);
+      const gd = (b.r.gf - b.r.ga) - (a.r.gf - a.r.ga);
+      if (gd) return gd;
+      if (b.r.gf !== a.r.gf) return b.r.gf - a.r.gf;
+      const ha = h2h.get(a.t.id) || [0, 0], hb = h2h.get(b.t.id) || [0, 0];
+      return hb[0] - ha[0] || hb[1] - ha[1] || pos(a.t.id) - pos(b.t.id);
     });
   },
-  pointsFor(res, tm) { return this.data.points[tm.place - 1] || 0; },
-  /* every group has exactly CONFIG.GROUP_SIZE clubs, so the league size must be a multiple of it */
-  validTeamCount(n) { return n >= CONFIG.GROUP_SIZE && n % CONFIG.GROUP_SIZE === 0; },
-  /* the season has begun once a match was played or a week/group match was passed: from then on the fixture,
+  /* league points of one club in a finished match (res = Game.getResult()) */
+  pointsFor(res, tm) {
+    const op = res.teams.find(x => x.id !== tm.id), p = this.data.points;
+    if (!op) return 0;
+    return tm.score > op.score ? p[0] : tm.score === op.score ? p[1] : p[2];
+  },
+  /* every week every club plays one 1v1 match, so the league needs an even number of clubs */
+  validTeamCount(n) { return n >= 2 && n % 2 === 0; },
+  /* the season has begun once a match was played or a week/match was passed: from then on the fixture,
      the team list and the season length are fixed until the season ends */
   seasonStarted() { const d = this.data; return d.history.length > 0 || d.week > 1 || d.weekMatch > 1; },
   validPlanShape(p) {
-    return !!(p && typeof p === 'object' && Array.isArray(p.weeks) && p.weeks.every(w => Array.isArray(w) && w.every(g => Array.isArray(g))));
+    return !!(p && typeof p === 'object' && Array.isArray(p.weeks) && p.weeks.every(w => Array.isArray(w) && w.every(g => Array.isArray(g) && g.length === 2)));
   },
   /* ---------- promotion playoff (see CUP_SHAPE) ---------- */
   /* the playoff is played only with a full pool (CONFIG.CUP_SIZE clubs) and 3 promotion places; otherwise the old pool queue is used */
   cupOn() { const d = this.data; return d.reserve.length === CONFIG.CUP_SIZE && CONFIG.RELEGATE_COUNT === 3 && d.teams.length >= 5; },
-  /* all group matches of the season are played */
+  /* all league matches of the season are played */
   mainOver() { const d = this.data; return d.week > d.seasonLength; },
-  /* the group matches are over and the playoff is on (or about to start) */
+  /* the league matches are over and the playoff is on (or about to start) */
   cupPhase() { return this.cupOn() && this.mainOver() && !this.cupDone(); },
-  /* the season is over (champion, relegation and promotion can be settled): group matches and the playoff are both finished */
+  /* the season is over (champion, relegation and promotion can be settled): league matches and the playoff are both finished */
   seasonOver() { return this.mainOver() && (!this.cupOn() || this.cupDone()); },
   /* this season's bracket: its draw (a random order of the pool, drawn from the season's seed) and the results so far.
-     build: draw it now if the group matches are over and it has not been drawn yet. Null before that. */
+     build: draw it now if the league matches are over and it has not been drawn yet. Null before that. */
   cup(build) {
     const d = this.data, season = d.season || 1;
     if (!this.cupOn()) return null;
@@ -192,13 +219,15 @@ const League = {
     if (!this.cupDone()) return null;
     return [c.res['FIN'].winner, c.res['FIN'].loser, c.res['3RD'].winner].map(id => this.poolTeam(id)).filter(Boolean);
   },
-  /* a finished playoff match into the bracket (same entry as a group match: League.record) */
+  /* a finished playoff match into the bracket (same entry as a league match: League.record) */
   recordCup(s, res, winnerId) {
     const c = this.cup();
     if (!c || !s.cup) return false;
     const W = res.teams.find(t => t.id === winnerId), L = res.teams.find(t => t.id !== winnerId);
     c.res[s.cup] = { winner: W.id, loser: L.id, sw: W.score, sl: L.score, seed: s.seed, theme: res.theme, duration: res.duration,
       date: s.date || new Date().toISOString() };
+    if (res.pens) { c.res[s.cup].pw = W.pen; c.res[s.cup].pl = L.pen; }       // decided on penalties
+    else if (res.golden) c.res[s.cup].gg = 1;                                    // decided by a golden goal
     this.save();
     return false;
   },
@@ -221,6 +250,7 @@ const League = {
       champion: { id: ch.champion.id, name: ch.champion.name, season, pts: ch.pts },
       relegated: out.map(brief), promoted: ch.in.map(brief),
       table: this.ranking().map((x, i) => ({ rank: i + 1, id: x.t.id, name: x.t.name, code: x.t.code, ...x.r })),
+      points: d.points.slice(),
       history: d.history, cup: cup ? JSON.parse(JSON.stringify(cup)) : null };
     d.champions.push(Object.assign({}, archive.champion));
     d.teams = d.teams.filter(t => !out.some(o => o.id === t.id)).concat(ch.in);
@@ -233,15 +263,16 @@ const League = {
     this.save();
     return archive;
   },
-  /* write a finished match into the league: table, history, next group match / week. Returns true when a new week began.
+  /* write a finished match into the league: table, history, next match / week. Returns true when a new week began.
      Used by the browser (App.onOver) and by the live league's catch-up (07_live.js), so both give the same league. */
   record(s, res, winnerId) {
     if (s.cup) return this.recordCup(s, res, winnerId);       // a playoff match: into the bracket, not the table
     const d = this.data;
     this.applyTo(d.table, res);
-    d.history.push({ matchNo: s.matchNo, week: s.week, weekMatch: s.weekMatch, mode: 'arena', seed: s.seed, theme: res.theme, date: s.date || new Date().toISOString(),
+    /* teams / result: [home, away] */
+    d.history.push({ matchNo: s.matchNo, week: s.week, weekMatch: s.weekMatch, mode: 'match', seed: s.seed, theme: res.theme, date: s.date || new Date().toISOString(),
       teams: res.teams.map(t => t.id), winner: winnerId, duration: res.duration,
-      result: res.teams.map(t => ({ id: t.id, code: t.code, place: t.place, gf: t.gf, ga: t.ga, saves: t.saves, score: t.score })) });
+      result: res.teams.map(t => ({ id: t.id, code: t.code, score: t.score, saves: t.saves })) });
     d.matchNo++;
     d.weekMatch++;
     let newWeek = false;
@@ -252,18 +283,20 @@ const League = {
   applyTo(table, res) {
     for (const tm of res.teams) {
       if (!this.data.teams.some(t => t.id === tm.id)) continue;
-      const r = table[tm.id] || (table[tm.id] = { played: 0, pts: 0, wins: 0, gf: 0, ga: 0, places: [0, 0, 0, 0, 0, 0] });
-      if (!Array.isArray(r.places)) r.places = [r.wins || 0, 0, 0, 0, 0, 0];
-      r.places[tm.place - 1]++;
-      r.played++; r.gf += tm.gf; r.ga += tm.ga; r.pts += this.pointsFor(res, tm);
-      if (tm.place === 1) r.wins++;
+      const op = res.teams.find(x => x.id !== tm.id);
+      if (!op) continue;
+      const r = table[tm.id] || (table[tm.id] = { played: 0, pts: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 });
+      r.played++; r.gf += tm.score; r.ga += op.score; r.pts += this.pointsFor(res, tm);
+      if (tm.score > op.score) r.w++; else if (tm.score === op.score) r.d++; else r.l++;
     }
   },
 };
-/* panel: last-matches badges (empty slots as dashes), e.g. 1st 2nd 1st */
+/* panel: last-results badges (empty slots as dashes), e.g. G B M */
+const FORM_TR = { W: 'G', D: 'B', L: 'M' };
 function formHtml(form) {
   const pad = Array(Math.max(0, CONFIG.FORM_COUNT - form.length)).fill('<i class="fp fe">–</i>');
-  return pad.concat(form.map(p => `<i class="fp f${Math.min(p, 5)}">${ordinal(p).toLowerCase()}</i>`)).join('');
+  /* results (W / D / L → G / B / M); a finished season of the old group-match league keeps its places (1st 2nd …) */
+  return pad.concat(form.map(p => typeof p === 'string' ? `<i class="fp f${p}">${FORM_TR[p] || p}</i>` : `<i class="fp f${Math.min(p, 5)}">${ordinal(p).toLowerCase()}</i>`)).join('');
 }
 function validColor(c, def) { return /^#[0-9a-fA-F]{6}$/.test(String(c || '')) ? String(c).toUpperCase() : def; }
 /* every match gets its own random 32-bit seed (never shown, never stored ahead of the match; played matches keep theirs in the history) */
@@ -333,21 +366,20 @@ const $ = (id) => document.getElementById(id);
 const UI = {
   init() {
     const s = League.data.settings;
-    $('theme').value = s.theme; $('lives').value = s.lives;
+    $('theme').value = s.theme;
     $('speedMult').value = s.speedMult; $('simSpeed').value = String(s.simSpeed);
     $('volume').value = s.volume; $('testMatch').checked = s.testMatch;
-    $('pointsInput').value = League.data.points.slice(0, CONFIG.GROUP_SIZE).join(','); $('seasonLen').value = League.data.seasonLength;
+    $('pointsInput').value = League.data.points.join(','); $('seasonLen').value = League.data.seasonLength;
     AudioSys.vol = s.volume; AudioSys.muted = s.muted;
     const read = () => {
       s.theme = $('theme').value;
-      s.lives = clamp(Math.round(+$('lives').value || 3), 1, 5);
       s.speedMult = clamp(+$('speedMult').value || 1, 0.7, 1.5);
       s.simSpeed = +$('simSpeed').value || 1;
       s.testMatch = $('testMatch').checked;
       League.save(); this.refresh();
       if (!App.running || App.end) App.prepare();
     };
-    ['theme', 'lives', 'speedMult', 'testMatch'].forEach(id => $(id).addEventListener('change', read));
+    ['theme', 'speedMult', 'testMatch'].forEach(id => $(id).addEventListener('change', read));
     $('speedMult').addEventListener('input', () => { $('speedVal').textContent = '×' + (+$('speedMult').value).toFixed(2); });
     $('simSpeed').addEventListener('change', () => { s.simSpeed = +$('simSpeed').value || 1; League.save(); });
     $('volume').addEventListener('input', () => { s.volume = +$('volume').value; AudioSys.vol = s.volume; AudioSys.apply(); });
@@ -359,14 +391,14 @@ const UI = {
     $('btnReset').addEventListener('click', () => App.reset());
     $('btnNewDay').addEventListener('click', () => {
       const d = League.data;
-      if (d.week > d.seasonLength) { alert(League.cupPhase() ? 'Grup maçları bitti. Önce yükselme eleme maçlarını oynayın.' : 'Sezon tamamlandı. Önce yeni sezonu başlatın.'); return; }
-      /* skipping a week leaves its unplayed group matches unplayed for good: warn and ask first */
+      if (d.week > d.seasonLength) { alert(League.cupPhase() ? 'Lig maçları bitti. Önce yükselme eleme maçlarını oynayın.' : 'Sezon tamamlandı. Önce yeni sezonu başlatın.'); return; }
+      /* skipping a week leaves its unplayed matches unplayed for good: warn and ask first */
       const left = App.unplayedThisWeek();
       if (left.length) {
         const code = (id) => (d.teams.find(t => t.id === id) || {}).code || '?';
-        const list = left.map(x => `  • ${x.no}. grup maçı: ${x.ids.map(code).join(' · ')}`).join('\n');
-        if (!confirm(`⚠️ Hafta ${d.week} içinde oynanmamış ${left.length} grup maçı var:\n${list}\n\n` +
-          `Yeni haftaya geçilirse bu maçlar hiç oynanmayacak; bu ${left.length * CONFIG.GROUP_SIZE} takım sezonu diğerlerinden eksik maçla bitirecek (adil olmaz).\n\nYine de sonraki haftaya (Hafta ${d.week + 1}) geçilsin mi?`)) return;
+        const list = left.map(x => `  • ${x.no}. maç: ${x.ids.map(code).join(' – ')}`).join('\n');
+        if (!confirm(`⚠️ Hafta ${d.week} içinde oynanmamış ${left.length} maç var:\n${list}\n\n` +
+          `Yeni haftaya geçilirse bu maçlar hiç oynanmayacak; bu ${left.length * 2} takım sezonu diğerlerinden eksik maçla bitirecek (adil olmaz).\n\nYine de sonraki haftaya (Hafta ${d.week + 1}) geçilsin mi?`)) return;
       }
       d.week++; d.weekMatch = 1; League.save(); this.refresh(); if (!App.running || App.end) App.prepare();
       this.toast(d.week > d.seasonLength ? '🏁 Sezonun son haftası geçildi.' : `📅 Hafta ${d.week} başladı.`);
@@ -383,7 +415,7 @@ const UI = {
           const d = JSON.parse(rd.result);
           if (!d || !Array.isArray(d.teams) || d.teams.length < 2) throw new Error('Geçersiz dosya: takım listesi yok.');
           if (!League.validTeamCount(d.teams.length))
-            throw new Error(`Takım sayısı (${d.teams.length}) ${CONFIG.GROUP_SIZE}'nın katı olmalı; aksi halde gruplar eşit olmaz.`);
+            throw new Error(`Takım sayısı (${d.teams.length}) çift olmalı; her hafta her takım bir maç oynar.`);
           League.data = League.normalize(d); League.save(); this.init2(); App.prepare();
           this.toast('✅ Lig verisi içe aktarıldı.');
         } catch (e) { alert('İçe aktarma başarısız: ' + e.message); }
@@ -398,9 +430,9 @@ const UI = {
     });
     $('btnTeams').addEventListener('click', () => TeamEditor.open());
     $('pointsInput').addEventListener('change', () => {
-      const arr = $('pointsInput').value.split(/[,\s;]+/).filter(Boolean).map(x => Math.max(0, Math.round(+x) || 0)).slice(0, CONFIG.GROUP_SIZE);
-      while (arr.length < 10) arr.push(0);
-      League.data.points = arr; $('pointsInput').value = arr.slice(0, CONFIG.GROUP_SIZE).join(','); League.save();
+      const arr = $('pointsInput').value.split(/[,\s;]+/).filter(Boolean).map(x => Math.max(0, Math.round(+x) || 0)).slice(0, 3);
+      while (arr.length < 3) arr.push(0);
+      League.data.points = arr; $('pointsInput').value = arr.join(','); League.save();
     });
     $('seasonLen').addEventListener('change', () => {
       const d = League.data;
@@ -420,9 +452,9 @@ const UI = {
   init2() { this.init_values(); this.refresh(); },
   init_values() {
     const s = League.data.settings;
-    $('theme').value = s.theme; $('lives').value = s.lives; $('speedMult').value = s.speedMult;
+    $('theme').value = s.theme; $('speedMult').value = s.speedMult;
     $('testMatch').checked = s.testMatch;
-    $('pointsInput').value = League.data.points.slice(0, CONFIG.GROUP_SIZE).join(','); $('seasonLen').value = League.data.seasonLength;
+    $('pointsInput').value = League.data.points.join(','); $('seasonLen').value = League.data.seasonLength;
   },
   refresh() {
     const d = League.data, s = d.settings;
@@ -434,18 +466,18 @@ const UI = {
     $('seasonLen').title = started ? 'Sezon başladı: yeni sezonda değiştirilebilir' : '';
     let info = `<div class="kv"><span>Sezon</span><b>${d.season || 1}</b></div><div class="kv"><span>Hafta</span><b>${Math.min(d.week, d.seasonLength)} / ${d.seasonLength}</b></div>`;
     if (!plan) {
-      info += `<div class="warn">⚠️ Takım sayısı (${d.teams.length}) ${CONFIG.GROUP_SIZE}'nın katı değil. Gruplar eşit olsun diye maç oynatılamaz — <b>Takımları düzenle</b> ile takım sayısını ${CONFIG.GROUP_SIZE}'nın katı yapın.</div>`;
+      info += `<div class="warn">⚠️ Takım sayısı (${d.teams.length}) tek. Her hafta her takım bir maç oynasın diye maç oynatılamaz — <b>Takımları düzenle</b> ile takım sayısını çift yapın.</div>`;
       $('fixture').innerHTML = '';
     } else {
-      info += `<div class="kv"><span>Sıradaki grup maçı</span><b>${d.week > d.seasonLength ? '—' : `${d.weekMatch} / ${App.perWeek()}`}</b></div><div class="kv"><span>Oynanan maç (bu sezon)</span><b>${d.history.length}</b></div>`
-        + `<div class="hint">${d.teams.length} takım, her maçta ${CONFIG.GROUP_SIZE} takım → haftada ${App.perWeek()} grup maçı; her takım her hafta tam 1 maç oynar. Haftanın son grup maçı kaydedilince hafta kendiliğinden ilerler.</div>`;
+      info += `<div class="kv"><span>Sıradaki maç</span><b>${d.week > d.seasonLength ? '—' : `${d.weekMatch} / ${App.perWeek()}`}</b></div><div class="kv"><span>Oynanan maç (bu sezon)</span><b>${d.history.length}</b></div>`
+        + `<div class="hint">${d.teams.length} takım, her maç 1'e 1 (${CONFIG.MATCH_TIME} sn) → haftada ${App.perWeek()} maç; her takım her hafta tam 1 maç oynar. Haftanın son maçı kaydedilince hafta kendiliğinden ilerler.</div>`;
       const wk = plan.weeks[d.week - 1];
-      if (wk) info += `<div class="hint" style="margin-top:10px"><b>Hafta ${d.week} grupları</b></div>` + wk.map((g, i) =>
-        `<div class="kv"><span>${i + 1}. grup${i + 1 < d.weekMatch ? ' ✓' : i + 1 === d.weekMatch ? ' ▶' : ''}</span><b style="font-weight:600">${g.map(code).join(' · ')}</b></div>`).join('');
-      const st = fixtureMeetings(d.teams.map(t => t.id), plan.weeks.slice(0, d.seasonLength));
+      if (wk) info += `<div class="hint" style="margin-top:10px"><b>Hafta ${d.week} maçları</b> (ilk yazılan ev sahibi, üst kale)</div>` + wk.map((g, i) =>
+        `<div class="kv"><span>${i + 1}. maç${i + 1 < d.weekMatch ? ' ✓' : i + 1 === d.weekMatch ? ' ▶' : ''}</span><b style="font-weight:600">${g.map(code).join(' – ')}</b></div>`).join('');
+      const st = fixtureStats(d.teams.map(t => t.id), plan.weeks.slice(0, d.seasonLength));
       $('fixture').innerHTML = `<details><summary>📋 Sezon ${d.season || 1} fikstürü (${d.seasonLength} hafta)</summary>`
-        + `<div class="hint">Sezon başında adil olarak bir kez oluşturuldu ve sezon bitene kadar değişmez. Her takım ikilisi sezonda en az <b>${st.min}</b>, en çok <b>${st.max}</b> kez aynı grupta.</div>`
-        + `<div class="fixture">${plan.weeks.slice(0, d.seasonLength).map((w, i) => `<div class="wk${i + 1 === d.week ? ' cur' : ''}"><b>H${i + 1}</b> · ${w.map(g => g.map(code).join(' ')).join(' &nbsp;|&nbsp; ')}</div>`).join('')}</div></details>`;
+        + `<div class="hint">Sezon başında bir kez oluşturuldu ve sezon bitene kadar değişmez. Her takım ikilisi sezonda ${st.min === st.max ? `<b>${st.min}</b>` : `<b>${st.min}–${st.max}</b>`} kez karşılaşır; her takım <b>${st.homeMin}–${st.homeMax}</b> maçta ev sahibi.</div>`
+        + `<div class="fixture">${plan.weeks.slice(0, d.seasonLength).map((w, i) => `<div class="wk${i + 1 === d.week ? ' cur' : ''}"><b>H${i + 1}</b> · ${w.map(g => g.map(code).join('–')).join(' &nbsp;|&nbsp; ')}</div>`).join('')}</div></details>`;
     }
     $('leagueInfo').innerHTML = info;
     const note = $('seasonNote');
@@ -455,7 +487,7 @@ const UI = {
         const c = League.seasonChange(), nm = (a) => a.map(t => esc(t.name)).join(', ') || '—';
         if (c.pending) {
           const ms = League.cupMatches(), next = ms.find(m => !m.res), nmId = (id) => esc((League.poolTeam(id) || {}).name || '?');
-          note.innerHTML = `🏁 <b>Grup maçları bitti!</b> Şampiyon: <b>🏆 ${esc(c.champion.name)}</b> (${c.pts} puan).<br>Ligden çıkacaklar: ${nm(c.out)}<br>`
+          note.innerHTML = `🏁 <b>Lig maçları bitti!</b> Şampiyon: <b>🏆 ${esc(c.champion.name)}</b> (${c.pts} puan).<br>Ligden çıkacaklar: ${nm(c.out)}<br>`
             + `⚔️ <b>Yükselme eleme maçları</b> (havuzdaki ${CONFIG.CUP_SIZE} takım, tek maç): ${ms.filter(m => m.res).length} / ${CUP_SHAPE.length} oynandı`
             + (next && next.a && next.b ? ` · sıradaki: <b>${cupName(next.k)[1]}</b> — ${nmId(next.a)} · ${nmId(next.b)}` : ' · kura Başlat\'a basınca çekilir')
             + `.<br><span class="hint">Final galibi, finalist ve 3.lük maçı galibi ligi yükselir; eleme bitince yeni sezon başlatılabilir.</span>`;
@@ -469,8 +501,8 @@ const UI = {
       } else note.innerHTML = `🏁 Sezonun son haftası. Haftanın maçlarından sonra tablonun lideri şampiyon olur; son ${CONFIG.RELEGATE_COUNT} takım ligden çıkar${League.cupOn() ? `; yerlerine havuzdaki ${CONFIG.CUP_SIZE} takımın eleme maçlarında ilk 3'e girenler gelir` : ''}.`;
     } else note.classList.add('hidden');
     const rk = League.ranking();
-    $('leagueTable').innerHTML = `<table><thead><tr><th>#</th><th>Takım</th><th title="Oynanan">O</th><th title="Puan">P</th><th title="Birincilik">1st</th><th title="Atılan gol">AG</th><th title="Yenilen gol">YG</th><th title="Averaj">AV</th><th title="Son ${CONFIG.FORM_COUNT} maçtaki sırası (eskiden yeniye)">Son ${CONFIG.FORM_COUNT}</th></tr></thead><tbody>` +
-      rk.map((x, i) => { const av = x.r.gf - x.r.ga; return `<tr><td>${i + 1}</td><td class="tn"><span class="dot" style="background:${x.t.c1};border-color:${x.t.c2}"></span>${esc(x.t.name)}</td><td>${x.r.played}</td><td><b>${x.r.pts}</b></td><td>${x.r.wins}</td><td>${x.r.gf}</td><td>${x.r.ga}</td><td>${av > 0 ? '+' : ''}${av}</td><td class="form">${formHtml(League.formOf(x.t.id))}</td></tr>`; }).join('') +
+    $('leagueTable').innerHTML = `<table><thead><tr><th>#</th><th>Takım</th><th title="Oynanan">O</th><th title="Galibiyet">G</th><th title="Beraberlik">B</th><th title="Mağlubiyet">M</th><th title="Atılan gol">AG</th><th title="Yenilen gol">YG</th><th title="Averaj">AV</th><th title="Puan">P</th><th title="Son ${CONFIG.FORM_COUNT} maç (eskiden yeniye)">Son ${CONFIG.FORM_COUNT}</th></tr></thead><tbody>` +
+      rk.map((x, i) => { const av = x.r.gf - x.r.ga; return `<tr><td>${i + 1}</td><td class="tn"><span class="dot" style="background:${x.t.c1};border-color:${x.t.c2}"></span>${esc(x.t.name)}</td><td>${x.r.played}</td><td>${x.r.w}</td><td>${x.r.d}</td><td>${x.r.l}</td><td>${x.r.gf}</td><td>${x.r.ga}</td><td>${av > 0 ? '+' : ''}${av}</td><td><b>${x.r.pts}</b></td><td class="form">${formHtml(League.formOf(x.t.id))}</td></tr>`; }).join('') +
       `</tbody></table>` + (d.champions.length ? `<div class="hint">🏆 Şampiyonlar: ${d.champions.map(c => `${esc(c.name)} (sezon ${c.season || '?'})`).join(', ')}</div>` : '');
     this.status();
   },
@@ -534,7 +566,7 @@ const TeamEditor = {
     this.collect();
     if (League.seasonStarted()) { alert('Sezon başladı: takımlar ancak yeni sezon başında (hiç maç oynanmadan) değiştirilebilir; fikstür sezon bitene kadar sabit.'); return; }
     if (!League.validTeamCount(this.rows.length)) {
-      alert(`Takım sayısı ${CONFIG.GROUP_SIZE}'nın katı olmalı (${CONFIG.GROUP_SIZE}, ${CONFIG.GROUP_SIZE * 2}, ${CONFIG.GROUP_SIZE * 3}, ${CONFIG.GROUP_SIZE * 4}…); şu an ${this.rows.length}. Aksi halde gruplar eşit olmaz.`);
+      alert(`Takım sayısı çift olmalı (2, 4, 6 … 18 …); şu an ${this.rows.length}. Her hafta her takım bir maç oynar.`);
       return;
     }
     const codes = new Set();
@@ -562,53 +594,41 @@ const App = {
   simSpeed() { return League.data.settings.simSpeed || 1; },
   /* league points a finishing place earns (null in a playoff match: it earns none, the screens then show the place only) */
   pointsForPlace(place) { return this.setup && this.setup.cup ? null : League.data.points[place - 1] || 0; },
-  /* group matches per week: every club plays once a week (18 clubs, 6 per match → 3) */
-  perWeek() { return Math.max(1, Math.floor(League.data.teams.length / CONFIG.GROUP_SIZE)); },
-  /* the season fixture: built once when the season starts (fair split, see planSeason) and stored with the league;
+  /* matches per week: every club plays once a week (18 clubs → 9 matches) */
+  perWeek() { return Math.max(1, Math.floor(League.data.teams.length / 2)); },
+  /* the season fixture: a round robin (see planRoundRobin), built once when the season starts and stored with the league;
      it is never rebuilt while the season is running (team list and season length are locked then) */
   seasonPlan() {
     const d = League.data, ids = d.teams.map(t => t.id), key = ids.slice().sort().join(',');
     const p = d.seasonPlan, season = d.season || 1;
-    if (p && p.season === season && p.key === key && p.size === CONFIG.GROUP_SIZE && p.weeks.length >= d.seasonLength) return p;
+    if (p && p.season === season && p.key === key && p.size === 2 && p.weeks.length >= d.seasonLength) return p;
     if (!League.validTeamCount(ids.length)) return null;
     const rng = new RNG(pickSeed('plan', season));
-    /* normally the season has not begun yet. A save from an older version (weekly plans) may be mid-season:
-       then the weeks already passed stay as they were played and the current week keeps its played groups */
-    const fixed = [];
-    if (League.seasonStarted()) {
-      const arena = d.history.filter(h => h.mode === 'arena' && Array.isArray(h.teams));
-      for (let w = 1; w < d.week; w++) fixed.push(arena.filter(h => h.week === w).map(h => h.teams.slice()));
-      const old = d.weekPlan && d.weekPlan.week === d.week && Array.isArray(d.weekPlan.groups) ? d.weekPlan.groups : null;
-      const valid = (gs) => gs.every(g => g.length === CONFIG.GROUP_SIZE) && new Set(gs.flat()).size === gs.flat().length && gs.flat().every(id => ids.includes(id));
-      let cur = arena.filter(h => h.week === d.week).sort((a, b) => (a.weekMatch || 0) - (b.weekMatch || 0)).map(h => h.teams.slice());
-      if (!valid(cur)) cur = [];
-      if (old && valid(old) && old.length === ids.length / CONFIG.GROUP_SIZE && cur.every((g, i) => old[i] && g.slice().sort().join() === old[i].slice().sort().join())) cur = old.map(g => g.slice());
-      else {
-        const rest = rng.shuffle(ids.filter(id => !cur.some(g => g.includes(id))));
-        while (rest.length) cur.push(rest.splice(0, CONFIG.GROUP_SIZE));
-      }
-      fixed.push(cur);
-    }
-    const weeks = fixed.concat(planSeason(ids, d.seasonLength, CONFIG.GROUP_SIZE, rng, fixed));
-    d.seasonPlan = { season, key, size: CONFIG.GROUP_SIZE, created: new Date().toISOString(), weeks };
+    d.seasonPlan = { season, key, size: 2, created: new Date().toISOString(), weeks: planRoundRobin(ids, d.seasonLength, rng) };
     delete d.weekPlan;
     League.save();
     return d.seasonPlan;
   },
-  /* the group matches of the current week that have not been played yet */
+  /* the matches of the current week that have not been played yet */
   unplayedThisWeek() {
     const d = League.data, plan = this.seasonPlan();
     if (!plan || d.week > d.seasonLength) return [];
     const wk = plan.weeks[d.week - 1] || [];
     return wk.map((ids, i) => ({ no: i + 1, ids })).filter(x => x.no >= d.weekMatch);
   },
-  /* the next promotion playoff match once the group matches are over (the bracket is drawn here, on first need), else null */
+  /* the next promotion playoff match once the league matches are over (the bracket is drawn here, on first need), else null */
   cupMatch() {
     if (!League.cupPhase()) return null;
     League.cup(true);
     return League.cupNext();
   },
-  /* a playoff match: two pool clubs on the final-duel pitch (first to CONFIG.FINAL_GOALS goals, no draws) */
+  /* a 1v1 match's options for the Game: CONFIG.MATCH_TIME seconds; a playoff match cannot end level (golden goal, penalties) */
+  matchOpts(teams, seed, theme, knockout) {
+    const s = League.data.settings;
+    return { mode: 'match', teams: teams.map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false,
+      matchTime: CONFIG.MATCH_TIME, knockout: !!knockout };
+  },
+  /* a playoff match: two pool clubs, the first one drawn is the home club (top goal) */
   buildCupSetup(m) {
     const d = League.data, s = d.settings;
     const seed = pickSeed('cupmatch', d.season || 1, m.k);
@@ -618,21 +638,25 @@ const App = {
     let theme = s.theme;
     if (theme === 'auto') theme = srng.pick(THEME_IDS);
     else if (!THEME_DEFS[theme]) theme = 'classic';
-    return { err, title: `PLAYOFF · ${cupName(m.k)[0]}`, mode: 'arena', cup: m.k, round: m.r, week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(),
+    return { err, title: `PLAYOFF · ${cupName(m.k)[0]}`, mode: 'match', cup: m.k, round: m.r, week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(),
       matchNo: d.matchNo, seed, theme, test: Live.on ? false : s.testMatch,
       date: Live.on ? new Date(Live.nextStart()).toISOString() : null,
-      opts: { mode: 'arena', teams: teams.map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false } };
+      opts: this.matchOpts(teams, seed, theme, true) };
   },
-  /* the round of a playoff match as match cards (the intro before it, the end screen after it).
+  /* a club for the screens */
+  tObj(t) { return t ? { id: t.id, name: t.name, code: t.code, c1: t.c1, c2: t.c2 } : null; },
+  /* the round of a playoff match as match rows (the intro before it, the end screen after it).
      played: the result of the match just played when it is not in the bracket (test match) */
   cupBoard(round, key, played) {
-    const tm = (id) => League.poolTeam(id);
-    const tObj = (t, extra) => Object.assign({ id: t.id, name: t.name, c1: t.c1, c2: t.c2 }, extra || {});
+    const tm = (id) => this.tObj(League.poolTeam(id));
     const matches = League.cupMatches().filter(m => m.r === round).map(m => {
       const res = m.res || (played && played.k === m.k ? played : null), label = cupName(m.k)[0];
-      if (res) return { label, status: 'done', hi: m.k === key, teams: [[res.winner, res.sw, 1], [res.loser, res.sl, 2]].map(([id, g, place]) => {
-        const t = tm(id); return t ? tObj(t, { place, txt: String(g) }) : null; }).filter(Boolean) };
-      return { label, status: m.k === key ? 'now' : 'later', teams: [m.a, m.b].map(tm).filter(Boolean).map(t => tObj(t)) };
+      const a = tm(m.a), b = tm(m.b);
+      if (res && a && b) {
+        const aw = res.winner === m.a, sc = (w) => (w ? res.sw : res.sl), pn = (w) => (res.pw !== undefined ? (w ? res.pw : res.pl) : null);
+        return { label, status: 'done', hi: m.k === key, a, b, sa: sc(aw), sb: sc(!aw), pa: pn(aw), pb: pn(!aw), win: aw ? 'a' : 'b', gg: !!res.gg };
+      }
+      return { label, status: m.k === key ? 'now' : 'later', a, b };
     });
     return { heading: 'PLAYOFFS', sub: `SEASON ${League.data.season || 1} · ${CUP_ROUNDS[round]} · TOP 3 GO UP`, later: 'COMING UP', matches };
   },
@@ -642,43 +666,42 @@ const App = {
     const d = League.data, s = d.settings;
     const seed = pickSeed('match', d.season || 1, d.week, d.weekMatch);   // a fresh hidden seed for every match setup (live league: derived from the fixture)
     const srng = new RNG((seed ^ 0x5BD1E995) >>> 0);
-    /* every match is the next group match of the season fixture */
+    /* every match is the next match of the season fixture: [home, away] */
     let teams = [], err = null;
     const plan = this.seasonPlan();
-    if (!plan) err = `Takım sayısı (${d.teams.length}) ${CONFIG.GROUP_SIZE}'nın katı olmalı — Takımları düzenle ile düzeltin.`;
+    if (!plan) err = `Takım sayısı (${d.teams.length}) çift olmalı — Takımları düzenle ile düzeltin.`;
     else if (d.week > d.seasonLength) err = 'Sezon tamamlandı — panelden yeni sezonu başlatın.';
     else {
       const ids = (plan.weeks[d.week - 1] || [])[d.weekMatch - 1] || [];
       teams = ids.map(id => d.teams.find(t => t.id === id)).filter(Boolean);
-      if (teams.length !== CONFIG.GROUP_SIZE) err = 'Bu grup maçı için fikstürde takım bulunamadı.';
+      if (teams.length !== 2) err = 'Bu maç için fikstürde takım bulunamadı.';
     }
     let theme = s.theme;
     if (theme === 'auto') theme = srng.pick(THEME_IDS);
     else if (!THEME_DEFS[theme]) theme = 'classic';
-    const title = `WEEK ${d.week} · GROUP MATCH ${d.weekMatch}`;
-    return { err, title, mode: 'arena', week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(), matchNo: d.matchNo, seed, theme, test: Live.on ? false : s.testMatch,
+    const title = `WEEK ${d.week} · MATCH ${d.weekMatch}`;
+    return { err, title, mode: 'match', week: d.week, weekMatch: d.weekMatch, perWeek: this.perWeek(), matchNo: d.matchNo, seed, theme, test: Live.on ? false : s.testMatch,
       date: Live.on ? new Date(Live.nextStart()).toISOString() : null,
-      opts: { mode: 'arena', teams: teams.map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false } };
+      opts: this.matchOpts(teams, seed, theme, false) };
   },
-  /* what the video shows before the match: today's matches (played ones with their results, the rest as fixtures) */
+  /* what the video shows before the match: the week's matches (played ones with their scores, the one about to start, the rest) */
   buildIntro() {
     const s = this.setup, d = League.data;
     if (s.cup) return Object.assign({ title: s.title }, this.cupBoard(s.round, s.cup));
-    const tm = (id) => d.teams.find(t => t.id === id);
-    const tObj = (t, extra) => Object.assign({ id: t.id, name: t.name, c1: t.c1, c2: t.c2 }, extra || {});
+    const tm = (id) => this.tObj(d.teams.find(t => t.id === id));
     const matches = [], week = (this.seasonPlan().weeks[s.week - 1]) || [];
     for (let j = 1; j <= s.perWeek; j++) {
-      const label = `GROUP MATCH ${j}`;
+      const label = `MATCH ${j}`;
       if (j < s.weekMatch) {
-        const h = d.history.slice().reverse().find(x => x.mode === 'arena' && x.week === s.week && x.weekMatch === j);
-        if (h) matches.push({ label, status: 'done', teams: h.result.slice().sort((a, b) => a.place - b.place)
-          .map(r => { const t = tm(r.id); return t ? tObj(t, { place: r.place, pts: d.points[r.place - 1] || 0 }) : null; }).filter(Boolean) });
-      } else if (j === s.weekMatch) matches.push({ label, status: 'now', teams: s.opts.teams.map(t => tObj(t)) });
-      else matches.push({ label, status: 'later', teams: (week[j - 1] || []).map(tm).filter(Boolean).map(t => tObj(t)) });
+        const h = d.history.slice().reverse().find(x => x.week === s.week && x.weekMatch === j);
+        if (h && h.result.length === 2) {
+          const [ra, rb] = h.result, a = tm(ra.id), b = tm(rb.id);
+          if (a && b) matches.push({ label, status: 'done', a, b, sa: ra.score, sb: rb.score, win: ra.score > rb.score ? 'a' : ra.score < rb.score ? 'b' : '' });
+        }
+      } else if (j === s.weekMatch) matches.push({ label, status: 'now', a: this.tObj(s.opts.teams[0]), b: this.tObj(s.opts.teams[1]) });
+      else { const ids = week[j - 1] || []; matches.push({ label, status: 'later', a: tm(ids[0]), b: tm(ids[1]) }); }
     }
-    /* the live league plays a week in a few hours, not one a day */
-    if (Live.on) return { title: s.title, heading: `WEEK ${s.week} MATCHES`, sub: `SEASON ${d.season || 1}`, later: 'COMING UP', matches };
-    return { title: s.title, sub: `WEEK ${s.week}`, matches };
+    return { title: s.title, heading: `WEEK ${s.week} MATCHES`, sub: `SEASON ${d.season || 1}`, later: 'COMING UP', matches };
   },
   prepare() {
     if (Recorder.active) return false;
@@ -702,7 +725,7 @@ const App = {
     if (record) {
       if (!Recorder.supported()) { alert('Bu tarayıcı MediaRecorder/captureStream desteklemiyor. Güncel Chrome kullanın.'); return; }
       const s = this.setup;
-      Recorder.start(s.cup ? `arena_playoff_${s.cup}` : `arena_week${s.week}_match${s.weekMatch}`);
+      Recorder.start(s.cup ? `match_playoff_${s.cup}` : `match_week${s.week}_match${s.weekMatch}`);
     }
     this.running = true;
     lastNow = performance.now();
@@ -722,8 +745,9 @@ const App = {
   /* a playoff match is over: the bracket records it; the end screen shows the round's results (after the final: who goes up and down) */
   onOverCup() {
     const g = this.game, s = this.setup, d = League.data;
-    const res = g.getResult(), W = g.teams[g.winner], L = g.teams.find(t => t.place === 2);
-    const played = { k: s.cup, winner: W.id, loser: L.id, sw: W.score, sl: L.score };
+    const res = g.getResult(), W = g.teams[g.winner], L = g.teams[1 - g.winner];
+    const played = { k: s.cup, winner: W.id, loser: L.id, sw: W.score, sl: L.score, gg: res.golden && !res.pens };
+    if (res.pens) { played.pw = W.pen; played.pl = L.pen; }
     if (!s.test) League.record(s, res, W.id);
     const board = this.cupBoard(s.round, s.cup, played);
     let summary = null;
@@ -734,24 +758,22 @@ const App = {
       FX.startEndConfetti([W.c1, W.c2, '#FFD54F', '#ffffff']);
     }
     this.end = { title: s.title, winner: { name: W.name, code: W.code, c1: W.c1, c2: W.c2 }, rows: [], cup: board, summary, seasonEnd: null,
-      subtitle: `${W.code} ${W.score} – ${L.score} ${L.code}`,
-      standings: res.teams.slice().sort((a, b) => a.place - b.place).map(tm => {
-        const T = g.teams[tm.slot];
-        return { name: T.name, code: T.code, c1: T.c1, c2: T.c2, place: tm.place, gf: tm.score, pts: 0 };
-      }) };
+      subtitle: scoreLine(g),
+      standings: [W, L].map((T, i) => ({ name: T.name, code: T.code, c1: T.c1, c2: T.c2, place: i + 1, gf: T.score, pts: 0 })) };
     this.endT = 0;
-    $('caption').value = this.captionCup(W, L, summary);
+    $('caption').value = this.captionCup(W, L, res, summary);
     UI.refresh();
   },
   onOver() {
     if (this.setup.cup) return this.onOverCup();
     const g = this.game, s = this.setup, d = League.data;
     const res = g.getResult();
-    const W = g.teams[g.winner];
+    const [H, A] = g.teams;
     const before = JSON.parse(JSON.stringify(d.table));
     const after = JSON.parse(JSON.stringify(d.table));
     League.applyTo(after, res);
-    const rkB = League.ranking(before), rkA = League.ranking(after);
+    const histAfter = d.history.concat([{ result: res.teams.map(t => ({ id: t.id, score: t.score })) }]);
+    const rkB = League.ranking(before), rkA = League.ranking(after, histAfter);
     const oldRank = new Map(rkB.map((x, i) => [x.t.id, i])), newRank = new Map(rkA.map((x, i) => [x.t.id, i]));
     const today = new Set(res.teams.map(t => t.id));
     const gdOf = (tab, id) => { const r = League.rowOf(tab, id); return r.gf - r.ga; };
@@ -762,27 +784,24 @@ const App = {
         oldPts: League.rowOf(before, t.id).pts, newPts: League.rowOf(after, t.id).pts,
         played: League.rowOf(after, t.id).played, dPlayed: tm ? 1 : 0,
         oldGd: gdOf(before, t.id), newGd: gdOf(after, t.id),
-        place: tm ? tm.place : null, delta: tm ? League.pointsFor(res, tm) : null,
-        oldForm: League.formOf(t.id, d.history), newForm: League.formOf(t.id, tm ? d.history.concat([{ result: [{ id: t.id, place: tm.place }] }]) : d.history) };
+        res: tm ? League.resultOf(histAfter[histAfter.length - 1], t.id) : null, delta: tm ? League.pointsFor(res, tm) : null,
+        oldForm: League.formOf(t.id, d.history), newForm: League.formOf(t.id, histAfter) };
     });
     const leaderBefore = rkB[0] && rkB[0].r.played ? rkB[0].t.id : null;
     const leaderAfter = rkA[0].t;
-    let subtitle;
-    {
-      const L = g.teams.find(t => t.place === 2);
-      subtitle = L && g.finalDuel ? `Final: ${W.code} ${W.score} – ${L.score} ${L.code}` : `${W.gf} goals · ${W.saves} saves`;
-    }
-    /* this match's full result: every team's place, goals scored (own goals excluded) and points earned */
-    const standings = res.teams.slice().sort((a, b) => a.place - b.place).map(tm => {
-      const T = g.teams[tm.slot];
-      return { name: T.name, code: T.code, c1: T.c1, c2: T.c2, place: tm.place, gf: tm.gf, pts: League.pointsFor(res, tm) };
+    /* this match's result: both clubs with their goals and points */
+    const standings = [H, A].map(T => {
+      const tm = res.teams.find(x => x.id === T.id);
+      return { name: T.name, code: T.code, c1: T.c1, c2: T.c2, place: T.place, gf: T.score, pts: League.pointsFor(res, tm) };
     });
-    this.end = { title: s.title, winner: { name: W.name, code: W.code, c1: W.c1, c2: W.c2 }, rows, standings, seasonEnd: null, subtitle };
+    const W = g.winner >= 0 ? g.teams[g.winner] : null;
+    this.end = { title: s.title, winner: W ? { name: W.name, code: W.code, c1: W.c1, c2: W.c2 } : null, rows, standings, seasonEnd: null,
+      subtitle: scoreLine(g), score: { a: this.tObj(H), b: this.tObj(A), sa: H.score, sb: A.score } };
     this.endT = 0;
     /* persist */
     if (!s.test) {
-      if (League.record(s, res, W.id)) setTimeout(() => UI.toast(`📅 Hafta ${d.week} başladı.`), 300);
-      /* last group match of the season: the table leader is the champion, the last teams will be relegated */
+      if (League.record(s, res, W ? W.id : null)) setTimeout(() => UI.toast(`📅 Hafta ${d.week} başladı.`), 300);
+      /* last match of the season: the table leader is the champion, the last teams will be relegated */
       if (League.mainOver()) {
         const ch = League.seasonChange();
         this.end.seasonEnd = { season: d.season || 1, champion: { id: ch.champion.id, name: ch.champion.name }, out: ch.out.map(t => t.id), in: ch.in.map(t => ({ id: t.id, name: t.name })), playoff: ch.pending };
@@ -790,21 +809,16 @@ const App = {
         FX.startEndConfetti([ch.champion.c1, ch.champion.c2, '#FFD54F', '#ffffff']);
       }
     }
-    $('caption').value = this.caption(res, W, leaderBefore !== leaderAfter.id && rkA[0].r.pts > 0 ? leaderAfter : null);
+    $('caption').value = this.caption(res, leaderBefore !== leaderAfter.id && rkA[0].r.pts > 0 ? leaderAfter : null);
     UI.refresh();
   },
-  caption(res, W, newLeader) {
-    const s = this.setup, g = this.game;
-    const L = g.teams.find(t => t.place === 2);
-    const l1 = `Week ${s.week} · Group Match ${s.weekMatch} 🏆 ${W.name} win${L && g.finalDuel ? ` the final ${W.score}–${L.score} vs ${L.name}` : ''}!`;
-    const top = g.teams.slice().sort((a, b) => b.gf - a.gf || a.place - b.place)[0];
-    let extra = '';
-    if (top && top.gf > 0) {
-      extra = `${top.name} scored the most goals (${top.gf})`;
-      if (newLeader && !s.test) extra += newLeader.id === top.id ? ' and they are the new league leader!' : ` — and ${newLeader.name} is the new league leader!`;
-      else extra += '!';
-    } else if (newLeader && !s.test) extra = `New league leader: ${newLeader.name}!`;
-    let l2 = 'Who takes the top spot next? Comment your team 👇';
+  caption(res, newLeader) {
+    const s = this.setup, g = this.game, [H, A] = g.teams;
+    const W = g.winner >= 0 ? g.teams[g.winner] : null, L = W ? g.teams[1 - g.winner] : null;
+    const l1 = W ? `Week ${s.week} · Match ${s.weekMatch} 🏆 ${W.name} beat ${L.name} ${W.score}–${L.score}!`
+      : `Week ${s.week} · Match ${s.weekMatch} 🤝 ${H.name} ${H.score}–${A.score} ${A.name}: a draw!`;
+    const extra = newLeader && !s.test ? `New league leader: ${newLeader.name}!` : '';
+    let l2 = 'Who wins the next one? Comment your team 👇';
     let season = '';
     const se = this.end && this.end.seasonEnd;
     if (se) {
@@ -813,11 +827,12 @@ const App = {
         (se.playoff ? '⚔️ The promotion playoff decides who replaces them!' : `🔺 Joining next season: ${se.in.map(t => t.name).join(', ')}`);
       l2 = se.playoff ? 'Who gets promoted? Comment your team 👇' : 'Who wins next season? Comment your team 👇';
     }
-    return [l1, season, extra, l2, '#satisfying #football #simulation #arena #oddlysatisfying #league'].filter(Boolean).join('\n');
+    return [l1, season, extra, l2, '#satisfying #football #simulation #oddlysatisfying #league'].filter(Boolean).join('\n');
   },
-  captionCup(W, L, summary) {
+  captionCup(W, L, res, summary) {
     const s = this.setup, label = cupName(s.cup)[0];
-    const l1 = `Promotion playoff · ${label} 🏆 ${W.name} beat ${L.name} ${W.score}–${L.score}!`;
+    const how = res.pens ? ` (${W.pen}–${L.pen} on penalties)` : res.golden ? ' with a golden goal' : '';
+    const l1 = `Promotion playoff · ${label} 🏆 ${W.name} beat ${L.name} ${W.score}–${L.score}${how}!`;
     let l2, l3 = '';
     if (summary) {
       l2 = `🔺 Promoted: ${summary.up.map(t => t.name).join(', ')}\n🔻 Relegated: ${summary.down.map(t => t.name).join(', ')}`;
@@ -827,9 +842,14 @@ const App = {
     else if (s.round === 2) l2 = `${W.name} are promoted and go on to the final!`;
     else l2 = `${W.name} move on!`;
     if (!l3) l3 = 'Who goes up next? Comment your team 👇';
-    return [l1, l2, l3, '#satisfying #football #simulation #arena #oddlysatisfying #league'].filter(Boolean).join('\n');
+    return [l1, l2, l3, '#satisfying #football #simulation #oddlysatisfying #league'].filter(Boolean).join('\n');
   },
 };
+/* "RMA 2 – 1 BAR" (+ golden goal / penalties) */
+function scoreLine(g) {
+  const [A, B] = g.teams;
+  return `${A.code} ${A.score} – ${B.score} ${B.code}` + (g.pens ? ` · PENS ${A.pen}–${B.pen}` : g.extra && g.winner >= 0 ? ' · GOLDEN GOAL' : '');
+}
 
 /* =====================================================================
    BALANCE TEST  (100 headless matches, chunked, no drawing / audio)
@@ -839,8 +859,7 @@ const Balance = {
   run() {
     if (this.busy || Recorder.active) return;
     const s = League.data.settings, teamsAll = League.data.teams;
-    const n = CONFIG.GROUP_SIZE;
-    if (teamsAll.length < n) { alert('Yeterli takım yok.'); return; }
+    if (teamsAll.length < 2) { alert('Yeterli takım yok.'); return; }
     this.busy = true; $('btnBalance').disabled = true;
     const N = 100, res = [];
     let i = 0;
@@ -850,44 +869,38 @@ const Balance = {
       while (i < N && performance.now() < until) {
         const seed = randomSeed();
         const r = new RNG((seed ^ 0x51ED27) >>> 0);
-        const teams = r.shuffle(teamsAll).slice(0, n).map(t => ({ ...t }));
+        const teams = r.shuffle(teamsAll).slice(0, 2);
         let theme = s.theme === 'auto' ? r.pick(THEME_IDS) : s.theme;
-        const g = new Game({ mode: 'arena', teams, seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false });
+        const g = new Game(App.matchOpts(teams, seed, theme, false));
         while (!g.over && g.t < 200) g.step(DT);
         res.push(g.getResult());
         i++;
       }
       $('balBar').style.width = (i / N * 100) + '%';
       if (i < N) setTimeout(stepChunk, 0);
-      else { this.show(res, n, (performance.now() - t0) / 1000); this.busy = false; $('btnBalance').disabled = false; }
+      else { this.show(res, (performance.now() - t0) / 1000); this.busy = false; $('btnBalance').disabled = false; }
     };
     $('balOut').innerHTML = '<div class="hint">Simüle ediliyor…</div>';
     stepChunk();
   },
-  show(res, n, secs) {
-    const N = res.length, d = res.map(r => r.duration);
-    const avg = d.reduce((a, b) => a + b, 0) / N;
+  show(res, secs) {
+    const N = res.length, pct = (x, tot) => tot ? Math.round(x / tot * 100) + '%' : '–';
     const goals = res.reduce((a, r) => a + r.goals, 0), og = res.reduce((a, r) => a + r.ownGoals, 0);
-    const ok = avg >= 25 && avg <= 40;
-    const slot = Array.from({ length: n }, () => Array(n).fill(0));
+    const home = res.filter(r => !r.draw && r.winner === r.teams[0].id).length, draws = res.filter(r => r.draw).length;
     const byTeam = new Map();
     for (const r of res) for (const t of r.teams) {
-      slot[t.slot][t.place - 1]++;
-      const b = byTeam.get(t.code) || { m: 0, w: 0, ps: 0 }; b.m++; if (t.place === 1) b.w++; b.ps += t.place; byTeam.set(t.code, b);
+      const op = r.teams.find(x => x.id !== t.id);
+      const b = byTeam.get(t.code) || { m: 0, w: 0, gf: 0 }; b.m++; if (t.score > op.score) b.w++; b.gf += t.score; byTeam.set(t.code, b);
     }
-    const pct = (x, tot) => tot ? Math.round(x / tot * 100) + '%' : '–';
     let html = `<div class="bal-grid">
-      <div class="kv"><span>Ortalama süre</span><b class="${ok ? 'ok' : 'bad'}">${avg.toFixed(1)} sn</b></div>
-      <div class="kv"><span>Min / Maks</span><b>${Math.min(...d).toFixed(1)} / ${Math.max(...d).toFixed(1)} sn</b></div>
-      <div class="kv"><span>Uzatmaya giden</span><b>${pct(res.filter(r => r.overtime).length, N)}</b></div>
       <div class="kv"><span>Ort. toplam gol</span><b>${(goals / N).toFixed(1)}</b></div>
+      <div class="kv"><span>Beraberlik</span><b>${pct(draws, N)}</b></div>
+      <div class="kv"><span>Ev sahibi (üst kale) / deplasman galibiyeti</span><b>${pct(home, N)} / ${pct(N - draws - home, N)}</b></div>
       <div class="kv"><span>Ort. kurtarış</span><b>${(res.reduce((a, r) => a + r.saves, 0) / N).toFixed(1)}</b></div>
       <div class="kv"><span>Kendi kalesine gol</span><b>${pct(og, goals)}</b></div>
-    </div><div class="hint">${N} maç · ${secs.toFixed(1)} sn'de simüle edildi · hedef ortalama 25–40 sn ${ok ? '✅' : '⚠️'}</div>`;
-    html += `<div class="hint"><b>Başlangıç pozisyonuna (kale) göre sıra dağılımı</b> — her satır ~eşitse rastgelelik adil:</div><table class="mini"><thead><tr><th>Kale</th>${Array.from({ length: n }, (_, k) => `<th>${k + 1}.</th>`).join('')}</tr></thead><tbody>` +
-      slot.map((row, si) => `<tr><td>#${si + 1}</td>${row.map(c => `<td>${pct(c, N)}</td>`).join('')}</tr>`).join('') + '</tbody></table>';
-    html += `<div class="hint"><b>Takım bazında</b> (maç · birincilik · ort. sıra):</div><table class="mini"><tbody>` +
-      [...byTeam.entries()].sort((a, b) => b[1].w / b[1].m - a[1].w / a[1].m).map(([c, b]) => `<tr><td>${esc(c)}</td><td>${b.m}</td><td>${pct(b.w, b.m)}</td><td>${(b.ps / b.m).toFixed(2)}</td></tr>`).join('') + '</tbody></table>';
+    </div><div class="hint">${N} maç (${CONFIG.MATCH_TIME} sn) · ${secs.toFixed(1)} sn'de simüle edildi · ev sahibi ve deplasman galibiyeti ~eşitse taraflar adil</div>`;
+    html += `<div class="hint"><b>Takım bazında</b> (maç · galibiyet · ort. gol):</div><table class="mini"><tbody>` +
+      [...byTeam.entries()].sort((a, b) => b[1].w / b[1].m - a[1].w / a[1].m).map(([c, b]) => `<tr><td>${esc(c)}</td><td>${b.m}</td><td>${pct(b.w, b.m)}</td><td>${(b.gf / b.m).toFixed(2)}</td></tr>`).join('') + '</tbody></table>';
     $('balOut').innerHTML = html;
   },
 };

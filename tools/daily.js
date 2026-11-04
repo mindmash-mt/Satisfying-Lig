@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
-  Günlük maç günü — aktif ligin bu haftaki kalan grup maçlarını (sezon sonunda: yükselme elemesinin sıradaki turunu)
-  oynatır, her biri için MP4 üretir ve lig verisini günceller. Her sabah zamanlanmış görev çalıştırır; elle çalıştırmak ligi bir hafta ilerletir.
+  Günlük maç günü — aktif ligin bu haftaki kalan 1'e 1 maçlarını (18 takım: 9 maç; sezon sonunda: yükselme elemesinin sıradaki
+  turunu) oynatır, her biri için MP4 üretir ve lig verisini günceller. Elle çalıştırmak ligi bir hafta ilerletir.
 
   Kullanım:  node tools/daily.js [active] [--dry-run] [--max N] [--bitrate MBPS] [--reset] [--out KLASÖR]
     --dry-run   videoları üretir ama lig verisine hiçbir şey yazmaz (deneme için; çıktı out/dry-run/<tarih>)
@@ -15,7 +15,7 @@
   Sezon arşivi: data/active/seasons/season-<n>.json
   Çıktı:        <out>/*.mp4, <out>/captions.txt, <out>/summary.json
 
-  Sezonun son haftası bittiğinde final oynanmaz: tablonun lideri şampiyon olur, son 3 takım düşer. Ardından havuzdaki
+  Sezon tek devreli bir ligdir (galibiyet 3, beraberlik 1 puan). Son hafta bittiğinde tablonun lideri şampiyon olur, son 3 takım düşer. Ardından havuzdaki
   12 takım tek maçlık yükselme elemesi oynar (her çalıştırma bir turu oynatır: 1. tur, çeyrek final, yarı final,
   3.lük maçı + final); ilk 3'e girenler ligi yükselir, sezon arşivlenir ve yeni sezon 1. haftadan başlar.
 
@@ -36,7 +36,7 @@ if (args[0] && !args[0].startsWith('--') && args[0] !== league) {
 const dry = args.includes('--dry-run');
 const maxMatches = +opt('--max', 99);
 const bitrate = +opt('--bitrate', 8) * 1e6;
-const STORAGE_KEY = 'arenaLeague_v1';
+const STORAGE_KEY = 'arenaLeague_v2';
 
 const istanbul = (d = new Date()) => {
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Istanbul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
@@ -64,35 +64,34 @@ function writeLeague(d) {
   fs.renameSync(tmp, leagueFile);
 }
 
-/* rank: the table order and last-match places from the app itself (League.ranking / League.formOf), so the rules live in one place only */
+/* rank: the table order and last results from the app itself (League.ranking / League.formOf), so the rules live in one place only */
 function standingsMd(d, rank) {
   const rankIds = rank.map(x => x.id), formOf = Object.fromEntries(rank.map(x => [x.id, x.form || []]));
-  const ord = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th'));
-  const formTxt = (id) => formOf[id].length ? formOf[id].map(ord).join(' ') : '–';
-  const row = (id) => d.table[id] || { played: 0, pts: 0, wins: 0, gf: 0, ga: 0 };
+  const TR = { W: 'G', D: 'B', L: 'M' };
+  const formTxt = (id) => formOf[id].length ? formOf[id].map(x => TR[x] || x).join(' ') : '–';
+  const row = (id) => d.table[id] || { played: 0, pts: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 };
   const rk = rankIds.map(id => d.teams.find(t => t.id === id)).filter(Boolean).map(t => ({ t, r: row(t.id) }));
   const code = (id) => (d.teams.find(t => t.id === id) || {}).code || id;
   const L = [];
   L.push('# Satisfying Lig — Aktif lig', '');
   const groupsOver = d.week > d.seasonLength;
-  L.push(`Sezon **${d.season || 1}** · ${groupsOver ? 'grup maçları bitti, **yükselme eleme maçları** sürüyor' : `sıradaki: **Hafta ${d.week} / ${d.seasonLength}**, grup maçı ${d.weekMatch}`} · bu sezon oynanan maç: **${d.history.length}**`, '');
+  L.push(`Sezon **${d.season || 1}** · ${groupsOver ? 'lig maçları bitti, **yükselme eleme maçları** sürüyor' : `sıradaki: **Hafta ${d.week} / ${d.seasonLength}**, maç ${d.weekMatch}`} · bu sezon oynanan maç: **${d.history.length}**`, '');
   L.push(`_Son güncelleme: ${now.date} ${istanbul().time} (İstanbul)_`, '');
-  L.push('| # | Takım | O | P | 1. | AG | YG | AV | Son maçlar |', '|---:|---|---:|---:|---:|---:|---:|---:|---|');
-  rk.forEach((x, i) => { const r = x.r, av = r.gf - r.ga; L.push(`| ${i + 1} | ${x.t.name} | ${r.played} | **${r.pts}** | ${r.wins} | ${r.gf} | ${r.ga} | ${av > 0 ? '+' : ''}${av} | ${formTxt(x.t.id)} |`); });
-  L.push('', 'O: oynanan · P: puan · 1.: birincilik · AG: atılan gol · YG: yenilen gol · AV: averaj · Son maçlar: son maçlardaki sırası (eskiden yeniye, en sağdaki en yeni)', '');
+  L.push('| # | Takım | O | G | B | M | AG | YG | AV | P | Son maçlar |', '|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|');
+  rk.forEach((x, i) => { const r = x.r, av = r.gf - r.ga; L.push(`| ${i + 1} | ${x.t.name} | ${r.played} | ${r.w} | ${r.d} | ${r.l} | ${r.gf} | ${r.ga} | ${av > 0 ? '+' : ''}${av} | **${r.pts}** | ${formTxt(x.t.id)} |`); });
+  L.push('', 'O: oynanan · G/B/M: galibiyet/beraberlik/mağlubiyet · AG: atılan gol · YG: yenilen gol · AV: averaj · P: puan · Son maçlar: eskiden yeniye, en sağdaki en yeni', '');
   const last = d.history.slice(-9).reverse();
   if (last.length) {
-    L.push('## Son maçlar', '', '| Maç | Hafta · grup | Sıralama (gol) | Tema | Süre | Tarih |', '|---:|---|---|---|---:|---|');
+    L.push('## Son maçlar', '', '| Maç | Hafta · maç | Sonuç | Tema | Tarih |', '|---:|---|---|---|---|');
     for (const h of last) {
-      const order = h.result.slice().sort((a, b) => a.place - b.place).map(r => `${r.place}. ${code(r.id)} (${r.gf})`).join(' · ');
-      const when = `H${h.week} · ${h.weekMatch}`;
-      L.push(`| ${h.matchNo} | ${when} | ${order} | ${h.theme} | ${Math.round(h.duration)} sn | ${istanbul(new Date(h.date)).date} |`);
+      const [a, b] = h.result;
+      L.push(`| ${h.matchNo} | H${h.week} · ${h.weekMatch} | ${code(a.id)} ${a.score}–${b.score} ${code(b.id)} | ${h.theme} | ${istanbul(new Date(h.date)).date} |`);
     }
     L.push('');
   }
   if (d.cup && d.cup.res && Object.keys(d.cup.res).length) {
     const nm = (id) => (d.reserve.concat(d.teams).find(t => t.id === id) || {}).name || id;
-    L.push('## Yükselme eleme maçları', '', ...Object.entries(d.cup.res).map(([k, r]) => `- ${k}: **${nm(r.winner)}** ${r.sw}–${r.sl} ${nm(r.loser)}`), '');
+    L.push('## Yükselme eleme maçları', '', ...Object.entries(d.cup.res).map(([k, r]) => `- ${k}: **${nm(r.winner)}** ${r.sw}–${r.sl} ${nm(r.loser)}${r.pw !== undefined ? ` (pen. ${r.pw}–${r.pl})` : r.gg ? ' (altın gol)' : ''}`), '');
   }
   if (d.champions.length) {
     L.push('## Şampiyonlar', '', ...d.champions.map(c => `- Sezon ${c.season || '?'}: **${c.name}**`), '');
@@ -127,12 +126,12 @@ function standingsMd(d, rank) {
     League.save();
     /* the season fixture is built once at the start of the season and stored in league.json */
     const sp = App.seasonPlan();
-    if (!sp) return { error: `Takım sayısı (${d.teams.length}) ${CONFIG.GROUP_SIZE}'nın katı değil; gruplar eşit olamaz.` };
+    if (!sp) return { error: `Takım sayısı (${d.teams.length}) çift değil; her hafta her takım bir maç oynayamaz.` };
     return { season: d.season, week: d.week, weekMatch: d.weekMatch, perWeek: App.perWeek(), seasonLength: d.seasonLength,
       groups: (sp.weeks[d.week - 1] || []).map(g => g.map(id => (d.teams.find(t => t.id === id) || {}).code || id)) };
   });
   if (plan.error) throw new Error(plan.error);
-  log(`Sezon ${plan.season} · Hafta ${plan.week}/${plan.seasonLength} · grup maçı ${plan.weekMatch}/${plan.perWeek} · gruplar: ${plan.groups.map(g => g.join(' ')).join(' | ')}`);
+  log(`Sezon ${plan.season} · Hafta ${plan.week}/${plan.seasonLength} · maç ${plan.weekMatch}/${plan.perWeek} · maçlar: ${plan.groups.map(g => g.join('–')).join(' | ')}`);
 
   const videos = [];
   const renderOne = async () => {
@@ -158,7 +157,7 @@ function standingsMd(d, rank) {
   let d = await page.evaluate(() => League.data), played = 0, archived = null;
   writeLeague(d);
   try {
-    /* the rest of this week's group matches (a run cut short yesterday is completed first) */
+    /* the rest of this week's matches (a run cut short yesterday is completed first) */
     const startWeek = plan.week;
     while (d.week <= d.seasonLength && played < maxMatches) {
       d = await renderOne(); played++;

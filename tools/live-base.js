@@ -76,7 +76,9 @@ async function main() {
   const out = path.resolve(process.argv[2] || path.join(ROOT, 'dist', 'live-base.json'));
   const { loadLive } = require('./live-node.js');
   const sim = require('child_process').execFileSync('node', [path.join(__dirname, 'live-fingerprint.js')]).toString().trim();
-  const { Live } = loadLive({ simHash: sim });
+  /* the league's start chosen by tools/live-start.js (run before this, next to the output) is part of the league's identity */
+  const sf = path.join(path.dirname(out), 'live-start.json'), start = fs.existsSync(sf) ? JSON.parse(fs.readFileSync(sf, 'utf8')) : null;
+  const { Live } = loadLive({ simHash: sim, start });
   const cur = { league: Live.league(), sim };
   const prevBase = readJSON(await fetchPublished('live-base.json'), 'live-base.json');
   const pub = readJSON(await fetchPublished('live-state.json'), 'live-state.json');

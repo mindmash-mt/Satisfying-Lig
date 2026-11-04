@@ -7,7 +7,7 @@
 const fs = require('fs'), path = require('path');
 const FILES = ['01_core.js', '02_sim.js', '03_fx_audio.js', '04_render.js', '05_app.js', '06_offline.js', '07_live.js'];
 
-function loadLive({ simHash, base } = {}) {
+function loadLive({ simHash, base, start } = {}) {
   const stub = () => new Proxy(function () {}, { get: (t, k) => (k === Symbol.toPrimitive ? () => '' : stub()), apply: () => stub(), construct: () => stub() });
   const store = new Map();
   const env = {
@@ -16,9 +16,11 @@ function loadLive({ simHash, base } = {}) {
     document: stub(), window: stub(), navigator: {}, requestAnimationFrame: () => 0,
   };
   /* simHash / base: what build.sh writes into the page (BUILD_SIM_HASH, BUILD_BASE = the frozen state of a league that changed rules) */
+  /* start: live-start.json (BUILD_START = the league's start chosen at its first deploy, and the old league's archive) */
   const code = (simHash ? `const BUILD_SIM_HASH = ${JSON.stringify(simHash)};\n` : '') + `const BUILD_BASE = ${JSON.stringify(base || null)};\n` +
+    `const BUILD_START = ${JSON.stringify(start || null)};\n` +
     FILES.map(f => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8')).join('\n') +
-    '\nreturn { Live, League, App, CONFIG, Game, DT, RNG, planSeason, DM, LivePages };';
+    '\nreturn { Live, League, App, CONFIG, Game, DT, RNG, planRoundRobin, fixtureStats, DM, LivePages };';
   const L = new Function(...Object.keys(env), code)(...Object.values(env));
   L.Live.adopt(base && base.data ? L.Live.baseState() : null);
   return L;

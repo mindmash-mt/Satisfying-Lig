@@ -29,9 +29,10 @@ const out = path.resolve(process.argv[2] || path.join(ROOT, 'dist', 'live-state.
 function built() {
   const dir = path.dirname(out), f = path.join(dir, 'index.html');
   const html = fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '';
-  const m = html.match(/const BUILD_SIM_HASH = '([^']+)'/), b = path.join(dir, 'live-base.json');
+  const m = html.match(/const BUILD_SIM_HASH = '([^']+)'/), b = path.join(dir, 'live-base.json'), st = path.join(dir, 'live-start.json');
   return { simHash: m ? m[1] : require('child_process').execFileSync('node', [path.join(__dirname, 'live-fingerprint.js')]).toString().trim(),
-    base: fs.existsSync(b) ? JSON.parse(fs.readFileSync(b, 'utf8')) : null };
+    base: fs.existsSync(b) ? JSON.parse(fs.readFileSync(b, 'utf8')) : null,
+    start: fs.existsSync(st) ? JSON.parse(fs.readFileSync(st, 'utf8')) : null };
 }
 
 /* a checkpoint written before the season archive existed: rebuild it with the archive if the league from its start is provably the same */
@@ -48,8 +49,8 @@ async function adoptLegacy(L, legacy, hasBase) {
 }
 
 (async () => {
-  const { simHash, base } = built();
-  const L = loadLive({ simHash, base }), { Live, League } = L;
+  const { simHash, base, start } = built();
+  const L = loadLive({ simHash, base, start }), { Live, League } = L;
   const now = process.env.LIVE_NOW ? Date.parse(process.env.LIVE_NOW) : Date.now();
   if (isNaN(now)) throw new Error('LIVE_NOW okunamadı');
   let from = base ? `taban ${base.id} (${base.count} maç)` : 'ligin başı', prevText = null;
@@ -64,7 +65,11 @@ async function adoptLegacy(L, legacy, hasBase) {
         from = `yayındaki checkpoint (${d.liveCount} maç)`;
       } else if (legacy && (legacy.liveLastEnd || 0) <= now && (legacy.liveCount || 0) >= League.data.liveCount) {
         from = await adoptLegacy(L, legacy, !!base);
-      } else console.log(!r.ok ? `Yayındaki checkpoint yok (HTTP ${r.status}).` : d ? 'Yayındaki checkpoint tabandan eski; tabandan devam ediliyor.' : 'Yayındaki checkpoint bu kodla uyumsuz (simülasyon değişmiş: taban kullanılıyor).');
+      } else {
+        let other = false; try { other = !!txt && Live.parts(JSON.parse(txt).hash).league === null; } catch (e) { /* unreadable */ }
+        console.log(!r.ok ? `Yayındaki checkpoint yok (HTTP ${r.status}).` : d ? 'Yayındaki checkpoint tabandan eski; tabandan devam ediliyor.'
+          : other ? 'Yayındaki checkpoint başka bir lige ait (yeni lig: başından hesaplanıyor).' : 'Yayındaki checkpoint bu kodla uyumsuz (simülasyon değişmiş: taban kullanılıyor).');
+      }
     } catch (e) { console.log('Yayındaki checkpoint okunamadı:', e.message); }
   }
   /* from scratch: refuse an unbounded recomputation (it would also hit every visitor's browser) */
@@ -90,4 +95,4 @@ async function adoptLegacy(L, legacy, hasBase) {
   const d = League.data;
   console.log(`${path.relative(ROOT, out)}: ${from} → ${d.liveCount} maç (+${d.liveCount - c0}, ${((Date.now() - t0) / 1000).toFixed(1)} sn) · Sezon ${d.season} · Hafta ${d.week} · hash ${Live.hash()}`);
 })().catch(e => { console.error('❌', e && e.stack || e); process.exit(1); });
-function CONFIG_START(L) { return L.CONFIG.LIVE.start; }
+function CONFIG_START(L) { return L.Live.cfg().start; }
