@@ -137,6 +137,10 @@
   .fx-match ol.res li .pt { margin-left: auto; padding-left: 6px; font-weight: 800; }
   .pt.g { color: var(--accent); } .pt.r { color: var(--danger); }
   .fx-match ol li.tbd { color: var(--muted); font-style: italic; }
+  .hist-bar { display: flex; gap: 6px; align-items: stretch; margin: 8px 0 10px; }
+  .hist-bar select { flex: 1; min-width: 0; width: auto; }
+  .hist-nav { width: 40px; padding: 0; font-size: 22px; line-height: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
+  .hist-nav:disabled { opacity: .35; }
   .lp-pool { list-style: none; margin: 0; padding: 10px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; background: var(--surface); border-radius: 12px; font-size: 13px; }
   .lp-pool li { display: flex; align-items: center; min-width: 0; }
   @media (max-width: 520px) {
@@ -144,6 +148,10 @@
     .lp-table { font-size: 13px; }
     .fx-match ol { grid-template-columns: 1fr; }
     #liveTabs button { padding: 7px 11px; }
+  }
+  @media (max-width: 430px) {
+    #liveTabs { gap: 2px; padding: 3px; }
+    #liveTabs button { padding: 7px 8px; font-size: 12.5px; }
   }
   @media (max-width: 900px) {
     #app { flex-direction: column; height: auto; }

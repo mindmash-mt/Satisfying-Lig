@@ -174,8 +174,9 @@ const League = {
   cupDone() { const c = this.cup(); return !!(c && c.res['FIN'] && c.res['3RD']); },
   poolTeam(id) { return this.data.reserve.find(t => t.id === id) || null; },
   /* the 12 playoff matches in playing order with their clubs (ids; null = not decided yet) and result */
-  cupMatches() {
-    const c = this.cup();
+  cupMatches() { return this.cupMatchesOf(this.cup()); },
+  /* ...of any bracket { draw, res } (also a finished season's, see Live.archiveSeason) */
+  cupMatchesOf(c) {
     if (!c) return [];
     const ref = (s) => {
       if (s[0] === 's') return c.draw[+s.slice(1)] || null;
