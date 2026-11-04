@@ -63,7 +63,7 @@ const Renderer = {
     }
     const k = FX.cam.k;
     if (k > 0.002) {
-      ctx.beginPath(); ctx.rect(0, 448, 1080, 1170); ctx.clip();
+      ctx.beginPath(); ctx.rect(0, 108, 1080, 1812); ctx.clip();   // below the top bar
       const z = 1 + 0.3 * k, C = { x: CONFIG.CX, y: CONFIG.CY };
       const Fx = C.x + (FX.cam.x - C.x) * 0.55 * k, Fy = C.y + (FX.cam.y - C.y) * 0.55 * k;
       ctx.translate(C.x, C.y); ctx.scale(z, z); ctx.translate(-Fx, -Fy);
@@ -568,6 +568,13 @@ function drawHeart(ctx, x, y, s, fill, stroke) {
 const HUD = {
   draw(ctx, g, app, vis) {
     const SX = 510; // center of safe area (60..960)
+    /* 1v1 match: everything in one line on top (title · score · clock), the pitch fills the rest of the frame */
+    if (g.timed) {
+      this.topBar(ctx, g, app);
+      this.announcement(ctx, CONFIG.CY + CONFIG.FINAL_DY - CONFIG.FINAL_H * 0.27);
+      if (g.pens) this.penalties(ctx, g, SX);
+      return;
+    }
     /* title */
     const title = app.title || '';
     let tfs = 86; ctx.font = `${tfs}px ${FONT_BIG}`;
@@ -593,30 +600,53 @@ const HUD = {
     this.duelA = (this.duelA || 0) + (want - (this.duelA || 0)) * 0.18;
     if (this.duelA > 0.02) { ctx.save(); ctx.globalAlpha = this.duelA; this.duelScore(ctx, g, SX); ctx.restore(); }
     this.announcement(ctx, 394);
-    if (g.timed) { this.clock(ctx, g, SX); if (g.pens) this.penalties(ctx, g, SX); }
   },
-  /* 1v1 match clock under the pitch (never covered by a text): time played, a progress bar; last 10 s red; golden goal gold */
-  clock(ctx, g, SX) {
-    const y = CONFIG.CY + CONFIG.FINAL_DY + CONFIG.FINAL_H / 2 + CONFIG.NET_DEPTH_RECT + 128;   // below the goal tally (mini balls) of the bottom club
+  /* 1v1 match: one line above the pitch — title + theme (left), the score (centre), the clock (right; last 10 s red, golden goal gold).
+     A thin bar under the clock shows the time played. */
+  topBar(ctx, g, app) {
+    const y = CONFIG.TOPBAR_Y, X0 = 30, X1 = 1050, H = 84;
+    ctx.save();
+    roundRect(ctx, X0, y - H / 2, X1 - X0, H, 24);
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.stroke();
+    const fit = (text, size, maxW, weight = '') => {
+      let fs = size; ctx.font = `${weight}${fs}px ${FONT_BIG}`;
+      while (ctx.measureText(text).width > maxW && fs > 18) { fs -= 2; ctx.font = `${weight}${fs}px ${FONT_BIG}`; }
+      return `${weight}${fs}px ${FONT_BIG}`;
+    };
+    /* left: "WEEK 5 · MATCH 5" + theme icon */
+    const title = app.title || '', tf = fit(title, 36, 270);
+    outlinedText(ctx, title, X0 + 24, y + 2, tf, '#ffffff', null, 0, 'left');
+    ctx.font = tf; const tw = ctx.measureText(title).width;
+    ctx.font = `26px ${FONT_UI}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(THEME_DEFS[g.themeId].icon, X0 + 24 + tw + 8, y);
+    /* centre: ● LIV 2 – 4 JUV ● (home on the left); a score pops when it changes */
+    const [A, B] = g.teams, SX = 535;
+    const pop = (T) => { const p = g.t - (T.hitT >= 0 ? T.hitT : -9); return p < 0.5 ? 1 + 0.35 * Math.sin(p / 0.5 * Math.PI) : 1; };
+    const dot = (T, x) => { ctx.beginPath(); ctx.arc(x, y, 12, 0, TAU); ctx.fillStyle = T.c1; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = T.c2; ctx.stroke(); };
+    dot(A, SX - 158); dot(B, SX + 158);
+    outlinedText(ctx, A.code, SX - 140, y + 3, `44px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
+    outlinedText(ctx, B.code, SX + 140, y + 3, `44px ${FONT_BIG}`, '#ffffff', null, 0, 'right');
+    for (const [T, x, O] of [[A, SX - 40, B], [B, SX + 40, A]]) {
+      const k = pop(O);
+      ctx.save(); ctx.translate(x, y + 3); ctx.scale(k, k);
+      outlinedText(ctx, String(T.score), 0, 0, `56px ${FONT_BIG}`, '#ffffff', null, 0);
+      ctx.restore();
+    }
+    outlinedText(ctx, '–', SX, y + 1, `44px ${FONT_BIG}`, 'rgba(255,255,255,0.6)', null, 0);
+    /* right: the clock */
     const T = g.matchTime, gold = g.extra || g.pens, left = g.timeLeft();
-    const shown = g.pens ? 'PENALTIES' : g.winnerSet || g.over ? 'FULL TIME' : gold ? `GOLDEN GOAL · ${Math.ceil(left)}` : (() => {
+    const shown = g.pens ? 'PENALTIES' : g.winnerSet || g.over ? 'FULL TIME' : gold ? `GOLDEN GOAL ${Math.ceil(left)}` : (() => {
       const t = Math.min(T, Math.floor(g.clock)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; })();
     const hot = !gold && !g.winnerSet && left <= 10;
-    const pulse = hot ? 1 + 0.12 * Math.max(0, 1 - (Math.ceil(left) - left) * 4) : 1;
     const col = gold ? '#FFD54F' : hot ? '#FF5252' : '#ffffff';
-    const W = 420, H = 92;
-    ctx.save();
-    roundRect(ctx, SX - W / 2, y - H / 2, W, H, 26);
-    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = gold ? 'rgba(255,213,79,0.8)' : hot ? 'rgba(255,82,82,0.8)' : 'rgba(255,255,255,0.18)'; ctx.stroke();
-    /* progress of the regular time (golden goal: its own 30 s) */
-    const frac = g.pens ? 1 : gold ? clamp01((g.clock - T) / CONFIG.GOLDEN_TIME) : clamp01(g.clock / T);
-    roundRect(ctx, SX - W / 2 + 18, y + H / 2 - 16, (W - 36), 6, 3); ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
-    if (frac > 0) { roundRect(ctx, SX - W / 2 + 18, y + H / 2 - 16, (W - 36) * frac, 6, 3); ctx.fillStyle = col; ctx.fill(); }
-    ctx.translate(SX, y - 6); ctx.scale(pulse, pulse);
-    let fs = 66; ctx.font = `${fs}px ${FONT_BIG}`;
-    while (ctx.measureText(shown).width > W - 40 && fs > 30) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
-    outlinedText(ctx, shown, 0, 0, `${fs}px ${FONT_BIG}`, col, null, 0);
+    const cx = X1 - 110, pulse = hot ? 1 + 0.15 * Math.max(0, 1 - (Math.ceil(left) - left) * 4) : 1;
+    ctx.save(); ctx.translate(cx, y - 2); ctx.scale(pulse, pulse);
+    outlinedText(ctx, shown, 0, 0, fit(shown, 48, 180), col, null, 0);
+    ctx.restore();
+    const frac = g.pens ? 1 : gold ? clamp01((g.clock - T) / CONFIG.GOLDEN_TIME) : clamp01(g.clock / T), bw = 160;
+    roundRect(ctx, cx - bw / 2, y + 26, bw, 5, 2.5); ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
+    if (frac > 0) { roundRect(ctx, cx - bw / 2, y + 26, bw * frac, 5, 2.5); ctx.fillStyle = col; ctx.fill(); }
     ctx.restore();
   },
   /* penalty shoot-out over the (empty) pitch: one row per club, a circle per kick (goal ● green, miss ✕ red) */

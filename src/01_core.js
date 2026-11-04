@@ -18,8 +18,11 @@ const CONFIG = {
   OT_AT: 45, OT_RAMP: 10, OT_MULT: 1.6,
   ELIM_SLOW_GAME: 0.18, ELIM_FREEZE: 1.0, WIN_SLOW_GAME: 0.24, TS_SLOW: 0.3,
   FINAL_SLOWMO_GAME: 0.375, FINAL_SLOWMO_TS: 0.25, FINAL_SLOWMO_DIST: 120,
-  FINAL_W: 820, FINAL_H: 1030, FINAL_GOALS: 2,   // final duel: first to FINAL_GOALS goals wins (narrower, longer pitch)
-  FINAL_DY: 30,   // the longer final pitch sits this much below the arena centre so it clears the scoreboard
+  /* the 1v1 pitch fills the frame from just under the top bar (title · score · clock) to the bottom edge; the goal tally
+     (mini balls behind each net) still fits above / below it */
+  FINAL_W: 820, FINAL_H: 1660, FINAL_GOALS: 2,   // final duel: first to FINAL_GOALS goals wins (narrower, longer pitch)
+  FINAL_DY: 37,   // the pitch's centre sits this much below the arena centre (top goal line y 182, bottom 1842)
+  TOPBAR_Y: 60,   // centre of the one-line top bar of a 1v1 match
   /* final duel: 2 players per team, one is the captain. A captain touch that sends the ball toward the rival goal
      (within CAPTAIN_AIM_DEG of the goal centre) makes it CAPTAIN_SHOT_MULT × faster until it hits anything else. */
   CAPTAIN_SHOT_MULT: 2, CAPTAIN_AIM_DEG: 55,
