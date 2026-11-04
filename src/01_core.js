@@ -37,8 +37,10 @@ const CONFIG = {
      and then to a penalty shoot-out (PEN_P: chance a penalty goes in, PEN_STEP: seconds per penalty on screen).
      Added time: when the time is up (full time, end of the golden goal) while the ball is in a goal's half and moving towards
      that goal (only the up / down direction counts), play goes on until the ball turns towards the other goal or a goal is
-     scored — at most ADDED_MAX seconds. */
-  MATCH_TIME: 90, GOLDEN_TIME: 20, PEN_P: 0.75, PEN_STEP: 0.9, ADDED_MAX: 10,
+     scored — at most ADDED_MAX seconds. The same at half time.
+     Half time at MATCH_TIME / 2: a HALF_BREAK-second break (the clock stops), the clubs change ends and walk into their new
+     halves; the second half kicks off from the centre at MATCH_TIME / 2 (first-half added time does not shorten it). */
+  MATCH_TIME: 90, GOLDEN_TIME: 20, PEN_P: 0.75, PEN_STEP: 0.9, ADDED_MAX: 10, HALF_BREAK: 3,
   GROUP_SIZE: 2,
   /* league points: win, draw, loss. A season is a single round robin: every club meets every other club once (17 weeks with
      18 clubs, 9 matches a week); a longer season repeats it with home and away swapped. */

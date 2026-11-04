@@ -62,6 +62,7 @@ class Game {
     this.knockout = !!o.knockout; this.clock = 0; this.extra = false; this.pens = null; this.draw = false;
     this.extraStart = 0;         // clock when the golden goal began
     this.added = 0;              // clock when the running added time began (0: none)
+    this.half = 1;               // 1 / 2; at half time the clubs change ends (rectTeams swaps)
     if (this.timed) this.cx = CONFIG.FINAL_CX;
     this.slowmo = null; this.slowmoCd = 0;
     this.spawnBlock = 0;
@@ -182,25 +183,26 @@ class Game {
     const side = team === top ? -1 : 1, flank = x > this.cx ? -1 : 1;
     return { x: this.cx + flank * W * 0.24, y: this.rectCy() + side * H * 0.24 };
   }
+  /* kick-off spots of a club on the duel pitch (top: the club at the top goal): captain, team-mate and — in a 1v1 match,
+     CONFIG.TEAM_PLAYERS outfield players — the third in the middle of its own half in front of its box, a fourth or more spread */
+  duelSpots(t, top) {
+    const side = t === top ? -1 : 1, flank = t === top ? 1 : -1, out = [];
+    const cx = this.cx + flank * this.W * 0.2, cy = this.rectCy() + side * this.H * 0.18;
+    out.push({ x: cx, y: cy });
+    out.push(this.duelMateSpot(t, top, this.W, this.H, cx));
+    const n = this.timed ? Math.max(2, CONFIG.TEAM_PLAYERS) : 2;
+    for (let k = 2; k < n; k++) {
+      const off = k === 2 ? 0 : (k % 2 ? -1 : 1) * 0.36 * Math.ceil((k - 2) / 2) / Math.max(1, Math.ceil((n - 3) / 2));
+      out.push({ x: this.cx + off * this.W, y: this.rectCy() + side * this.H * (k === 2 ? 0.34 : 0.1) });
+    }
+    return out;
+  }
   initPlayers() {
     const mk = (team, x, y, cap) => this.makePlayer(team, x, y, cap);
     if (this.finalDuel) {
       /* direct final / 1v1 match (only 2 teams): captain + team-mates */
       const [top, bottom] = this.rectTeams;
-      for (const t of [top, bottom]) {
-        const side = t === top ? -1 : 1, flank = t === top ? 1 : -1;
-        const cx = this.cx + flank * this.W * 0.2, cy = this.rectCy() + side * this.H * 0.18;
-        this.players.push(mk(t, cx, cy, true));
-        const m = this.duelMateSpot(t, top, this.W, this.H, cx);
-        this.players.push(mk(t, m.x, m.y, false));
-        /* a 1v1 match: CONFIG.TEAM_PLAYERS outfield players — the third starts in the middle of its own half, in front of its box,
-           a fourth or more spread across the own half */
-        const n = this.timed ? Math.max(2, CONFIG.TEAM_PLAYERS) : 2;
-        for (let k = 2; k < n; k++) {
-          const off = k === 2 ? 0 : (k % 2 ? -1 : 1) * 0.36 * Math.ceil((k - 2) / 2) / Math.max(1, Math.ceil((n - 3) / 2));
-          this.players.push(mk(t, this.cx + off * this.W, this.rectCy() + side * this.H * (k === 2 ? 0.34 : 0.1), false));
-        }
-      }
+      for (const t of [top, bottom]) this.duelSpots(t, top).forEach((p, k) => this.players.push(mk(t, p.x, p.y, k === 0)));
     } else {
       for (const g of this.geo.goals) {
         this.players.push(mk(g.team, this.cx + (g.mx - this.cx) * 0.5, this.cy + (g.my - this.cy) * 0.5));
@@ -269,7 +271,7 @@ class Game {
   step(dt) {
     if (this.over) return;
     /* the match clock runs on screen time: a slow-motion step takes longer on screen */
-    if (this.timed && !this.winnerSet) {
+    if (this.timed && !this.winnerSet && !this.morph) {          // the clock stops during the half-time break
       if (this.t === 0) this.emit('kickoff', {});
       this.clock += dt / this.timeScale();
       const left = Math.ceil(this.timeLeft());                   // last 10 seconds: one tick a second (sound / clock pulse only)
@@ -727,6 +729,14 @@ class Game {
     const m = this.morph;
     for (const mv of m.moves) { mv.e.x = mv.x1; mv.e.y = mv.y1; if (mv.e.px !== undefined) { mv.e.px = mv.x1; mv.e.py = mv.y1; } }
     this.morph = null;
+    if (m.kind === 'half') {                                  // second half: kick-off from the centre spot
+      this.balls = [];
+      this.geo = this.computeGeo();
+      this.updateKeepers(0);
+      this.spawnBall(false);
+      this.emit('kickoff', { half: 2 });
+      return;
+    }
     if (m.kind === 'poly') {
       this.va = m.newVa; this.sides = m.newSides; this.R = m.toR;
       this.omega *= CONFIG.ROT_GROWTH;
@@ -747,6 +757,18 @@ class Game {
   }
   /* timed match: full time (the score decides; level → draw, or golden goal in a knockout match), end of the golden goal → penalties */
   checkClock() {
+    /* half time (with added time, like full time) */
+    if (this.half === 1 && !this.extra) {
+      const ht = this.matchTime / 2;
+      if (this.clock < ht) return;
+      if (this.attacking() && this.clock < ht + CONFIG.ADDED_MAX) {
+        if (!this.added) { this.added = this.clock; this.emit('addedTime', { half: 1 }); }
+        return;
+      }
+      this.added = 0;
+      this.halfTime();
+      return;
+    }
     const [A, B] = this.teams, end = this.extra ? this.extraStart + CONFIG.GOLDEN_TIME : this.matchTime;
     if (this.clock < end) return;
     /* time is up, but the ball is on its way to a goal: added time until it turns back (or goes in), at most ADDED_MAX seconds */
@@ -760,6 +782,24 @@ class Game {
       else if (!this.knockout) { this.draw = true; this.finish(-1); }
       else { this.extra = true; this.extraStart = this.clock; this.emit('goldenGoal', {}); }
     } else this.startPens();
+  }
+  /* half time: the ball goes, the clubs change ends (the goals' teams swap) and their players walk into their new halves during the
+     break (CONFIG.HALF_BREAK s, the clock stops); then the second half kicks off at MATCH_TIME / 2 */
+  halfTime() {
+    this.emit('halfTime', {});
+    this.half = 2; this.clock = this.matchTime / 2;
+    for (const b of this.balls) if (b.state !== 'dead') b.state = 'vanish';
+    this.slowmo = null;
+    this.rectTeams = [this.rectTeams[1], this.rectTeams[0]];
+    this.geo = this.computeGeo();
+    for (const T of this.teams) { T.k.s = 0; T.k.vs = 0; }
+    this.updateKeepers(0);
+    const moves = [], top = this.rectTeams[0];
+    for (const t of this.rectTeams) {
+      const spots = this.duelSpots(t, top), mine = this.players.filter(p => p.alive && p.team === t);
+      mine.forEach((p, k) => { const q = spots[Math.min(k, spots.length - 1)]; moves.push({ e: p, x0: p.x, y0: p.y, x1: q.x, y1: q.y }); });
+    }
+    this.morph = { kind: 'half', t: 0, dur: CONFIG.HALF_BREAK, moves };
   }
   /* penalty shoot-out: drawn at once from the match's RNG (5 each, then sudden death), shown one kick every PEN_STEP seconds */
   startPens() {

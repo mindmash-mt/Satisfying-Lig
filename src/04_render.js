@@ -637,8 +637,9 @@ const HUD = {
     /* centre: the clock */
     const T = g.matchTime, gold = g.extra || g.pens, left = g.timeLeft();
     /* added time (the ball is on its way to a goal when the time is up): "1:30+" / "GOLDEN GOAL +" */
-    const shown = g.pens ? 'PENALTIES' : g.winnerSet || g.over ? 'FULL TIME' : gold ? `GOLDEN GOAL ${g.added ? '+' : Math.ceil(left)}` : (() => {
-      const t = Math.min(T, Math.floor(g.clock)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}${g.added ? '+' : ''}`; })();
+    const brk = g.morph && g.morph.kind === 'half';
+    const shown = g.pens ? 'PENALTIES' : g.winnerSet || g.over ? 'FULL TIME' : brk ? 'HALF TIME' : gold ? `GOLDEN GOAL ${g.added ? '+' : Math.ceil(left)}` : (() => {
+      const t = Math.min(g.half === 1 ? T / 2 : T, Math.floor(g.clock)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}${g.added ? '+' : ''}`; })();
     const hot = !gold && !g.winnerSet && left <= 10;
     const col = gold ? '#FFD54F' : hot ? '#FF5252' : '#ffffff';
     const cx = 540, pulse = hot ? 1 + 0.15 * Math.max(0, 1 - (Math.ceil(left) - left) * 4) : 1;
