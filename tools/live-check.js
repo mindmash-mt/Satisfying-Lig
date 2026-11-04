@@ -10,6 +10,8 @@
   5) Kural değişikliği ligi sıfırlamaz: dondurulmuş lig (taban) yeni kurallarla devam eder, geçmiş aynen kalır, yeni puan /
      sezon uzunluğu uygulanır, iki bağımsız tarayıcı ve checkpoint'ten devam eden üçüncüsü birebir aynı sonucu bulur;
      yayın iş akışının taban kararı (tools/live-base.js) doğru çalışır.
+  5c) Geçmiş sekmesi: biten her sezonun tablosu + yükselme elemesi arşivlenir, sekme yalnızca seçili sezonu çizer (açılışta en son),
+     eski biçimli (arşivsiz) kayıtlar önbellek olarak kabul edilmez, taban arşivi korur.
   6) --long: gerçek takvimle 48 saatlik hızlandırılmış koşu (gün ve bant geçişleri, ~10 sezon: 51 grup + 12 eleme maçı, şampiyon sınırı).
   Kullanım: node tools/live-check.js [maç sayısı] [--long]
 */
@@ -112,7 +114,7 @@ console.log(`${N} grup maçı + ${N} eleme (1v1) maçı + sezon fikstürü, Math
     /* the new rules: other points, 3-week seasons */
     const fromBase = (b) => { const L = loadLive({ simHash: 'new', base: b }); L.CONFIG.POINTS = [9, 5, 2, 1, 0, 0, 0, 0, 0, 0]; L.CONFIG.SEASON_LENGTH = 3; L.Live.adopt(L.Live.baseState()); return L; };
     const B = fromBase(base), d0 = B.League.data;
-    ok(d0.liveCount === frozen.liveCount && J(d0.history) === J(frozen.history) && J(d0.table) === J(frozen.table) && J(d0.champions) === J(frozen.champions) && d0.season === frozen.season,
+    ok(d0.liveCount === frozen.liveCount && J(d0.history) === J(frozen.history) && J(d0.table) === J(frozen.table) && J(d0.champions) === J(frozen.champions) && J(d0.seasons) === J(frozen.seasons) && frozen.seasons.length === 1 && d0.season === frozen.season,
       `Taban: ${frozen.liveCount} maçlık lig (Sezon ${frozen.season}, ${frozen.history.length} grup maçı, ${frozen.champions.length} şampiyon) olduğu gibi yüklendi`);
     ok(d0.points.slice(0, 4).join() === '9,5,2,1' && d0.seasonLength === 2 && d0.settings.lives === B.CONFIG.DEFAULT_LIVES,
       'Yeni puanlama hemen geçerli; başlamış sezonun uzunluğu (2 hafta) sezon bitene kadar korunuyor');
@@ -125,7 +127,7 @@ console.log(`${N} grup maçı + ${N} eleme (1v1) maçı + sezon fikstürü, Math
     B.Live.closeMatch = (m) => { logB.push(B.League.data.history.length); closeB(m); };
     await B.Live.catchUp(0, () => T(B, 45)); B.Live.snapshot();
     const dB = B.League.data;
-    ok(dB.liveCount === 45 && dB.season === frozen.season + 1 && dB.seasonLength === 3 && dB.champions.length === frozen.champions.length + 1 && J(dB.champions.slice(0, frozen.champions.length)) === J(frozen.champions),
+    ok(dB.liveCount === 45 && dB.season === frozen.season + 1 && dB.seasonLength === 3 && dB.champions.length === frozen.champions.length + 1 && J(dB.champions.slice(0, frozen.champions.length)) === J(frozen.champions) && dB.seasons.length === 2 && J(dB.seasons[0]) === J(frozen.seasons[0]),
       `Sezon geçişi: yeni sezon 3 hafta (eski 2), eski şampiyonlar aynen duruyor, ${dB.champions.length}. şampiyon eklendi`);
     /* the points of the matches played after the freeze are the new ones, the table before the freeze is not rewritten */
     const rowsBefore = Object.fromEntries(Object.entries(frozen.table).map(([k, v]) => [k, v.pts]));
@@ -153,6 +155,46 @@ console.log(`${N} grup maçı + ${N} eleme (1v1) maçı + sezon fikstürü, Math
     const eb = mk(JSON.parse(E.Live.lastClean).data), F = fromBase(eb);
     ok(eb.data.season === 2 && eb.data.history.length === 0 && F.League.data.seasonLength === 3, 'Sezonlar arasında dondurulan lig: yeni sezon uzunluğu (3 hafta) hemen geçerli');
   }
+  /* 5c) the "Geçmiş" tab: season archive + rendering of one season at a time */
+  {
+    const L = loadLive(); L.CONFIG.SEASON_LENGTH = 2; L.Live.adopt(null);
+    const { Live, LivePages, League } = L, count = (h, re) => (h.match(re) || []).length;
+    ok(LivePages.history().includes('Henüz biten sezon yok'), 'Geçmiş: ilk sezon bitmeden "henüz biten sezon yok" gösteriliyor');
+    await Live.catchUp(0, () => Live.slot(40) + 1); Live.snapshot();
+    const d = League.data, sz = d.seasons, c0 = sz[0];
+    const top3 = (r) => [r.cup.res.FIN[0], r.cup.res.FIN[1], r.cup.res['3RD'][0]].sort().join();
+    ok(sz.length === 2 && sz.every((r, i) => r.season === i + 1 && r.champ === d.champions[i].id && r.rows[0][0] === r.champ && r.rows[0][2] === d.champions[i].pts
+        && r.rows.length === 18 && r.rows.every((x, k) => !k || r.rows[k - 1][2] >= x[2]) && r.n === 6 && r.p.slice(0, 4).join() === '4,3,2,1'
+        && r.out.length === 3 && r.rows.slice(-3).map(x => x[0]).sort().join() === r.out.slice().sort().join()
+        && r.up.length === 3 && r.up.slice().sort().join() === top3(r) && Object.keys(r.cup.res).length === 12 && r.t0 > 0 && r.t1 > r.t0),
+      `Arşiv: ${sz.length} biten sezon; her birinde sıralı tablo (şampiyon başta), düşen 3, yükselen 3 (= final galibi, finalist, 3.lük galibi), 12 eleme maçı`);
+    ok(JSON.stringify(c0).length < 1500, `Arşiv küçük: sezon başına ${JSON.stringify(c0).length} bayt (50 sezon ≈ ${Math.round(JSON.stringify(c0).length * 50 / 1024)} KB)`);
+    Live.histSel = 0;
+    let h = LivePages.history();
+    const nm = (id) => LivePages.anyTeam(id).name;
+    ok(h.includes('Sezon 2 şampiyonu') && !h.includes('Sezon 1 şampiyonu') && count(h, /<table class="lp-table"/g) === 1 && count(h, /<option /g) === 2 && h.includes(`<option value="2" selected>`)
+        && h.includes('title="Önceki sezon">') && h.includes('title="Sonraki sezon" disabled') && h.includes('Yükselme eleme maçları') && count(h, /class="fx-match done"/g) === 12,
+      'Sekme açılınca en son biten sezon (2): yalnızca onun tablosu, 12 eleme maçı; sezon seçici 2 sezon listeliyor');
+    ok(sz[1].up.every(id => h.includes(nm(id))) && h.includes(nm(sz[1].champ)) && sz[1].out.every(id => h.includes(nm(id))), 'Seçili sezonun şampiyonu, yükselenleri ve düşenleri sayfada');
+    Live.histSel = 1; h = LivePages.history();
+    ok(h.includes('Sezon 1 şampiyonu') && !h.includes('Sezon 2 şampiyonu') && count(h, /<table class="lp-table"/g) === 1 && h.includes('title="Önceki sezon" disabled') && h.includes(`data-season="2" title="Sonraki sezon"`) && h.includes(`<option value="1" selected>`),
+      'Eski sezon (1) seçilince yalnızca onun tablosu yüklenir; ‹ pasif, › sezon 2\'ye gidiyor');
+    Live.histSel = 99; ok(LivePages.history().includes('Sezon 2 şampiyonu'), 'Geçersiz seçim en son sezona düşüyor');
+    Live.histSel = 0;
+    /* the table is the one that was on the screen: frozen at the season's end */
+    const R = loadLive(); R.CONFIG.SEASON_LENGTH = 2; R.Live.adopt(null);
+    let last = null; const close = R.Live.closeMatch.bind(R.Live);
+    R.Live.closeMatch = (m) => { if (R.League.seasonOver()) last = R.League.ranking().map(x => [x.t.id, x.r.played, x.r.pts]); close(m); };
+    await R.Live.catchUp(0, () => R.Live.slot(20) + 1);
+    ok(last && JSON.stringify(R.League.data.seasons[0].rows.map(r => r.slice(0, 3))) === JSON.stringify(last), 'Arşivlenen tablo, sezonun bittiği andaki tabloyla aynı');
+    /* storage: only the newest keepChampions seasons; old-format (archive-less) states are not trusted as caches */
+    const K = loadLive(); K.CONFIG.SEASON_LENGTH = 2; K.CONFIG.LIVE.keepChampions = 1; K.Live.adopt(null);
+    await K.Live.catchUp(0, () => K.Live.slot(40) + 1);
+    ok(K.League.data.seasons.length === 1 && K.League.data.seasons[0].season === 2, 'Arşiv en fazla keepChampions sezon tutuyor (en yenileri)');
+    const env = JSON.parse(Live.lastClean), noav = { ...env }; delete noav.av;
+    ok(Live.parseState(env) && Live.parseState(noav) === null && Live.parseState(noav, true) && Live.parseState({ ...env, av: 0 }) === null,
+      'Arşivsiz eski biçimli kayıt önbellek/checkpoint olarak geçersiz; yalnızca yayın aracı (legacy) kabul ediyor');
+  }
   /* 5b) the publish workflow's base decision (tools/live-base.js) */
   {
     const { decide } = require('./live-base.js'), L = loadLive(), parts = (h) => L.Live.parts(h), lg = L.Live.league();
@@ -161,7 +203,7 @@ console.log(`${N} grup maçı + ${N} eleme (1v1) maçı + sezon fikstürü, Math
     const cur = { league: lg, sim: 'S2' }, run = (prevBase, pub, c = cur) => decide({ cur: c, prevBase, pub, parts });
     let r;
     r = run(null, null);                              ok(r.action === 'none', 'Taban kararı: ilk yayın → tabansız');
-    r = run(null, st('S2', 50));                      ok(r.action === 'none', 'Taban kararı: checkpoint bu kodla uyumlu, taban yok → tabansız (eski önbellekler geçerli kalır)');
+    r = run(null, st('S2', 50));                      ok(r.action === 'none', 'Taban kararı: checkpoint bu kodla uyumlu, taban yok → tabansız');
     r = run(null, st('S1', 142));                     ok(r.action === 'rebase' && r.base.data.liveCount === 142 && r.base.sim === 'S2' && r.base.count === 142, 'Taban kararı: kural değişti → yayındaki checkpoint (142 maç) yeni tabanı oldu');
     r = run(bs('S2', 142), st('S2', 160, 'b1'));      ok(r.action === 'keep' && r.base.id === 'b1', 'Taban kararı: kural aynı → taban aynen taşınıyor');
     r = run(bs('S1', 142), st('S1', 190, 'b1'));      ok(r.action === 'rebase' && r.base.data.liveCount === 190, 'Taban kararı: ikinci kural değişikliği → taban birikimli, en son checkpoint\'ten yenilendi');

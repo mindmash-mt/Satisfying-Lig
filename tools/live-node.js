@@ -18,7 +18,7 @@ function loadLive({ simHash, base } = {}) {
   /* simHash / base: what build.sh writes into the page (BUILD_SIM_HASH, BUILD_BASE = the frozen state of a league that changed rules) */
   const code = (simHash ? `const BUILD_SIM_HASH = ${JSON.stringify(simHash)};\n` : '') + `const BUILD_BASE = ${JSON.stringify(base || null)};\n` +
     FILES.map(f => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8')).join('\n') +
-    '\nreturn { Live, League, App, CONFIG, Game, DT, RNG, planSeason, DM };';
+    '\nreturn { Live, League, App, CONFIG, Game, DT, RNG, planSeason, DM, LivePages };';
   const L = new Function(...Object.keys(env), code)(...Object.values(env));
   L.Live.adopt(base && base.data ? L.Live.baseState() : null);
   return L;

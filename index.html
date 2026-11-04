@@ -137,6 +137,10 @@
   .fx-match ol.res li .pt { margin-left: auto; padding-left: 6px; font-weight: 800; }
   .pt.g { color: var(--accent); } .pt.r { color: var(--danger); }
   .fx-match ol li.tbd { color: var(--muted); font-style: italic; }
+  .hist-bar { display: flex; gap: 6px; align-items: stretch; margin: 8px 0 10px; }
+  .hist-bar select { flex: 1; min-width: 0; width: auto; }
+  .hist-nav { width: 40px; padding: 0; font-size: 22px; line-height: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
+  .hist-nav:disabled { opacity: .35; }
   .lp-pool { list-style: none; margin: 0; padding: 10px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; background: var(--surface); border-radius: 12px; font-size: 13px; }
   .lp-pool li { display: flex; align-items: center; min-width: 0; }
   @media (max-width: 520px) {
@@ -144,6 +148,10 @@
     .lp-table { font-size: 13px; }
     .fx-match ol { grid-template-columns: 1fr; }
     #liveTabs button { padding: 7px 11px; }
+  }
+  @media (max-width: 430px) {
+    #liveTabs { gap: 2px; padding: 3px; }
+    #liveTabs button { padding: 7px 8px; font-size: 12.5px; }
   }
   @media (max-width: 900px) {
     #app { flex-direction: column; height: auto; }
@@ -2856,8 +2864,9 @@ const League = {
   cupDone() { const c = this.cup(); return !!(c && c.res['FIN'] && c.res['3RD']); },
   poolTeam(id) { return this.data.reserve.find(t => t.id === id) || null; },
   /* the 12 playoff matches in playing order with their clubs (ids; null = not decided yet) and result */
-  cupMatches() {
-    const c = this.cup();
+  cupMatches() { return this.cupMatchesOf(this.cup()); },
+  /* ...of any bracket { draw, res } (also a finished season's, see Live.archiveSeason) */
+  cupMatchesOf(c) {
     if (!c) return [];
     const ref = (s) => {
       if (s[0] === 's') return c.draw[+s.slice(1)] || null;
@@ -3794,6 +3803,7 @@ const Offline = {
 const Live = {
   on: !/[?&]studio\b/.test(location.search),
   CACHE_KEY: 'arenaLive_v2',
+  AV: 1,                    // saved-state format: 1 = carries the season archive (League.data.seasons); states without it are not trusted as caches
   HOLD: 4,                  // seconds the final table stays after the end screen
   RESYNC_GAP: 60e3,         // the page slept longer than this (ms): reload from the newest saved state
   offset: 0, skew: 0, phase: 'loading', progress: null, cur: null, pending: null, st: null, simT: 0,
@@ -3871,7 +3881,7 @@ const Live = {
   count() { return League.data.liveCount || 0; },
 
   /* --- league state ------------------------------------------------------ */
-  freshLeague() { const d = League.normalize(null); d.liveCount = 0; d.liveSeasonStart = 0; d.liveLastEnd = 0; return d; },
+  freshLeague() { const d = League.normalize(null); d.liveCount = 0; d.liveSeasonStart = 0; d.liveLastEnd = 0; d.seasons = []; return d; },
   /* The rules a live league plays by always come from CONFIG, never from what a saved state carries (League.normalize keeps a
      saved league's points / lives / speed / season length). So a league frozen before a rule change plays the new rules from
      its next match on; matches already played stay as they were. A season that has begun keeps its length until it ends.
@@ -3884,6 +3894,7 @@ const Live = {
   /* make a saved state the live league (null = a brand-new league) */
   adopt(d) {
     League.data = d ? Object.assign(League.normalize(d), { liveCount: d.liveCount || 0, liveSeasonStart: d.liveSeasonStart || 0, liveLastEnd: d.liveLastEnd || 0 }) : this.freshLeague();
+    if (!Array.isArray(League.data.seasons)) League.data.seasons = [];
     this.applyRules();
   },
   /* live match number of a season's group match */
@@ -3916,17 +3927,33 @@ const Live = {
   /* after a match: season over (group matches AND the promotion playoff) → champion, relegation/promotion, new season; then the next live match */
   closeMatch(m) {
     const d = League.data, ended = League.seasonOver();
-    if (ended) { League.endSeason(); this.applyRules(d); d.champions = d.champions.slice(-this.cfg().keepChampions); }
+    if (ended) {
+      const a = League.endSeason(), keep = this.cfg().keepChampions;
+      d.seasons = (d.seasons || []).concat(this.archiveSeason(a)).slice(-keep);
+      this.applyRules(d); d.champions = d.champions.slice(-keep);
+    }
     d.liveCount = (d.liveCount || 0) + 1;
     d.liveLastEnd = m.start + Math.round(m.dur * 1000);
     if (ended) d.liveSeasonStart = d.liveCount;
     this.pending = null;
     this.snapshot();
   },
+  /* a finished season for the "Geçmiş" tab, kept small: the final table (with the last matches' places), who went down / up and the
+     promotion playoff's bracket. The group matches themselves are dropped. Times are minutes since 1970 (0 = unknown). */
+  archiveSeason(a) {
+    const min = (iso) => { const t = Date.parse(iso); return isNaN(t) ? 0 : Math.round(t / 60000); };
+    const cup = a.cup, ts = a.history.map(h => min(h.date)).concat(cup ? Object.values(cup.res).map(r => min(r.date)) : []).filter(Boolean);
+    return { season: a.season, champ: a.champion.id, t0: ts.length ? Math.min(...ts) : 0, t1: ts.length ? Math.max(...ts) : 0,
+      n: a.history.length, p: League.data.points.slice(0, CONFIG.GROUP_SIZE),
+      rows: a.table.map(x => [x.id, x.played, x.pts, x.wins, x.gf, x.ga].concat(League.formOf(x.id, a.history))),
+      out: a.relegated.map(t => t.id), up: a.promoted.map(t => t.id),
+      cup: cup ? { draw: cup.draw.slice(), res: Object.fromEntries(Object.entries(cup.res).map(([k, r]) => [k, [r.winner, r.loser, r.sw, r.sl, min(r.date)]])) } : null };
+  },
   /* a state "after liveCount matches", taken only between matches (cache, checkpoint, resync) */
-  snapshot() { this.lastClean = JSON.stringify({ hash: this.hash(), savedAt: new Date(this.now()).toISOString(), data: League.data }); },
+  snapshot() { this.lastClean = JSON.stringify({ hash: this.hash(), av: this.AV, savedAt: new Date(this.now()).toISOString(), data: League.data }); },
   saveCache() { if (!this.lastClean) this.snapshot(); try { localStorage.setItem(this.CACHE_KEY, this.lastClean); } catch (e) { /* full / blocked: recompute next time */ } },
-  parseState(txt) { try { const c = typeof txt === 'string' ? JSON.parse(txt) : txt; return c && c.hash === this.hash() && c.data ? c.data : null; } catch (e) { return null; } },
+  /* legacy: also accept a state written before the season archive existed (the publish tool rebuilds those, see live-state.js) */
+  parseState(txt, legacy) { try { const c = typeof txt === 'string' ? JSON.parse(txt) : txt; return c && c.hash === this.hash() && (legacy || c.av === this.AV) && c.data ? c.data : null; } catch (e) { return null; } },
   readCache() { try { return this.parseState(localStorage.getItem(this.CACHE_KEY)); } catch (e) { return null; } },
   /* the site's checkpoint; its HTTP Date header also corrects a wrong device clock */
   async readCheckpoint() {
@@ -3998,11 +4025,14 @@ const Live = {
   ui() {
     const tabs = document.createElement('nav');
     tabs.id = 'liveTabs';
-    tabs.innerHTML = `<button data-tab="live" class="on">⚽ Canlı</button><button data-tab="table">Lig tablosu</button><button data-tab="fixture">Fikstür</button><button data-tab="cup">Eleme</button>`;
+    tabs.innerHTML = `<button data-tab="live" class="on">⚽ Canlı</button><button data-tab="table">Lig tablosu</button><button data-tab="fixture">Fikstür</button><button data-tab="cup">Eleme</button><button data-tab="history">Geçmiş</button>`;
     const pane = document.createElement('div');
     pane.id = 'livePane'; pane.className = 'hidden';
     $('stage').appendChild(tabs); $('stage').appendChild(pane);
     tabs.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) this.showTab(b.dataset.tab); });
+    /* "Geçmiş": the season picker (a select, and ‹ › for the neighbouring seasons) */
+    pane.addEventListener('change', (e) => { if (e.target.matches('.hist-sel')) this.pickSeason(+e.target.value); });
+    pane.addEventListener('click', (e) => { const b = e.target.closest('.hist-nav'); if (b && !b.disabled) this.pickSeason(+b.dataset.season); });
     const bar = document.createElement('div');
     bar.id = 'liveBar';
     bar.innerHTML = `<button id="liveSound">🔇 Ses kapalı</button><span id="liveInfo"></span>`;
@@ -4024,8 +4054,11 @@ const Live = {
     return `Her ${this.every(now)} dk'da bir maç · sıradaki ${this.clock(next)}`;
   },
   tab: 'live', paneKey: '',
+  histSel: 0,               // "Geçmiş": the selected season (0 = the latest finished one)
+  pickSeason(n) { this.histSel = n; this.paneKey = ''; this.renderPane(); $('livePane').scrollTop = 0; },
   showTab(tab) {
     this.tab = tab; this.paneKey = '';
+    if (tab === 'history') this.histSel = 0;                  // opening the tab always starts at the latest season
     document.querySelectorAll('#liveTabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     $('livePane').classList.toggle('hidden', tab === 'live');
     this.renderPane();
@@ -4037,10 +4070,11 @@ const Live = {
     if (this.tab === 'live' || this.phase === 'loading') return;
     const d = League.data, s = App.setup;
     const live = this.phase === 'match' && s ? (s.cup ? 'cup-' + s.cup : !d.history.some(h => h.week === s.week && h.weekMatch === s.weekMatch) ? `${s.week}-${s.weekMatch}` : '') : '';
-    const key = [this.tab, d.season, d.history.length, this.count(), live].join('|');
+    /* the history tab shows one finished season only: it is built (and redrawn) when the selection or the archive changes, nothing else */
+    const key = this.tab === 'history' ? ['history', this.histSel, (d.seasons || []).length].join('|') : [this.tab, d.season, d.history.length, this.count(), live].join('|');
     if (key === this.paneKey) return;
     this.paneKey = key;
-    $('livePane').innerHTML = `<div class="lp-in">${this.tab === 'table' ? LivePages.table() : this.tab === 'cup' ? LivePages.cup(live) : LivePages.fixture(live)}</div>`;
+    $('livePane').innerHTML = `<div class="lp-in">${this.tab === 'table' ? LivePages.table() : this.tab === 'cup' ? LivePages.cup(live) : this.tab === 'history' ? LivePages.history() : LivePages.fixture(live)}</div>`;
   },
   /* join a computed match that is on: replay it from its kick-off up to now */
   startMatch(m) {
@@ -4160,15 +4194,20 @@ const LivePages = {
     return { t: Live.slot(n), late: false };
   },
   bandsText() { return Live.cfg().bands.map((b, i, B) => `${b.from}–${B[(i + 1) % B.length].from} her ${b.every} dk`).join(' · '); },
+  /* a league table (the running season's and a finished season's): list = [{ t: club, r: { played, pts, wins, gf, ga }, form: [places], rel }] in rank order */
+  tableHtml(list) {
+    const rows = list.map((x, i) => {
+      const av = x.r.gf - x.r.ga;
+      return `<tr class="${x.rel ? 'rel' : ''}"><td>${i + 1}</td><td class="tn">${this.dot(x.t)}${esc(x.t.name)}</td><td>${x.r.played}</td><td><b>${x.r.pts}</b></td>` +
+        `<td class="opt">${x.r.wins}</td><td class="opt">${x.r.gf}</td><td class="opt">${x.r.ga}</td><td>${av > 0 ? '+' : ''}${av}</td><td class="form">${formHtml(x.form)}</td></tr>`;
+    }).join('');
+    return `<table class="lp-table"><thead><tr><th>#</th><th>Takım</th><th title="Oynanan">O</th><th title="Puan">P</th><th class="opt" title="Birincilik">1.</th><th class="opt" title="Atılan gol">AG</th><th class="opt" title="Yenilen gol">YG</th><th title="Averaj">AV</th><th title="Son ${CONFIG.FORM_COUNT} maçtaki sırası (en sağdaki en yeni)">Son ${CONFIG.FORM_COUNT}</th></tr></thead><tbody>${rows}</tbody></table>`;
+  },
   table() {
     const d = League.data, rk = League.ranking(), out = rk.length - Math.min(CONFIG.RELEGATE_COUNT, d.reserve.length);
-    const rows = rk.map((x, i) => {
-      const av = x.r.gf - x.r.ga;
-      return `<tr class="${i >= out ? 'rel' : ''}"><td>${i + 1}</td><td class="tn">${this.dot(x.t)}${esc(x.t.name)}</td><td>${x.r.played}</td><td><b>${x.r.pts}</b></td>` +
-        `<td class="opt">${x.r.wins}</td><td class="opt">${x.r.gf}</td><td class="opt">${x.r.ga}</td><td>${av > 0 ? '+' : ''}${av}</td><td class="form">${formHtml(League.formOf(x.t.id))}</td></tr>`;
-    }).join('');
+    const list = rk.map((x, i) => ({ t: x.t, r: x.r, form: League.formOf(x.t.id), rel: i >= out }));
     return `<h2>Lig tablosu</h2><div class="lp-sub">Sezon ${d.season} · ${d.history.length} / ${d.seasonLength * App.perWeek()} maç oynandı</div>${this.champ()}
-      <table class="lp-table"><thead><tr><th>#</th><th>Takım</th><th title="Oynanan">O</th><th title="Puan">P</th><th class="opt" title="Birincilik">1.</th><th class="opt" title="Atılan gol">AG</th><th class="opt" title="Yenilen gol">YG</th><th title="Averaj">AV</th><th title="Son ${CONFIG.FORM_COUNT} maçtaki sırası (en sağdaki en yeni)">Son ${CONFIG.FORM_COUNT}</th></tr></thead><tbody>${rows}</tbody></table>
+      ${this.tableHtml(list)}
       <div class="lp-legend">Puan: ${d.points.slice(0, CONFIG.GROUP_SIZE).map((p, i) => `${i + 1}. → ${p}`).join(' · ')} · Kırmızı çizgili son ${CONFIG.RELEGATE_COUNT} takım sezon sonunda ligden düşer${League.cupOn() ? `; yerlerine havuzdaki ${CONFIG.CUP_SIZE} takımın eleme maçlarında ilk 3'e girenler çıkar (Eleme sekmesi)` : ''}.</div>${this.champs()}`;
   },
   /* kick-off of a playoff match: the actual one once played (or next), the planned slot otherwise */
@@ -4177,6 +4216,28 @@ const LivePages = {
     const n = Live.cupIndex(i);
     if (n === Live.count()) { const t = Live.nextStart(); return { t, late: t - Live.slot(n) > 1000 }; }
     return { t: Live.slot(n), late: false };
+  },
+  /* the bracket's rounds as HTML (the running playoff and a finished season's).
+     o: { team(id) → club or null, kick(match) → { t: ms, late }, live: 'cup-<key>' of the match being played } */
+  cupRounds(ms, c, o) {
+    const nm = (id, ph) => { const t = id && o.team(id); return t ? `<li>${this.dot(t)}<span class="nm">${esc(t.name)}</span>` : `<li class="tbd"><span class="nm">${ph}</span>`; };
+    /* a slot whose club is not decided yet: "Çeyrek final 1 galibi" */
+    const tbd = (ref) => ref[0] === 's' ? '—' : `${cupName(ref.slice(1))[1]} ${ref[0] === 'w' ? 'galibi' : 'mağlubu'}`;
+    return CUP_ROUNDS_TR.map((rn, r) => {
+      const list = ms.filter(m => m.r === r);
+      const cur = list.some(m => !m.res) && !ms.some(m => m.r < r && !m.res);
+      const body = list.map(m => {
+        const K = o.kick(m), isLive = o.live === 'cup-' + m.k, def = CUP_SHAPE[m.i];
+        const side = (id, ref, win) => nm(id, tbd(ref)) + (m.res ? `<span class="pt ${win ? 'g' : 'r'}">${win ? m.res.sw : m.res.sl}</span>` : '') + '</li>';
+        const badge = m.res ? '<span class="b done">Bitti</span>' : isLive ? '<span class="b live">● CANLI</span>' : '';
+        const aWin = !!m.res && m.res.winner === m.a;
+        return `<div class="fx-match${m.res ? ' done' : ''}${isLive ? ' live' : ''}"><div class="fx-head"><b>${cupName(m.k)[1]}</b><span>${Live.clock(K.t)}${K.late ? ' · ertelendi' : ''}</span>${badge}</div>`
+          + `<ol class="res">${side(m.a, def.a, aWin)}${side(m.b, def.b, !!m.res && !aWin)}</ol></div>`;
+      }).join('');
+      const k0 = o.kick(list[0]).t;
+      const byes = r === 0 ? `<div class="lp-legend" style="margin:0 0 4px">Bay geçenler: ${c.draw.slice(0, 4).map(id => esc((o.team(id) || {}).name || '?')).join(', ')}</div>` : '';
+      return `<section class="fx-week${cur ? ' cur' : ''}"><h3>${rn}<span>${this.day(k0)} · ${Live.clock(k0)}</span></h3>${byes}${body}</section>`;
+    }).join('');
   },
   /* the "Eleme" tab: the promotion playoff of the pool clubs, played after the season's group matches */
   cup(live) {
@@ -4190,27 +4251,38 @@ const LivePages = {
       return `${head}<div class="lp-sub">Sezon ${d.season} · grup maçları bitince başlar (${d.history.length} / ${d.seasonLength * App.perWeek()} maç oynandı)</div>${this.champ()}${guide}`
         + `<h3 class="lp-h3">Havuzdaki takımlar</h3><ul class="lp-pool">${d.reserve.map(t => `<li>${this.dot(t)}${esc(t.name)}</li>`).join('')}</ul>`;
     }
-    const nm = (id, ph) => { const t = League.poolTeam(id); return t ? `<li>${this.dot(t)}<span class="nm">${esc(t.name)}</span>` : `<li class="tbd"><span class="nm">${ph}</span>`; };
-    /* a slot whose club is not decided yet: "Çeyrek final 1 galibi" */
-    const tbd = (ref) => ref[0] === 's' ? '—' : `${cupName(ref.slice(1))[1]} ${ref[0] === 'w' ? 'galibi' : 'mağlubu'}`;
-    const rounds = CUP_ROUNDS_TR.map((rn, r) => {
-      const list = ms.filter(m => m.r === r);
-      const cur = list.some(m => !m.res) && !ms.some(m => m.r < r && !m.res);
-      const body = list.map(m => {
-        const K = this.cupKickoff(m.i, m), isLive = live === 'cup-' + m.k, def = CUP_SHAPE[m.i];
-        const side = (id, ref, win) => nm(id, tbd(ref)) + (m.res ? `<span class="pt ${win ? 'g' : 'r'}">${win ? m.res.sw : m.res.sl}</span>` : '') + '</li>';
-        const badge = m.res ? '<span class="b done">Bitti</span>' : isLive ? '<span class="b live">● CANLI</span>' : '';
-        const aWin = !!m.res && m.res.winner === m.a;
-        return `<div class="fx-match${m.res ? ' done' : ''}${isLive ? ' live' : ''}"><div class="fx-head"><b>${cupName(m.k)[1]}</b><span>${Live.clock(K.t)}${K.late ? ' · ertelendi' : ''}</span>${badge}</div>`
-          + `<ol class="res">${side(m.a, def.a, aWin)}${side(m.b, def.b, !!m.res && !aWin)}</ol></div>`;
-      }).join('');
-      const k0 = this.cupKickoff(list[0].i, list[0]).t;
-      const byes = r === 0 ? `<div class="lp-legend" style="margin:0 0 4px">Bay geçenler: ${c.draw.slice(0, 4).map(id => esc((League.poolTeam(id) || {}).name || '?')).join(', ')}</div>` : '';
-      return `<section class="fx-week${cur ? ' cur' : ''}"><h3>${rn}<span>${this.day(k0)} · ${Live.clock(k0)}</span></h3>${byes}${body}</section>`;
-    }).join('');
+    const rounds = this.cupRounds(ms, c, { team: (id) => League.poolTeam(id), kick: (m) => this.cupKickoff(m.i, m), live });
     const top = League.cupTop3();
     const done = top ? `<div class="lp-note">🔺 Yükselenler: <b>${top.map(t => esc(t.name)).join(', ')}</b></div>` : '';
     return `${head}<div class="lp-sub">Sezon ${d.season} · ${ms.filter(m => m.res).length} / ${ms.length} maç oynandı</div>${this.champ()}${done}${guide}${rounds}`;
+  },
+  /* a club by id: ligde ya da havuzda (every club ever in the league is in one of the two) */
+  anyTeam(id) { const d = League.data; return d.teams.find(t => t.id === id) || d.reserve.find(t => t.id === id) || null; },
+  /* the "Geçmiş" tab: ONE finished season at a time (the latest when the tab opens), picked from the list on top.
+     Only the selected season is turned into HTML; the others stay as compact data in the league state. */
+  history() {
+    const list = League.data.seasons || [], head = '<h2>Geçmiş</h2>';
+    if (!list.length) return `${head}<div class="lp-sub">Henüz biten sezon yok. Bir sezon bitince son tablosu ve yükselme eleme sonuçları burada görünür.</div>${this.champs()}`;
+    const found = list.findIndex(r => r.season === Live.histSel), at = found >= 0 ? found : list.length - 1;
+    const rec = list[at], team = (id) => this.anyTeam(id) || { name: id, c1: '#888', c2: '#fff' };
+    const when = (min) => { const ms = min * 60000; return `${this.day(ms).split(' ').slice(0, 2).join(' ')} ${Live.clock(ms)}`; };
+    const opts = list.slice().reverse().map(r => `<option value="${r.season}"${r.season === rec.season ? ' selected' : ''}>Sezon ${r.season} · 🏆 ${esc(team(r.champ).name)}</option>`).join('');
+    const bar = `<div class="hist-bar"><button class="hist-nav" data-season="${at > 0 ? list[at - 1].season : ''}" title="Önceki sezon"${at > 0 ? '' : ' disabled'}>‹</button>`
+      + `<select class="hist-sel" aria-label="Sezon seç">${opts}</select>`
+      + `<button class="hist-nav" data-season="${at < list.length - 1 ? list[at + 1].season : ''}" title="Sonraki sezon"${at < list.length - 1 ? '' : ' disabled'}>›</button></div>`;
+    const out = new Set(rec.out);
+    const rows = rec.rows.map(r => ({ t: team(r[0]), r: { played: r[1], pts: r[2], wins: r[3], gf: r[4], ga: r[5] }, form: r.slice(6), rel: out.has(r[0]) }));
+    const table = `${this.tableHtml(rows)}<div class="lp-legend">Puan: ${rec.p.map((p, k) => `${k + 1}. → ${p}`).join(' · ')} · Kırmızı çizgili ${rec.out.length} takım bu sezon sonunda ligden düştü.</div>`;
+    let cup;
+    if (rec.cup) {
+      const c = { draw: rec.cup.draw, res: Object.fromEntries(Object.entries(rec.cup.res).map(([k, r]) => [k, { winner: r[0], loser: r[1], sw: r[2], sl: r[3], t: r[4] * 60000 }])) };
+      const ms = League.cupMatchesOf(c);
+      cup = `<h3 class="lp-h3">Yükselme eleme maçları</h3><div class="lp-note">🔺 Yükselenler: <b>${rec.up.map(id => esc(team(id).name)).join(', ')}</b></div>`
+        + this.cupRounds(ms, c, { team: (id) => this.anyTeam(id), kick: (m) => ({ t: m.res ? m.res.t : 0, late: false }) });
+    } else cup = `<h3 class="lp-h3">Yükselme</h3><div class="lp-note">Bu sezon eleme maçı yoktu; havuzun sıradaki takımları yükseldi: <b>${rec.up.map(id => esc(team(id).name)).join(', ')}</b></div>`;
+    const span = rec.t0 ? ` · ${when(rec.t0)} – ${when(rec.t1)}` : '';
+    return `${head}${bar}<div class="lp-sub">Sezon ${rec.season}${span} · ${rec.n} grup maçı</div>`
+      + `<div class="lp-note">🏆 Sezon ${rec.season} şampiyonu: <b>${esc(team(rec.champ).name)}</b></div>${table}${cup}`;
   },
   fixture(live) {
     const d = League.data, plan = App.seasonPlan();

@@ -17,7 +17,7 @@ Site adresi: https://mindmash-mt.github.io/Satisfying-Lig/ — **hiç durmayan b
 
 - **Maç sırasında:** maçın kendisi. Geç gelen kişi maçı baştan değil, **kaldığı yerden** izler; herkes aynı anda aynı maçı görür. Maçtan önce `WEEK 5 MATCHES` ekranı, maçtan sonra animasyonlu lig tablosu gelir.
 - **Maçlar arasında:** güncel lig tablosu ve bir sonraki maça **geri sayım**.
-- Üstteki sekmeler: **⚽ Canlı** (yayın), **Lig tablosu** (O, P, 1., AG, YG, AV, son 3 maç; düşme hattındaki son 3 takım kırmızı çizgili; son şampiyonlar) **Fikstür** (sezonun bütün haftaları ve her maçın saati; oynananlar sıralama ve puanlarla, oynanan maç `● CANLI`, geciken maç `ertelendi` etiketiyle) ve **Eleme** (havuzdaki 12 kulübün yükselme eleme tablosu: turlar, skorlar, bay geçenler, sıradaki maç). Sekmeler açıkken yayın arka planda saate göre ilerler.
+- Üstteki sekmeler: **⚽ Canlı** (yayın), **Lig tablosu** (O, P, 1., AG, YG, AV, son 3 maç; düşme hattındaki son 3 takım kırmızı çizgili; son şampiyonlar) **Fikstür** (sezonun bütün haftaları ve her maçın saati; oynananlar sıralama ve puanlarla, oynanan maç `● CANLI`, geciken maç `ertelendi` etiketiyle) ve **Eleme** (havuzdaki 12 kulübün yükselme eleme tablosu: turlar, skorlar, bay geçenler, sıradaki maç). **Geçmiş** (biten sezonların tablosu ve yükselme eleme sonuçları; bkz. [Geçmiş sezonlar](#geçmiş-sezonlar)). Sekmeler açıkken yayın arka planda saate göre ilerler.
 - Alttaki çubuk: ses düğmesi (tarayıcı kuralları gereği kapalı başlar) ve "Her 3 dk'da bir maç · sıradaki 21:03".
 
 ### Maç takvimi
@@ -44,6 +44,14 @@ LIVE: {
 ```
 
 `start`, `bands`, `gap` ya da `salt` değişirse canlı lig **yeni bir lig** olarak baştan kurulur; bütün tarayıcılar kayıtlı durumu bırakır. (Bunlar ligin kimliğidir. **Simülasyonu değiştirmek ligi sıfırlamaz**, bkz. aşağıdaki [Kural değişikliği ligi sıfırlamaz](#kural-değişikliği-ligi-sıfırlamaz).)
+
+### Geçmiş sezonlar
+
+**Geçmiş** sekmesi biten sezonları gösterir. Sekmeye tıklayınca **en son biten sezonun** lig tablosu açılır; altında o sezonun yükselme eleme sonuçları (turlar, skorlar, bay geçenler, yükselenler) durur. Üstteki seçiciden (ya da ‹ › düğmelerinden) önceki sezonlar seçilir; **yalnızca seçilen sezon çizilir**, diğerleri sayfaya hiç yüklenmez. Sekmeyi yeniden açınca yine en son sezonla başlar. Tabloda sezonun puanlaması, son 3 maçın sırası ve sezon sonunda düşen (kırmızı çizgili) takımlar görünür.
+
+Biten her sezon, sezon geçişinde kompakt bir kayıt olarak lig durumuna eklenir (`seasons`; sezon başına ~1 KB, en yeni `CONFIG.LIVE.keepChampions` = 50 sezon): son tablo, düşenler, yükselenler ve eleme kurası/sonuçları. Grup maçlarının kendisi tutulmaz. Kayıt, tablonun sezonun bittiği andaki hâlidir; sonradan puanlama değişse de yeniden yazılmaz. Kural değişikliklerinde taban bu arşivi de taşır.
+
+*Geçmiş sezonları geri kazanma:* Geçmiş sekmesinden önce biten sezonların tablosu kayıtlı durumda yoktu. Yayın iş akışı (`tools/live-state.js`), arşivsiz eski biçimli bir checkpoint bulursa ligi aynı kurallarla ligin başından yeniden hesaplar ve yalnızca sonucun yayındakiyle **birebir aynı** olduğunu doğrularsa (arşiv hariç) onun yerine geçirir. Farklı çıkarsa ya da bir taban varsa (taban öncesi sezonlar yeniden hesaplanamaz) yayındaki durum aynen kullanılır ve arşiv o andan itibaren tutulur. Arşivsiz eski kayıtlar tarayıcılarda önbellek olarak kabul edilmez (`Live.AV`); bu yüzden herkes arşivli durumdan başlar.
 
 ### Nasıl çalışıyor (sunucusuz, ücretsiz)
 
@@ -283,7 +291,7 @@ src/
 tools/
   balance.js        Terminalden denge testi (Node.js)
   live-check.js     Canlı lig testleri: determinizm, takvim, taşma kuralı (--long: 48 saatlik koşu)
-  live-state.js     live-state.json checkpoint'ini üretir (Pages iş akışı 15 dakikada bir çalıştırır)
+  live-state.js     live-state.json checkpoint'ini üretir; arşivsiz eski checkpoint'i doğrulayarak arşivli hâle getirir (Pages iş akışı 15 dakikada bir çalıştırır)
   live-base.js      Kural değişince ligi dondurur: yayındaki checkpoint → live-base.json (Pages iş akışı her yayında çalıştırır)
   live-fingerprint.js  Simülasyon parmak izi (build.sh → BUILD_SIM_HASH)
   live-node.js      Canlı lig motorunu tarayıcısız (Node) yükler
