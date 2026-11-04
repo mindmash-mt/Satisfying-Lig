@@ -42,7 +42,8 @@ const CONFIG = {
   /* the public site's live league (07_live.js), a league that never stops. Istanbul time (UTC+3 all year).
      bands: from each `from` until the next band, one group match every `every` minutes (a day = 308 matches).
      The first match is at `start` + the first band's time. gap: seconds between a match that ran over and the next one.
-     Changing start / bands / gap / salt (or the simulation) starts a NEW live league: all browsers drop their saved state. */
+     Changing start / bands / gap / salt starts a NEW live league: all browsers drop their saved state.
+     Changing the simulation (results, scoring, balance) does NOT: the league is frozen as it stands and the new rules play on from there (tools/live-base.js). */
   LIVE: {
     start: '2026-11-04T00:36',   // 'YYYY-MM-DD' (that day at the first band's time) or 'YYYY-MM-DDTHH:MM'
     bands: [{ from: '05:00', every: 5 }, { from: '09:00', every: 10 }, { from: '19:00', every: 3 }],

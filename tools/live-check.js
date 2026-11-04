@@ -7,7 +7,10 @@
   3) Takvim: günde 308 maç, bant geçişleri (05:00 / 09:00 / 19:00) doğru saatte.
   4) Taşma kuralı: aralık zorla 1 dakikaya indirilir (maçlar sığmaz) → maçlar asla üst üste binmez, hiçbir maç
      planlı saatinden önce başlamaz, takvim kilitlenmez ve normal aralığa dönülünce gecikme erir.
-  5) --long: gerçek takvimle 48 saatlik hızlandırılmış koşu (gün ve bant geçişleri, ~10 sezon: 51 grup + 12 eleme maçı, şampiyon sınırı).
+  5) Kural değişikliği ligi sıfırlamaz: dondurulmuş lig (taban) yeni kurallarla devam eder, geçmiş aynen kalır, yeni puan /
+     sezon uzunluğu uygulanır, iki bağımsız tarayıcı ve checkpoint'ten devam eden üçüncüsü birebir aynı sonucu bulur;
+     yayın iş akışının taban kararı (tools/live-base.js) doğru çalışır.
+  6) --long: gerçek takvimle 48 saatlik hızlandırılmış koşu (gün ve bant geçişleri, ~10 sezon: 51 grup + 12 eleme maçı, şampiyon sınırı).
   Kullanım: node tools/live-check.js [maç sayısı] [--long]
 */
 const fs = require('fs'), path = require('path');
@@ -95,6 +98,77 @@ console.log(`${N} grup maçı + ${N} eleme (1v1) maçı + sezon fikstürü, Math
     const late = log.map(x => x.start - x.slot), back = log.findIndex((x, i) => i > 60 && x.start === x.slot);
     ok(sane(log, L.CONFIG.LIVE.gap) && log.length > 60 && back > 0,
       `Taşma kuralı (05–06 arası her 1 dk, maçlar sığmıyor): ${log.length} maç, üst üste binen yok, en büyük gecikme ${Math.round(Math.max(...late) / 60e3)} dk, normal aralıkta ${log[back] ? L.Live.clock(log[back].start) : '—'}'de saatine döndü`);
+  }
+  /* 5) a rule change does not reset the league: the frozen league (base) plays on under the new rules */
+  {
+    const T = (L, n) => L.Live.slot(n) + 1;                       // a moment shortly after match n's kick-off
+    const shortSeason = (L, len) => { L.CONFIG.SEASON_LENGTH = len; L.Live.adopt(null); };   // len group weeks + 12 playoff matches per season
+    const J = (x) => JSON.stringify(x, (k, v) => (k === 'created' ? undefined : v));   // seasonPlan.created is a wall-clock stamp, informational only
+    /* the old rules: 2-week seasons (6 group + 12 playoff matches); freeze the league 4 matches into season 2 */
+    const A = loadLive(); shortSeason(A, 2);
+    await A.Live.catchUp(0, () => T(A, 22)); A.Live.snapshot();
+    const frozen = JSON.parse(A.Live.lastClean).data, mk = (data) => ({ id: 'test', league: A.Live.league(), sim: 'old', count: data.liveCount, data });
+    const base = mk(frozen);
+    /* the new rules: other points, 3-week seasons */
+    const fromBase = (b) => { const L = loadLive({ simHash: 'new', base: b }); L.CONFIG.POINTS = [9, 5, 2, 1, 0, 0, 0, 0, 0, 0]; L.CONFIG.SEASON_LENGTH = 3; L.Live.adopt(L.Live.baseState()); return L; };
+    const B = fromBase(base), d0 = B.League.data;
+    ok(d0.liveCount === frozen.liveCount && J(d0.history) === J(frozen.history) && J(d0.table) === J(frozen.table) && J(d0.champions) === J(frozen.champions) && d0.season === frozen.season,
+      `Taban: ${frozen.liveCount} maçlık lig (Sezon ${frozen.season}, ${frozen.history.length} grup maçı, ${frozen.champions.length} şampiyon) olduğu gibi yüklendi`);
+    ok(d0.points.slice(0, 4).join() === '9,5,2,1' && d0.seasonLength === 2 && d0.settings.lives === B.CONFIG.DEFAULT_LIVES,
+      'Yeni puanlama hemen geçerli; başlamış sezonun uzunluğu (2 hafta) sezon bitene kadar korunuyor');
+    const hashed = B.Live.hash();
+    ok(hashed.endsWith('@test') && hashed.startsWith('new:') && J(B.Live.parts(hashed)) === J({ sim: 'new', league: B.Live.league(), base: 'test' }) &&
+       J(B.Live.parts('abc:' + B.Live.league())) === J({ sim: 'abc', league: B.Live.league(), base: '' }) && B.Live.parts('abc:başka-lig').league === null,
+      'Hash: <kural>:<lig kimliği>@<taban>; tabansız (eski biçim) hash\'ler de ayrıştırılıyor');
+    /* play on across the season change (match 36): 45 matches */
+    const logB = []; const closeB = B.Live.closeMatch.bind(B.Live);
+    B.Live.closeMatch = (m) => { logB.push(B.League.data.history.length); closeB(m); };
+    await B.Live.catchUp(0, () => T(B, 45)); B.Live.snapshot();
+    const dB = B.League.data;
+    ok(dB.liveCount === 45 && dB.season === frozen.season + 1 && dB.seasonLength === 3 && dB.champions.length === frozen.champions.length + 1 && J(dB.champions.slice(0, frozen.champions.length)) === J(frozen.champions),
+      `Sezon geçişi: yeni sezon 3 hafta (eski 2), eski şampiyonlar aynen duruyor, ${dB.champions.length}. şampiyon eklendi`);
+    /* the points of the matches played after the freeze are the new ones, the table before the freeze is not rewritten */
+    const rowsBefore = Object.fromEntries(Object.entries(frozen.table).map(([k, v]) => [k, v.pts]));
+    {
+      const C = fromBase(base); await C.Live.catchUp(0, () => T(C, 26));      // 4 more matches, still season 2
+      const dC = C.League.data, added = dC.history.slice(frozen.history.length);
+      const exp = {}; added.forEach(h => h.result.forEach(r => { exp[r.id] = (exp[r.id] || 0) + ([9, 5, 2, 1][r.place - 1] || 0); }));
+      ok(added.length > 0 && Object.keys(dC.table).every(k => dC.table[k].pts - (rowsBefore[k] || 0) === (exp[k] || 0)) && J(dC.history.slice(0, frozen.history.length)) === J(frozen.history),
+        `Taban sonrası ${added.length} maç yeni puanla (9-5-2-1) işlendi; tabandaki tablo ve geçmiş yeniden yazılmadı`);
+    }
+    ok(J(B.Live.baseState()) === J(frozen), 'Oynarken taban bozulmuyor (kopya üzerinde çalışılıyor)');
+    /* determinism: another browser from the same base, and one that resumes from a checkpoint half way */
+    const B2 = fromBase(base); await B2.Live.catchUp(0, () => T(B2, 45)); B2.Live.snapshot();
+    const B3 = fromBase(base); await B3.Live.catchUp(0, () => T(B3, 31)); B3.Live.snapshot();
+    const B4 = fromBase(base); B4.Live.adopt(B4.Live.parseState(B3.Live.lastClean));
+    await B4.Live.catchUp(0, () => T(B4, 45)); B4.Live.snapshot();
+    ok(J(dB) === J(B2.League.data) && J(dB) === J(B4.League.data) && B4.Live.parseState(B3.Live.lastClean),
+      'Aynı tabandan iki bağımsız tarayıcı + yarı yoldaki checkpoint\'ten devam eden: 45. maçta birebir aynı lig');
+    /* a state taken under another base / other rules is rejected */
+    const other = loadLive({ simHash: 'new', base: { ...base, id: 'other' } });
+    ok(other.Live.parseState(B3.Live.lastClean) === null && loadLive({ simHash: 'x' }).Live.parseState(B3.Live.lastClean) === null,
+      'Başka tabanın / başka kuralın checkpoint\'i geçersiz sayılıyor');
+    /* a freeze exactly between two seasons: the new season length applies at once */
+    const E = loadLive(); shortSeason(E, 2); await E.Live.catchUp(0, () => T(E, 18)); E.Live.snapshot();
+    const eb = mk(JSON.parse(E.Live.lastClean).data), F = fromBase(eb);
+    ok(eb.data.season === 2 && eb.data.history.length === 0 && F.League.data.seasonLength === 3, 'Sezonlar arasında dondurulan lig: yeni sezon uzunluğu (3 hafta) hemen geçerli');
+  }
+  /* 5b) the publish workflow's base decision (tools/live-base.js) */
+  {
+    const { decide } = require('./live-base.js'), L = loadLive(), parts = (h) => L.Live.parts(h), lg = L.Live.league();
+    const st = (sim, count, base) => ({ hash: `${sim}:${lg}${base ? '@' + base : ''}`, savedAt: 't' + count, data: { liveCount: count } });
+    const bs = (sim, count, id = 'b1') => ({ id, league: lg, sim, count, data: { liveCount: count } });
+    const cur = { league: lg, sim: 'S2' }, run = (prevBase, pub, c = cur) => decide({ cur: c, prevBase, pub, parts });
+    let r;
+    r = run(null, null);                              ok(r.action === 'none', 'Taban kararı: ilk yayın → tabansız');
+    r = run(null, st('S2', 50));                      ok(r.action === 'none', 'Taban kararı: checkpoint bu kodla uyumlu, taban yok → tabansız (eski önbellekler geçerli kalır)');
+    r = run(null, st('S1', 142));                     ok(r.action === 'rebase' && r.base.data.liveCount === 142 && r.base.sim === 'S2' && r.base.count === 142, 'Taban kararı: kural değişti → yayındaki checkpoint (142 maç) yeni tabanı oldu');
+    r = run(bs('S2', 142), st('S2', 160, 'b1'));      ok(r.action === 'keep' && r.base.id === 'b1', 'Taban kararı: kural aynı → taban aynen taşınıyor');
+    r = run(bs('S1', 142), st('S1', 190, 'b1'));      ok(r.action === 'rebase' && r.base.data.liveCount === 190, 'Taban kararı: ikinci kural değişikliği → taban birikimli, en son checkpoint\'ten yenilendi');
+    r = run(bs('S1', 142), null);                     ok(r.action === 'rebase' && r.base.data.liveCount === 142, 'Taban kararı: checkpoint yok → önceki tabandan devam (lig sıfırlanmıyor)');
+    r = run(bs('S1', 200), st('S1', 150));            ok(r.action === 'rebase' && r.base.data.liveCount === 200, 'Taban kararı: elde en ileri durum seçilir');
+    r = run(bs('S1', 142), st('S1', 190, 'b1'), { league: lg + 'x', sim: 'S2' });
+    ok(r.action === 'none' && st('S1', 1).hash.endsWith(lg), 'Taban kararı: lig kimliği (start/takvim/salt) değişti → yeni lig, eski durum yok sayılır');
   }
   if (process.argv.includes('--long')) {
     const L = loadLive(), t0 = Date.now();
