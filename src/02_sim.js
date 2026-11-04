@@ -38,6 +38,8 @@ function buildGeo(kind, verts, sideTeams, cx, cy, goalInfo, netDepth, goalFrac, 
    PHYSICS + ENTITIES (Ball, Player, Keeper) + POWERUPS — Game simulation
    All gameplay randomness uses this.rng (seeded). Fixed step DT.
    ===================================================================== */
+/* 1v1 match: the roles of a club's outfield players, in the order of Game.duelSpots (the first is the captain) */
+const GAME_ROLES = ['mid', 'def', 'def', 'fwd'];
 class Game {
   constructor(o) {
     this.o = o;
@@ -187,6 +189,11 @@ class Game {
      CONFIG.TEAM_PLAYERS outfield players — the third in the middle of its own half in front of its box, a fourth or more spread */
   duelSpots(t, top) {
     const side = t === top ? -1 : 1, flank = t === top ? 1 : -1, out = [];
+    if (this.timed) {                                       // 1v1 match: captain (midfield), left / right defender, forward (see ROLES)
+      const cx = this.cx, cy = this.rectCy(), W = this.W, H = this.H;
+      return [{ x: cx + flank * W * 0.2, y: cy + side * H * 0.08 }, { x: cx - W * 0.25, y: cy + side * H / 3 },
+        { x: cx + W * 0.25, y: cy + side * H / 3 }, { x: cx - flank * W * 0.1, y: cy - side * H * 0.3 }].slice(0, Math.max(1, CONFIG.TEAM_PLAYERS));
+    }
     const cx = this.cx + flank * this.W * 0.2, cy = this.rectCy() + side * this.H * 0.18;
     out.push({ x: cx, y: cy });
     out.push(this.duelMateSpot(t, top, this.W, this.H, cx));
@@ -197,12 +204,23 @@ class Game {
     }
     return out;
   }
+  /* a player's area (y range) in a 1v1 match: its third of the pitch, seen from its own goal (it flips at half time) */
+  zoneOf(p) {
+    const top = this.rectTeams[0], side = p.team === top ? -1 : 1, cy = this.rectCy(), H = this.H;
+    const a = p.role === 'def' ? side * H / 2 : p.role === 'fwd' ? -side * H / 6 : -H / 6;
+    const b = p.role === 'def' ? side * H / 6 : p.role === 'fwd' ? -side * H / 2 : H / 6;
+    return [cy + Math.min(a, b), cy + Math.max(a, b)];
+  }
   initPlayers() {
     const mk = (team, x, y, cap) => this.makePlayer(team, x, y, cap);
     if (this.finalDuel) {
       /* direct final / 1v1 match (only 2 teams): captain + team-mates */
       const [top, bottom] = this.rectTeams;
-      for (const t of [top, bottom]) this.duelSpots(t, top).forEach((p, k) => this.players.push(mk(t, p.x, p.y, k === 0)));
+      for (const t of [top, bottom]) this.duelSpots(t, top).forEach((p, k) => {
+        const pl = mk(t, p.x, p.y, k === 0);
+        if (this.timed) pl.role = GAME_ROLES[k] || 'mid';
+        this.players.push(pl);
+      });
     } else {
       for (const g of this.geo.goals) {
         this.players.push(mk(g.team, this.cx + (g.mx - this.cx) * 0.5, this.cy + (g.my - this.cy) * 0.5));
@@ -429,6 +447,13 @@ class Game {
         const vbn = b.vx * nx + b.vy * ny; if (vbn < 0) { b.vx -= 2 * vbn * nx; b.vy -= 2 * vbn * ny; b.h = DM.atan2(b.vy, b.vx); }
       }
     }
+    /* 1v1 match: a player stays in its third (after the walls and the other players pushed it) — at the edge it turns back */
+    for (const p of P) {
+      if (!p.alive || !p.role) continue;
+      const [y0, y1] = this.zoneOf(p);
+      if (p.y < y0 + R) { p.y = y0 + R; if (p.vy < 0) { p.vy = -p.vy; p.h = DM.atan2(p.vy, p.vx); } }
+      if (p.y > y1 - R) { p.y = y1 - R; if (p.vy > 0) { p.vy = -p.vy; p.h = DM.atan2(p.vy, p.vx); } }
+    }
   }
 
   /* ---------- balls ---------- */
@@ -466,6 +491,7 @@ class Game {
     let d = Math.sqrt(d2);
     if (d < 1e-6) { dx = 1; dy = 0; d = 1; }
     const nx = dx / d, ny = dy / d;
+    if (p.role) return this.kick(b, p, nx, ny, rad);
     b.x = p.x + nx * rad; b.y = p.y + ny * rad;
     let vn = b.vx * nx + b.vy * ny;
     if (vn < 0) { b.vx -= 2 * vn * nx; b.vy -= 2 * vn * ny; }
@@ -477,6 +503,26 @@ class Game {
     b.lastTouch = p.team; b.hitP = this.t;
     if (fresh) this.emit('player', { x: b.x - nx * CONFIG.BALL_R, y: b.y - ny * CONFIG.BALL_R, team: p.team });
     if (this.finalDuel && !this.winnerSet && p.captain && this.headingToRivalGoal(b, p.team)) {
+      if (!b.shot || b.shotTeam !== p.team) {
+        b.shot = true; b.shotTeam = p.team;
+        b.sp = this.ballSpeedTarget(b);
+        this.emit('captainShot', { x: b.x, y: b.y, team: p.team, id: b.id });
+      }
+    } else this.endShot(b);
+  }
+  /* 1v1 match: a player's touch sends the ball forward — a random direction within ±KICK_MAX_DEG of straight at the rival goal's
+     end (only the up / down part is fixed), at the ball's speed. While the ball is still touching the player right after a kick it
+     is only pushed clear (no new direction). */
+  kick(b, p, nx, ny, rad) {
+    const fresh = this.t - b.hitP > 0.12;
+    b.hitP = this.t;
+    if (!fresh) { b.x = p.x + nx * rad; b.y = p.y + ny * rad; return; }
+    const down = p.team === this.rectTeams[0], a = this.rng.range(-1, 1) * CONFIG.KICK_MAX_DEG * DEG, sp = DM.hypot(b.vx, b.vy) || b.sp;
+    b.vx = DM.sin(a) * sp; b.vy = (down ? 1 : -1) * DM.cos(a) * sp;
+    b.x = p.x + (b.vx / sp) * rad; b.y = p.y + (b.vy / sp) * rad;
+    b.lastTouch = p.team;
+    this.emit('player', { x: b.x - (b.vx / sp) * CONFIG.BALL_R, y: b.y - (b.vy / sp) * CONFIG.BALL_R, team: p.team });
+    if (!this.winnerSet && p.captain && this.headingToRivalGoal(b, p.team)) {
       if (!b.shot || b.shotTeam !== p.team) {
         b.shot = true; b.shotTeam = p.team;
         b.sp = this.ballSpeedTarget(b);

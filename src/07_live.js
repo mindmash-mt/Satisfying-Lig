@@ -7,12 +7,12 @@
        refreshed every 15 minutes by the Pages workflow, is a ready-made checkpoint so first visits are quick),
      • the match that is on is fast-forwarded to "now" and then plays in real time,
      • between matches: the league table and a countdown to the next kick-off.
-   Timetable (CONFIG.LIVE.bands, Istanbul time): a 1v1 match every 2 minutes, day and night (720 a day). A slot:
-   ~5 s this week's matches, the 90 s match, ~9 s the animated league table, then the table and a countdown.
-   A match starts at its slot, or GAP seconds after the previous match ended if that one ran over (a league match
-   is always ~109 s on screen and fits; a playoff match that goes to a golden goal can take up to ~2.5 min, then the
-   next matches start a little late until the delay is absorbed by the next slots — it can never jam). A match's length on screen is computed from
-   its own simulation, so every browser agrees on it too.
+   Timetable (CONFIG.LIVE.bands, Istanbul time): a 1v1 match every 3 minutes, day and night (480 a day). A slot:
+   ~5 s this week's matches, the 90 s match with a 3 s half-time break, ~9 s the animated league table, then the table
+   and a countdown. A match starts at its slot, or GAP seconds after the previous match ended if that one ran over (a
+   league match is ~108 s on screen, a playoff match with a golden goal and penalties at most ~2.3 min, so it does not
+   happen; it can never jam anyway: the overrun is absorbed by the next slots). A match's length on screen is computed
+   from its own simulation, so every browser agrees on it too.
    The league's start comes from the deploy (BUILD_START, tools/live-start.js): a new league starts a few minutes after
    it goes live. BUILD_START also carries the old league's champions and finished seasons ("Geçmiş" tab).
    Changing the simulation never restarts the league: the Pages workflow freezes the league as it stands (BUILD_BASE) and the new

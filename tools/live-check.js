@@ -87,10 +87,10 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
   {
     const { Live, CONFIG } = loadLive(), c = (n) => Live.clock(Live.slot(n));
     CONFIG.LIVE.start = '2026-11-04T22:00'; Live._slots = null; Live._sched = null;
-    ok(Live.slots().length === 720 && c(0) === '22:00' && c(1) === '22:02' && c(30) === '23:00' && c(60) === '00:00' && Live.slot(720) - Live.slot(0) === 864e5,
-      'Takvim: her 2 dk\'da bir, günde 720 maç · 22:00, 22:02 … 23:00 … 00:00 (gün geçişi)');
+    ok(Live.slots().length === 480 && c(0) === '22:00' && c(1) === '22:03' && c(20) === '23:00' && c(40) === '00:00' && Live.slot(480) - Live.slot(0) === 864e5,
+      'Takvim: her 3 dk\'da bir, günde 480 maç · 22:00, 22:03 … 23:00 … 00:00 (gün geçişi)');
     CONFIG.LIVE.start = '2026-11-04T22:01'; Live._sched = null;
-    ok(c(0) === '22:02' && c(1) === '22:04', 'Başlangıç saati aralığa denk gelmezse ilk maç sıradaki 2 dk\'da (22:01 → 22:02)');
+    ok(c(0) === '22:03' && c(1) === '22:06', 'Başlangıç saati aralığa denk gelmezse ilk maç sıradaki 3 dk\'da (22:01 → 22:03)');
     const start = { salt: CONFIG.LIVE.salt, start: '2026-11-05T09:17' }, B = loadLive({ start });
     ok(B.Live.cfg().start === '2026-11-05T09:17' && B.Live.clock(B.Live.slot(0)) === '09:18' && B.Live.league().includes('2026-11-05T09:17') && loadLive({ start: { ...start, salt: 'başka' } }).Live.cfg().start === loadLive().CONFIG.LIVE.start,
       'Yayının seçtiği başlangıç (BUILD_START, 09:17 → ilk maç 09:18) bu salt için geçerli, ligin kimliğine dahil; başka salt\'ın başlangıcı yok sayılıyor');
@@ -165,6 +165,29 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
       const brk = kick2 && atHT ? kick2.t - atHT.t : 0;
       ok(topBefore === home && after && after !== home && atHT && atHT.clock >= CONFIG.MATCH_TIME / 2 && pauseOK && Math.abs(brk - CONFIG.HALF_BREAK) < 0.02 && kick2.clock === CONFIG.MATCH_TIME / 2 && kick2.balls === 1 && g.clock >= CONFIG.MATCH_TIME,
         `Devre arası: ${atHT ? atHT.clock.toFixed(1) : '?'}. sn'de, ${brk.toFixed(1)} sn sürdü (saat durdu); ev sahibi 1. yarıda üst, 2. yarıda alt kalede; 2. yarı ${CONFIG.MATCH_TIME / 2}. sn'den ortadan başladı`);
+    }
+    /* 4 outfield players per club: captain in midfield, 2 defenders, 1 forward, each always inside its third (it flips at half time);
+       every player touch sends the ball towards the rival goal's end, at most KICK_MAX_DEG off straight */
+    {
+      let outside = 0, kicks = 0, badKick = 0, roles = '', flip = true;
+      for (let s = 1; s <= 40; s++) {
+        const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 9000 + s, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout: false });
+        if (s === 1) roles = g.teams.map(T => g.players.filter(p => p.team === T.i).map(p => p.role + (p.captain ? '(C)' : '')).join('+')).join(' / ');
+        const z0 = g.zoneOf(g.players.find(p => p.role === 'def'));
+        /* the ball's direction right at the kick (later in the same step it may already bounce off a wall or a keeper) */
+        g.onEvent = (t, d) => {
+          if (t !== 'player') return;
+          const b = g.balls.find(x => x.state === 'live'), down = d.team === g.rectTeams[0];
+          if (b) { kicks++; const ang = Math.atan2(Math.abs(b.vx), (down ? 1 : -1) * b.vy) * 180 / Math.PI; if (ang > CONFIG.KICK_MAX_DEG + 0.01) badKick++; }
+        };
+        while (!g.over) {
+          g.step(DT);
+          if (!g.morph) for (const p of g.players) { const [y0, y1] = g.zoneOf(p); if (p.y < y0 + CONFIG.PLAYER_R - 0.01 || p.y > y1 - CONFIG.PLAYER_R + 0.01) outside++; }
+        }
+        if (s === 1) { const z1 = g.zoneOf(g.players.find(p => p.role === 'def' && p.team === g.players.find(q => q.role === 'def').team)); flip = Math.sign(z0[0] - g.rectCy()) !== Math.sign(z1[0] - g.rectCy()); }
+      }
+      ok(roles === 'mid(C)+def+def+fwd / mid(C)+def+def+fwd' && outside === 0 && kicks > 500 && badKick === 0 && flip,
+        `Diziliş: ${roles} · oyuncular hep kendi üçte birlik bölgesinde (devre arasında bölgeler yer değiştiriyor) · ${kicks} vuruşun hepsi rakip kaleye doğru, en fazla ±${CONFIG.KICK_MAX_DEG}°`);
     }
     /* scoring and ranking on a hand-made table */
     const d = League.data, [a, b, c] = d.teams.map(t => t.id);
@@ -347,13 +370,13 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
   /* 3c) a timetable change does not reset the league: frozen in a base, the new timetable starts after the base's last match.
      Also: a state written while the timetable was part of the league's identity belongs to the same league. */
   {
-    const A = loadLive(); A.CONFIG.LIVE.bands = [{ from: '00:00', every: 3 }]; A.Live._slots = null; A.Live._sched = null; A.Live.adopt(null);
+    const A = loadLive(); A.CONFIG.LIVE.bands = [{ from: '00:00', every: 2 }]; A.Live._slots = null; A.Live._sched = null; A.Live.adopt(null);
     await A.Live.catchUp(0, () => A.Live.slot(12) + 1); A.Live.snapshot();
     const frozen = JSON.parse(A.Live.lastClean).data, lg = A.Live.league();
     const N = loadLive({ simHash: 'new', base: { id: 'tt', league: lg, sim: 'new', count: frozen.liveCount, data: frozen } }); N.Live.adopt(N.Live.baseState());
-    const s0 = N.Live.slot(frozen.liveCount), grid = (t) => Math.ceil((t + 3 * 3600e3) / 120e3) * 120e3 - 3 * 3600e3;
-    ok(frozen.liveCount === 12 && s0 === grid(frozen.liveLastEnd) && N.Live.slot(frozen.liveCount + 1) - s0 === 120e3 && N.Live.nextStart() === s0,
-      `Takvim değişikliği (3 dk → 2 dk) ligi sıfırlamıyor: 12 maçlık lig dondu, 13. maç eski son maçın bitişinden sonraki ilk 2 dk aralığında (${N.Live.clock(s0)}), sonrakiler 2 dk arayla`);
+    const s0 = N.Live.slot(frozen.liveCount), grid = (t) => Math.ceil((t + 3 * 3600e3) / 180e3) * 180e3 - 3 * 3600e3;
+    ok(frozen.liveCount === 12 && s0 === grid(frozen.liveLastEnd) && N.Live.slot(frozen.liveCount + 1) - s0 === 180e3 && N.Live.nextStart() === s0,
+      `Takvim değişikliği (2 dk → 3 dk) ligi sıfırlamıyor: 12 maçlık lig dondu, 13. maç eski son maçın bitişinden sonraki ilk 3 dk aralığında (${N.Live.clock(s0)}), sonrakiler 3 dk arayla`);
     const oldHash = `abc123:${lg}:00:00/3:10@b1`, P = N.Live.parts(oldHash), { decide } = require('./live-base.js');
     const r = decide({ cur: { league: lg, sim: 'S2' }, prevBase: { id: 'b1', league: lg + ':00:00/3:10', sim: 'S1', count: 5, data: { liveCount: 5 } }, pub: { hash: oldHash, data: { liveCount: 9 } }, parts: (h) => N.Live.parts(h) });
     ok(P.sim === 'abc123' && P.league === lg && P.base === 'b1' && N.Live.parts('abc123:başka:2026-01-01T00:00').league === null && r.action === 'rebase' && r.base.data.liveCount === 9,
@@ -375,7 +398,7 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
   {
     const long = process.argv.includes('--long'), L = loadLive(), t0 = Date.now();
     L.CONFIG.LIVE.start = '2026-11-04T00:00'; L.Live._slots = null; L.Live._sched = null; L.Live.adopt(null);
-    const hours = long ? 48 : 6.5, log = await runUntil(L, L.Live.slot(0) + hours * 3600e3);
+    const hours = long ? 48 : 9, log = await runUntil(L, L.Live.slot(0) + hours * 3600e3);
     const d = L.League.data, lg = Math.max(...log.filter(x => !x.cup).map(x => x.dur)), cup = Math.max(...log.filter(x => x.cup).map(x => x.dur), 0);
     const lateness = log.map(x => x.start - x.slot), worst = Math.max(...lateness);
     const lateLeague = log.filter((x, i) => !x.cup && lateness[i] > 0).length, n = log.length;

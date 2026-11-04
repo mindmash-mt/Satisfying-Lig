@@ -26,9 +26,12 @@ const CONFIG = {
   TOPBAR_Y: 60,   // centre of the one-line top bar of a 1v1 match
   /* final duel: 2 players per team, one is the captain. A captain touch that sends the ball toward the rival goal
      (within CAPTAIN_AIM_DEG of the goal centre) makes it CAPTAIN_SHOT_MULT × faster until it hits anything else. */
-  CAPTAIN_SHOT_MULT: 2, CAPTAIN_AIM_DEG: 55,
-  /* outfield players per club in a 1v1 match (besides the keeper): the captain + team-mates (the old arena final keeps 2) */
-  TEAM_PLAYERS: 3,
+  CAPTAIN_SHOT_MULT: 2, CAPTAIN_AIM_DEG: 25,
+  /* a 1v1 match: 4 outfield players per club (besides the keeper), each wandering at random in its own third of the pitch:
+     2 defenders (own third), the captain in midfield (middle third), 1 forward (the rival's third). A player's touch sends the
+     ball forward: a random direction whose up / down part points at the rival goal, at most KICK_MAX_DEG off straight ahead.
+     (The old arena final keeps 2 free players.) */
+  TEAM_PLAYERS: 4, KICK_MAX_DEG: 60,
   PU_R: 26, PU_LIFE: 8, PU_MIN: 6, PU_MAX: 10, PU_MAX_COUNT: 2, PU_WALL_MARGIN: 80,
   DEFAULT_LIVES: 1, DEFAULT_SPEED_MULT: 1.0,
   /* every match is a 1v1 league match: two clubs on the duel pitch (keeper + captain + team-mates each, see TEAM_PLAYERS) for MATCH_TIME seconds.
@@ -57,7 +60,7 @@ const CONFIG = {
   CUP_SIZE: 12,
   HARD_TIME_LIMIT: 300,
   /* the public site's live league (07_live.js), a league that never stops. Istanbul time (UTC+3 all year).
-     bands: from each `from` until the next band, one match every `every` minutes (one band, every 2 minutes: 720 matches a day).
+     bands: from each `from` until the next band, one match every `every` minutes (one band, every 3 minutes: 480 matches a day).
      The first match is at `start`. On the site `start` is set by the first deploy of a new salt (tools/live-start.js →
      BUILD_START: the league starts a few minutes after it goes live); `start` here is only the fallback for local builds.
      gap: seconds between a match that ran over and the next one.
@@ -66,7 +69,7 @@ const CONFIG = {
      and the new rules / timetable play on from there (tools/live-base.js). */
   LIVE: {
     start: '2026-11-04T22:00',   // 'YYYY-MM-DD' (that day at the first band's time) or 'YYYY-MM-DDTHH:MM' — overridden by BUILD_START
-    bands: [{ from: '00:00', every: 2 }],
+    bands: [{ from: '00:00', every: 3 }],
     utcOffset: 3, gap: 5, salt: 'satisfying-lig-live-2', keepChampions: 50,
   },
 };
