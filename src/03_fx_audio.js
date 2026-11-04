@@ -111,7 +111,8 @@ const FX = {
         }
         break;
       }
-      case 'kickoff': AudioSys.whistle(0.5, 0.22); break;
+      case 'kickoff': AudioSys.whistle(0.5, 0.22); if (d.half === 2) this.announce({ kind: 'big', text: 'SECOND HALF', color: '#00C853', dur: 1.2 }); break;
+      case 'halfTime': this.announce({ kind: 'big', text: 'HALF TIME', color: '#FFB300', dur: 2.2 }); AudioSys.whistle(0.35, 0.24); AudioSys.whistle(0.7, 0.24, 0.45); break;
       case 'countdown': AudioSys.tick(d.n <= 3 ? 1 : 0.6); break;
       case 'goldenGoal': this.announce({ kind: 'big', text: 'GOLDEN GOAL!', color: '#FFB300', dur: 1.8 }); AudioSys.whistle(0.6, 0.24); break;
       case 'penalties': this.announce({ kind: 'big', text: 'PENALTIES!', color: '#FFB300', dur: 1.6 }); AudioSys.whistle(1.0, 0.24); break;

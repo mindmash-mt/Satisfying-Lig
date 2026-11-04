@@ -19,8 +19,12 @@ const N = +(process.argv.find(a => /^\d+$/.test(a)) || 200), knockout = process.
 const teamsAll = DEFAULT_TEAMS.map((t, i) => ({ id: 't' + (i + 1), ...t }));
 /* the live player's loop: 60 fps frames, physics at the game's time scale → screen seconds */
 const run = (opts) => {
-  const g = new Game(opts); let acc = 0, n = 0, added = 0;
-  g.onEvent = (t) => { if (t === 'addedTime') added -= g.clock; else if (t === 'win' || t === 'goldenGoal' || t === 'penalties') { if (added < 0) added += g.clock; } };
+  /* added time: from 'addedTime' to the end of that period (half time, full time, golden goal start, penalties) */
+  const g = new Game(opts); let acc = 0, n = 0, from = -1; const added = [];
+  g.onEvent = (t) => {
+    if (t === 'addedTime') from = g.clock;
+    else if (from >= 0 && (t === 'halfTime' || t === 'win' || t === 'goldenGoal' || t === 'penalties')) { added.push(g.clock - from); from = -1; }
+  };
   while (!g.over) { acc += g.timeScale() / 60; while (acc >= DT && !g.over) { g.step(DT); acc -= DT; } n++; }
   return { r: g.getResult(), screen: n / 60, added };
 };
@@ -33,7 +37,7 @@ for (let i = 0; i < N; i++) {
   goals += r.goals; saves += r.saves; own += r.ownGoals; esc += r.escapes; scr.push(screen);
   if (r.draw) draws++; else if (r.winner === r.teams[0].id) home++;
   if (r.golden) golden++; if (r.pens) pens++;
-  if (added > 0) { addN++; addT += added; }
+  for (const x of added) { addN++; addT += x; }
   const k = r.teams.map(t => t.score).sort((a, b) => b - a).join('-'); hist[k] = (hist[k] || 0) + 1;
 }
 scr.sort((a, b) => a - b);
@@ -41,7 +45,7 @@ const pct = (x) => Math.round((x / N) * 1000) / 10 + '%';
 console.log(`${N} maç · 1'e 1 · ${CONFIG.MATCH_TIME} sn${knockout ? ' · eleme (altın gol + penaltı)' : ''}`);
 console.log(`Ort. gol: ${(goals / N).toFixed(2)} · Beraberlik: ${pct(draws)} · Ev sahibi (üst kale) galibiyeti: ${pct(home)} · Deplasman: ${pct(N - draws - home)}`);
 console.log(`Ekran süresi (maç): min ${scr[0].toFixed(1)} · medyan ${scr[N >> 1].toFixed(1)} · maks ${scr[N - 1].toFixed(1)} sn${knockout ? ` · altın gole giden ${pct(golden)} · penaltıya giden ${pct(pens)}` : ''}`);
-console.log(`Uzatma (süre bittiğinde top kaleye gidiyordu): ${pct(addN)} · ort. +${addN ? (addT / addN).toFixed(1) : 0} sn`);
+console.log(`Uzatma (devre / maç sonunda top kaleye gidiyordu): maç başına ${(addN / N).toFixed(2)} kez · ort. +${addN ? (addT / addN).toFixed(1) : 0} sn`);
 console.log(`Ort. kurtarış: ${(saves / N).toFixed(1)} · Kendi kalesine: ${goals ? Math.round((own / goals) * 100) : 0}% · Duvardan kaçan top: ${esc}`);
 console.log('En sık skorlar: ' + Object.entries(hist).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k} (${pct(v)})`).join(' · '));
 const o = { mode: 'match', teams: teamsAll.slice(0, 2), seed: 48213, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout: true };

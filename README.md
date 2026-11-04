@@ -28,15 +28,15 @@ Günün her saatinde **her 2 dakikada bir maç**: günde **720 maç**. 2 dakikal
 | Süre | Ekranda |
 |---|---|
 | ~5 sn | `WEEK 5 MATCHES`: haftanın 9 maçı |
-| **90 sn** | Maç (üst şeritte hafta · süre · skor; son 10 saniye kırmızı ve sesli) |
+| **90 sn + 3 sn** | Maç: iki 45 sn'lik yarı ve 3 sn devre arası (üst şeritte hafta · süre · skor; son 10 saniye kırmızı ve sesli) |
 | ~13 sn | `FULL TIME` + animasyonlu lig tablosu (+3 / +1 / +0, ▲▼, son 3 maç) |
-| ~15 sn | Lig tablosu, sıradaki maç ve geri sayım |
+| ~12 sn | Lig tablosu, sıradaki maç ve geri sayım |
 
 Bir sezon 17 hafta × 9 maç = **153 lig maçı** ve ardından **12 maçlık yükselme elemesidir** (bkz. [Sezon sonu](#sezon-sonu-şampiyon-yükselme-elemesi-ve-takım-değişimi)): toplam 165 maç ≈ **5 saat 30 dakika**, yani günde ~4,4 sezon biter. Şampiyon belirlenir, son 3 takım düşer, elemede ilk 3'e giren 3 havuz kulübü gelir ve yeni sezon bir sonraki maçta başlar. Her takım 18 dakikada bir sahaya çıkar. Şampiyonlar listesinde son 50 sezon tutulur.
 
 **Başlangıç:** yeni bir lig, ilk yayınından **birkaç dakika sonra** kendiliğinden başlar (`tools/live-start.js`, bkz. [Nasıl çalışıyor](#nasıl-çalışıyor-sunucusuz-ücretsiz)). Başlangıç saati o yayında bir kez belirlenir ve sonraki her yayında aynen korunur.
 
-**Taşma kuralı (kilitlenme olmaz):** bir maç, ekranları dahil sıradaki maçın saatine kadar bitmezse sıradaki maç önceki bitince 5 sn sonra başlar (`gap`). Lig maçları ekranlarıyla ~105 sn (uzatmayla en fazla ~112 sn) sürer ve 2 dakikaya sığar. Altın gole ya da penaltıya giden bir eleme maçı ~2,3 dakikaya uzayabilir: o zaman sıradaki maç birkaç saniye geç başlar (Fikstür'de `ertelendi`). 48 saatlik testte 1440 maçta en büyük gecikme 20 sn, geç başlayan lig maçı 1. `node tools/live-check.js` aralığı zorla 1 dakikaya indirip maçların üst üste binmediğini ve takvimin kendini toparladığını test eder.
+**Taşma kuralı (kilitlenme olmaz):** bir maç, ekranları dahil sıradaki maçın saatine kadar bitmezse sıradaki maç önceki bitince 5 sn sonra başlar (`gap`). Lig maçları ekranlarıyla ~108 sn (devre arası ve iki uzatma üst üste gelirse ender olarak ~116 sn) sürer. Altın gole ya da penaltıya giden bir eleme maçı ~2,3 dakikaya uzayabilir: o zaman sıradaki maç birkaç saniye geç başlar (Fikstür'de `ertelendi`). 48 saatlik testte 1440 maçta en büyük gecikme 24 sn, geç başlayan lig maçı 8. `node tools/live-check.js` aralığı zorla 1 dakikaya indirip maçların üst üste binmediğini ve takvimin kendini toparladığını test eder.
 
 Ayar `src/01_core.js` dosyasındaki `CONFIG.LIVE`:
 
@@ -137,6 +137,7 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 - **Kaptan şutu:** kaptan topa dokunduğunda top rakip kaleye doğru gidiyorsa (kale merkezine `CAPTAIN_AIM_DEG` = 55° içinde) **2 kat hızlı** gider; başka bir şeye çarpınca hız eski değerine döner.
 - **Kaleciler** topu sürekli takip eder; her takımın kalecisine maç başında rastgele bir yetenek atanır.
 - **Süre:** maç **90 saniye** sürer (`CONFIG.MATCH_TIME`). Saat ekran süresine göre işler: ağır çekim anları da saatten düşer, yani maç ekranda tam 90 saniyedir. Ekranın üstünde **tek satırlık bir şerit** vardır: solda hafta ve maç (`WEEK 5 · MATCH 3` + tema), ortada saat ve altında geçen süre çubuğu, sağda skor (ev sahibi solda). Saat son 10 saniyede kırmızıya döner ve her saniye tıklar; altın golde altın rengi `GOLDEN GOAL 21`, penaltılarda `PENALTIES` yazar. Başlangıçta ve bitişte düdük çalar.
+- **Devre arası:** 45. saniyede (`MATCH_TIME / 2`) ilk yarı biter; top kaleye gidiyorsa aşağıdaki uzatma kuralı burada da geçerlidir. **3 sn devre arası** (`HALF_BREAK`) olur: saat durur ve `HALF TIME` yazar, top kaybolur, takımlar **kale değiştirir** (ev sahibi ikinci yarıda alt kalede) ve oyuncular yeni yarı sahalarına yürür. İkinci yarı tam 0:45'ten ortadan başlar; ilk yarının uzatması ikinci yarıdan yemez. Maç ekranda 93–103 sn sürer.
 - **Bitiş düdüğü ve uzatma:** süre bittiğinde top bir kalenin yarı sahasındaysa ve **o kaleye doğru** gidiyorsa (yalnızca yukarı/aşağı yön dikkate alınır, sağa sola gidişi önemsizdir) maç bitmez: top öbür kaleye doğru dönene ya da gol olana kadar sürer (en fazla `ADDED_MAX` = 10 sn). Bu sırada saatte `1:30+` yazar. Bu kural altın golün sonunda da geçerlidir. Sonra çok gol atan kazanır; skor eşitse **beraberlik**.
 - **Goller:** her gol skora rakip takım lehine yazılır; kalecinin ya da oyuncunun kendi kalesine soktuğu top da (1'e 1'de çok sık olur) rakibin golüdür. Bu yüzden skor, AG ve YG her zaman birbirini tutar. Gol anında sahanın üst yarısında kısa süre `+ ARSENAL GOAL` ve altında yeni skor (`ARS 2 – 1 CHE`) belirir; golü atan takımın kalesinin arkasında her gol için bir mini futbol topu çıkar.
 - **Ağır çekim:** son 10 saniyede skor eşitken ya da fark 1 golken (ve altın golde) top kaleye yaklaşırsa kısa bir ağır çekim ve kamera yakınlaşması olur.
@@ -257,6 +258,7 @@ Varsayılan ayarlarla 90 saniyelik 1000 maçlık testte (`node tools/balance.js 
 | `MATCH_TIME` | 90 | Maç süresi (ekran saniyesi) |
 | `GOLDEN_TIME` | 20 | Eleme maçında beraberlikte altın gol süresi (sn); sonra penaltılar |
 | `ADDED_MAX` | 10 | Süre bittiğinde top kaleye giderken verilen uzatmanın üst sınırı (sn) |
+| `HALF_BREAK` | 3 | Devre arası (sn; saat durur, takımlar kale değiştirir) |
 | `PEN_P` / `PEN_STEP` | 0.75 / 0.9 | Penaltının gol olma olasılığı / ekranda her atışın süresi (sn) |
 | `POINTS` | 3, 1, 0 | Galibiyet, beraberlik, mağlubiyet puanı |
 | `SEASON_LENGTH` | 17 | Sezon uzunluğu (hafta; 18 takımda tek devre) |

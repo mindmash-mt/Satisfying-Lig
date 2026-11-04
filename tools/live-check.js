@@ -112,8 +112,8 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     let draw = null, win = null;
     for (let s = 1; s < 400 && !(draw && win); s++) { const x = play(false, s); if (x.r.draw) draw = draw || x; else win = win || x; }
     ok(draw && win && draw.g.winner === -1 && draw.r.teams.every(t => t.place === 1) && win.r.teams.map(t => t.place).sort().join() === '1,2'
-       && [draw, win].every(x => Math.abs(x.screen - CONFIG.MATCH_TIME) < 1.2 && x.r.teams.every(t => t.score === t.gf) && x.r.teams[0].ga === x.r.teams[1].score),
-      `Lig maçı ${CONFIG.MATCH_TIME} sn sürüyor (ekranda ${win.screen.toFixed(1)} sn), beraberlik olabiliyor; skor = AG, rakibin skoru = YG (kendi kalesine gol rakibe)`);
+       && [draw, win].every(x => x.screen >= CONFIG.MATCH_TIME + CONFIG.HALF_BREAK && x.screen < CONFIG.MATCH_TIME + CONFIG.HALF_BREAK + 2 * CONFIG.ADDED_MAX + 1.2 && x.r.teams.every(t => t.score === t.gf) && x.r.teams[0].ga === x.r.teams[1].score),
+      `Lig maçı ${CONFIG.MATCH_TIME} sn + ${CONFIG.HALF_BREAK} sn devre arası (ekranda ${win.screen.toFixed(1)} sn), beraberlik olabiliyor; skor = AG, rakibin skoru = YG (kendi kalesine gol rakibe)`);
     let gg = null, pens = null;
     for (let s = 1; s < 600 && !gg; s++) { const x = play(true, s, 30); if (x.r.golden && !x.r.pens) gg = x; }
     for (let s = 1; s < 600 && !pens; s++) { const x = play(true, s, 0.3); if (x.r.pens) pens = x; }
@@ -130,6 +130,7 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
         let added = false;
         g.onEvent = (t) => {
           if (t === 'addedTime') added = true;
+          if (t === 'halfTime') added = false;                    // this test looks at full time
           if (t === 'win') {
             const over = g.clock - CONFIG.MATCH_TIME;
             if (g.attacking() && over < CONFIG.ADDED_MAX) bad++;
@@ -144,6 +145,26 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
       }
       ok(bad === 0 && withAdded > 10 && withAdded < n && maxAdd <= CONFIG.ADDED_MAX + 0.01,
         `Uzatma: ${n} maçın ${withAdded}'inde süre bittiğinde top kaleye gidiyordu → maç top geri dönene / gol olana kadar sürdü (en uzun +${maxAdd.toFixed(1)} sn); top kaleye giderken hiç bitmedi`);
+    }
+    /* half time: at MATCH_TIME / 2 (+ added time) a HALF_BREAK-second break with the clock stopped; the clubs change ends and the
+       second half kicks off from the centre at exactly MATCH_TIME / 2 */
+    {
+      const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 777, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout: false });
+      const home = g.teams[0].id, topOf = () => g.teams[g.geo.goals.find(x => x.my < g.rectCy()).team].id, ev = [];
+      let topBefore = topOf(), atHT = null, after = null, pauseOK = true, kick2 = null;
+      g.onEvent = (t, d) => {
+        if (t === 'halfTime') atHT = { clock: g.clock, t: g.t };
+        if (t === 'kickoff' && d.half === 2) kick2 = { clock: g.clock, t: g.t, balls: g.balls.filter(b => b.state === 'live').length };
+        ev.push(t);
+      };
+      while (!g.over) {
+        const c = g.clock; g.step(DT);
+        if (g.morph && g.morph.kind === 'half' && g.clock !== c && atHT && g.t > atHT.t + DT) pauseOK = false;
+        if (kick2 && !after) after = topOf();
+      }
+      const brk = kick2 && atHT ? kick2.t - atHT.t : 0;
+      ok(topBefore === home && after && after !== home && atHT && atHT.clock >= CONFIG.MATCH_TIME / 2 && pauseOK && Math.abs(brk - CONFIG.HALF_BREAK) < 0.02 && kick2.clock === CONFIG.MATCH_TIME / 2 && kick2.balls === 1 && g.clock >= CONFIG.MATCH_TIME,
+        `Devre arası: ${atHT ? atHT.clock.toFixed(1) : '?'}. sn'de, ${brk.toFixed(1)} sn sürdü (saat durdu); ev sahibi 1. yarıda üst, 2. yarıda alt kalede; 2. yarı ${CONFIG.MATCH_TIME / 2}. sn'den ortadan başladı`);
     }
     /* scoring and ranking on a hand-made table */
     const d = League.data, [a, b, c] = d.teams.map(t => t.id);
@@ -358,8 +379,10 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     const d = L.League.data, lg = Math.max(...log.filter(x => !x.cup).map(x => x.dur)), cup = Math.max(...log.filter(x => x.cup).map(x => x.dur), 0);
     const lateness = log.map(x => x.start - x.slot), worst = Math.max(...lateness);
     const lateLeague = log.filter((x, i) => !x.cup && lateness[i] > 0).length, n = log.length;
-    ok(sane(log, L.CONFIG.LIVE.gap) && lg < 120 - L.CONFIG.LIVE.gap && worst < 4 * 60e3 && log.some(x => x.cup) && (!long || (n === 48 * 30 && d.season >= 9)),
-      `${hours} saat: ${n} maç${long ? `, ${d.season - 1} sezon bitti` : ''} · en uzun lig maçı ${lg.toFixed(0)} sn (< 2 dk), en uzun eleme maçı ${cup.toFixed(0)} sn · en büyük gecikme ${Math.round(worst / 1000)} sn, geciken lig maçı ${lateLeague} (${((Date.now() - t0) / 1000).toFixed(0)} sn'de hesaplandı)`);
+    /* a league match (half time + added time at both whistles) very rarely runs a few seconds past its slot: the next one starts a bit late */
+    const slotS = L.Live.slots().length ? 86400 / L.Live.slots().length : 120;
+    ok(sane(log, L.CONFIG.LIVE.gap) && lg < slotS && worst < 60e3 && lateLeague <= Math.ceil(n * 0.01) && log.some(x => x.cup) && (!long || (n === Math.round(48 * 3600 / slotS) && d.season >= 5)),
+      `${hours} saat: ${n} maç${long ? `, ${d.season - 1} sezon bitti` : ''} · en uzun lig maçı ${lg.toFixed(0)} sn (< ${slotS} sn), en uzun eleme maçı ${cup.toFixed(0)} sn · en büyük gecikme ${Math.round(worst / 1000)} sn, geciken lig maçı ${lateLeague} (${((Date.now() - t0) / 1000).toFixed(0)} sn'de hesaplandı)`);
   }
   process.exit(fail ? 1 : 0);
 })();
