@@ -34,8 +34,11 @@ const CONFIG = {
   /* every match is a 1v1 league match: two clubs on the duel pitch (keeper + captain + team-mates each, see TEAM_PLAYERS) for MATCH_TIME seconds.
      The clock runs on screen time (slow-motion moments count too), so a match is MATCH_TIME seconds long on screen.
      A draw is a draw in the league; a promotion playoff match that is level goes to a golden goal (at most GOLDEN_TIME seconds)
-     and then to a penalty shoot-out (PEN_P: chance a penalty goes in, PEN_STEP: seconds per penalty on screen). */
-  MATCH_TIME: 90, GOLDEN_TIME: 30, PEN_P: 0.75, PEN_STEP: 0.9,
+     and then to a penalty shoot-out (PEN_P: chance a penalty goes in, PEN_STEP: seconds per penalty on screen).
+     Added time: when the time is up (full time, end of the golden goal) while the ball is in a goal's half and moving towards
+     that goal (only the up / down direction counts), play goes on until the ball turns towards the other goal or a goal is
+     scored — at most ADDED_MAX seconds. */
+  MATCH_TIME: 90, GOLDEN_TIME: 20, PEN_P: 0.75, PEN_STEP: 0.9, ADDED_MAX: 10,
   GROUP_SIZE: 2,
   /* league points: win, draw, loss. A season is a single round robin: every club meets every other club once (17 weeks with
      18 clubs, 9 matches a week); a longer season repeats it with home and away swapped. */
@@ -62,7 +65,7 @@ const CONFIG = {
   LIVE: {
     start: '2026-11-04T22:00',   // 'YYYY-MM-DD' (that day at the first band's time) or 'YYYY-MM-DDTHH:MM' — overridden by BUILD_START
     bands: [{ from: '00:00', every: 2 }],
-    utcOffset: 3, gap: 10, salt: 'satisfying-lig-live-2', keepChampions: 50,
+    utcOffset: 3, gap: 5, salt: 'satisfying-lig-live-2', keepChampions: 50,
   },
 };
 const DT = 1 / CONFIG.STEP_HZ;

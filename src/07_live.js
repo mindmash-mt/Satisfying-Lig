@@ -23,7 +23,7 @@ const Live = {
   on: !/[?&]studio\b/.test(location.search),
   CACHE_KEY: 'arenaLive_v3',
   AV: 2,                    // saved-state format: 2 = 1v1 league (W/D/L table) with the season archive; older states are not trusted as caches
-  HOLD: 4,                  // seconds the final table stays after the end screen
+  HOLD: 0,                  // seconds the final table stays after the end screen (the table + countdown screen follows anyway)
   RESYNC_GAP: 60e3,         // the page slept longer than this (ms): reload from the newest saved state
   offset: 0, skew: 0, phase: 'loading', progress: null, cur: null, pending: null, st: null, simT: 0,
   sound: false, lastClean: null, lastFrame: 0,
@@ -230,6 +230,60 @@ const Live = {
       try { const r = await fetch('live-state.json', { cache: 'no-cache' }); if (r.ok) this.checkNewSite(await r.json()); } catch (e) { /* offline: try later */ }
     }, 600e3);
   },
+  /* --- browser tab title ---------------------------------------------------------------------------------------------------
+     Between matches: the countdown to the next kick-off ("⏱ 1:05 · RMA–BAR"); while a match is on: a ball running left and right
+     ("··⚽···· RMA–BAR"). It must keep going in a background tab, where browsers slow timers down (Chrome: to once a minute after
+     5 minutes) and stop drawing: a tiny Web Worker sends the tick (worker timers are not throttled like that), and the title is
+     worked out from the clock alone — the match state itself only advances while the page is visible. */
+  TITLE_W: 7,
+  startTitle() {
+    this.titleBase = document.title || 'Satisfying Lig';
+    const tick = () => { try { this.titleTick(); } catch (e) { /* keep ticking */ } };
+    try {
+      const w = new Worker(URL.createObjectURL(new Blob(['setInterval(function () { postMessage(0); }, 250);'], { type: 'text/javascript' })));
+      w.onmessage = tick;
+    } catch (e) { setInterval(tick, 250); }
+  },
+  /* the clubs of a match as "RMA–BAR" (home first) */
+  codes(ids) {
+    const d = League.data, t = ids.map(id => d.teams.find(x => x.id === id) || League.poolTeam(id)).filter(Boolean);
+    return t.length === 2 ? `${t[0].code}–${t[1].code}` : '';
+  },
+  /* the next match's clubs as LiveScreen shows them (only while the league state is up to date) */
+  nextIds() {
+    const d = League.data, plan = App.seasonPlan(), cm = App.cupMatch();
+    return cm ? [cm.a, cm.b].filter(Boolean) : plan && d.week <= d.seasonLength ? ((plan.weeks[d.week - 1] || [])[d.weekMatch - 1] || []) : [];
+  },
+  titleText(now) {
+    if (this.phase === 'loading' || this.phase === 'error') return this.titleBase;
+    let on = false, next = 0, vs = '';
+    if (this.cur) {
+      /* the ball runs from kick-off (intro included) until the final whistle; during the end table the countdown is back */
+      const end = this.cur.start + this.cur.dur * 1000, play = end - (CONFIG.END_DURATION + this.HOLD) * 1000;
+      if (now < play) { on = true; vs = this.codes(this.cur.s.opts.teams.map(t => t.id)); }
+      else {                                                     // after the whistle (also in a background tab, where the state is not advanced yet)
+        next = Math.max(this.slot(this.cur.n + 1), end + this.cfg().gap * 1000);
+        const d = League.data, plan = App.seasonPlan(), s = this.cur.s;
+        if (!s.cup && plan) {                                    // the league match after this one (a playoff's next pairing depends on its result)
+          const last = s.weekMatch >= s.perWeek, w = last ? s.week + 1 : s.week, m = last ? 1 : s.weekMatch + 1;
+          if (w <= d.seasonLength) vs = this.codes((plan.weeks[w - 1] || [])[m - 1] || []);
+        }
+      }
+    } else {
+      next = this.nextStart(); vs = this.codes(this.nextIds());
+      if (next <= now) on = true;                                // kicked off in a background tab
+    }
+    if (on) {
+      const W = this.TITLE_W, k = Math.floor(now / 250) % (2 * (W - 1)), pos = k < W ? k : 2 * (W - 1) - k;
+      return Array.from({ length: W }, (_, i) => (i === pos ? '⚽' : '·')).join('') + (vs ? ' ' + vs : '') + ' · CANLI';
+    }
+    const sec = Math.max(0, Math.ceil((next - now) / 1000)), h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, ss = String(sec % 60).padStart(2, '0');
+    return `⏱ ${h ? h + ':' + String(m).padStart(2, '0') : m}:${ss}${vs ? ' · ' + vs : ''} · Satisfying Lig`;
+  },
+  titleTick() {
+    const t = this.titleText(this.now());
+    if (t !== document.title) document.title = t;
+  },
   /* best starting point for time t: the furthest saved state whose last match had ended by t. The build's base is always a
      candidate (a league that changed rules starts from it, never from scratch); a brand-new league starts fresh. */
   async loadState(t) {
@@ -264,6 +318,7 @@ const Live = {
     document.body.classList.add('live');
     this.bootAt = Date.now();
     this.watchSite();
+    this.startTitle();
     League.data = this.freshLeague();
     UI.init();
     fitCanvas(); window.addEventListener('resize', fitCanvas);

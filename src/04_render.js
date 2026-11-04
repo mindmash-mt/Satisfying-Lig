@@ -636,15 +636,16 @@ const HUD = {
     outlinedText(ctx, '–', SX, y + 1, `44px ${FONT_BIG}`, 'rgba(255,255,255,0.6)', null, 0);
     /* centre: the clock */
     const T = g.matchTime, gold = g.extra || g.pens, left = g.timeLeft();
-    const shown = g.pens ? 'PENALTIES' : g.winnerSet || g.over ? 'FULL TIME' : gold ? `GOLDEN GOAL ${Math.ceil(left)}` : (() => {
-      const t = Math.min(T, Math.floor(g.clock)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; })();
+    /* added time (the ball is on its way to a goal when the time is up): "1:30+" / "GOLDEN GOAL +" */
+    const shown = g.pens ? 'PENALTIES' : g.winnerSet || g.over ? 'FULL TIME' : gold ? `GOLDEN GOAL ${g.added ? '+' : Math.ceil(left)}` : (() => {
+      const t = Math.min(T, Math.floor(g.clock)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}${g.added ? '+' : ''}`; })();
     const hot = !gold && !g.winnerSet && left <= 10;
     const col = gold ? '#FFD54F' : hot ? '#FF5252' : '#ffffff';
     const cx = 540, pulse = hot ? 1 + 0.15 * Math.max(0, 1 - (Math.ceil(left) - left) * 4) : 1;
     ctx.save(); ctx.translate(cx, y - 2); ctx.scale(pulse, pulse);
     outlinedText(ctx, shown, 0, 0, fit(shown, 48, 170), col, null, 0);
     ctx.restore();
-    const frac = g.pens ? 1 : gold ? clamp01((g.clock - T) / CONFIG.GOLDEN_TIME) : clamp01(g.clock / T), bw = 150;
+    const frac = g.pens ? 1 : gold ? clamp01((g.clock - g.extraStart) / CONFIG.GOLDEN_TIME) : clamp01(g.clock / T), bw = 150;
     roundRect(ctx, cx - bw / 2, y + 26, bw, 5, 2.5); ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
     if (frac > 0) { roundRect(ctx, cx - bw / 2, y + 26, bw * frac, 5, 2.5); ctx.fillStyle = col; ctx.fill(); }
     ctx.restore();

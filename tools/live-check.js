@@ -102,6 +102,7 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     const plan = App.seasonPlan(), ids = League.data.teams.map(t => t.id), st = fixtureStats(ids, plan.weeks);
     ok(plan.weeks.length === 17 && plan.weeks.every(w => w.length === 9 && new Set(w.flat()).size === 18) && st.min === 1 && st.max === 1 && st.homeMin >= 8 && st.homeMax <= 9,
       `Fikstür: 17 hafta × 9 maç, her takım haftada 1 maç, her ikili tam 1 kez karşılaşıyor, her takım ${st.homeMin}–${st.homeMax} maçta ev sahibi`);
+    const G0 = CONFIG.GOLDEN_TIME;
     const play = (knockout, seed, golden) => {
       if (golden !== undefined) CONFIG.GOLDEN_TIME = golden;
       const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout });
@@ -116,10 +117,34 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     let gg = null, pens = null;
     for (let s = 1; s < 600 && !gg; s++) { const x = play(true, s, 30); if (x.r.golden && !x.r.pens) gg = x; }
     for (let s = 1; s < 600 && !pens; s++) { const x = play(true, s, 0.3); if (x.r.pens) pens = x; }
-    CONFIG.GOLDEN_TIME = 30;
+    CONFIG.GOLDEN_TIME = G0;
     const pw = pens && pens.g.teams[pens.g.winner], pl = pens && pens.g.teams[1 - pens.g.winner];
     ok(gg && pens && gg.g.winner >= 0 && gg.r.teams[gg.g.winner].score === gg.r.teams[1 - gg.g.winner].score + 1 && !pens.r.draw && pw.score === pl.score && pw.pen > pl.pen && pens.g.pens.kicks.length >= 6,
       `Eleme maçı berabere bitmez: altın gol (${gg && gg.r.teams.map(t => t.score).join('–')}), sonra penaltılar (${pens && `${pw.score}–${pl.score}, pen. ${pw.pen}–${pl.pen}`})`);
+    /* added time: when the time is up while the ball is in a goal's half moving towards it (up / down), the match goes on
+       until the ball turns back or goes in (at most ADDED_MAX s); it never ends while that is still the case */
+    {
+      let n = 0, withAdded = 0, bad = 0, maxAdd = 0;
+      for (let s = 1; s <= 150; s++) {
+        const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 5000 + s, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout: false });
+        let added = false;
+        g.onEvent = (t) => {
+          if (t === 'addedTime') added = true;
+          if (t === 'win') {
+            const over = g.clock - CONFIG.MATCH_TIME;
+            if (g.attacking() && over < CONFIG.ADDED_MAX) bad++;
+            if (added) maxAdd = Math.max(maxAdd, over);
+            const b = g.balls.find(x => x.state === 'live');
+            if (!added && over > 0.05) bad++;                     // no added time → ends right at full time
+            if (added && b && over < CONFIG.ADDED_MAX && ((b.vy < 0 && b.y < g.rectCy()) || (b.vy > 0 && b.y > g.rectCy()))) bad++;
+          }
+        };
+        while (!g.over) g.step(DT);
+        n++; if (added) withAdded++;
+      }
+      ok(bad === 0 && withAdded > 10 && withAdded < n && maxAdd <= CONFIG.ADDED_MAX + 0.01,
+        `Uzatma: ${n} maçın ${withAdded}'inde süre bittiğinde top kaleye gidiyordu → maç top geri dönene / gol olana kadar sürdü (en uzun +${maxAdd.toFixed(1)} sn); top kaleye giderken hiç bitmedi`);
+    }
     /* scoring and ranking on a hand-made table */
     const d = League.data, [a, b, c] = d.teams.map(t => t.id);
     const res = (x, y, sx, sy) => ({ teams: [{ id: x, code: x, score: sx, saves: 0 }, { id: y, code: y, score: sy, saves: 0 }] });

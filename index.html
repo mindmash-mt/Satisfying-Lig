@@ -264,7 +264,7 @@
 </div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 <script>
-const BUILD_SIM_HASH = '8743cad88152';
+const BUILD_SIM_HASH = 'e4337908bb15';
 const BUILD_BASE = null;
 const BUILD_START = null;
 /* =====================================================================
@@ -303,8 +303,11 @@ const CONFIG = {
   /* every match is a 1v1 league match: two clubs on the duel pitch (keeper + captain + team-mates each, see TEAM_PLAYERS) for MATCH_TIME seconds.
      The clock runs on screen time (slow-motion moments count too), so a match is MATCH_TIME seconds long on screen.
      A draw is a draw in the league; a promotion playoff match that is level goes to a golden goal (at most GOLDEN_TIME seconds)
-     and then to a penalty shoot-out (PEN_P: chance a penalty goes in, PEN_STEP: seconds per penalty on screen). */
-  MATCH_TIME: 90, GOLDEN_TIME: 30, PEN_P: 0.75, PEN_STEP: 0.9,
+     and then to a penalty shoot-out (PEN_P: chance a penalty goes in, PEN_STEP: seconds per penalty on screen).
+     Added time: when the time is up (full time, end of the golden goal) while the ball is in a goal's half and moving towards
+     that goal (only the up / down direction counts), play goes on until the ball turns towards the other goal or a goal is
+     scored — at most ADDED_MAX seconds. */
+  MATCH_TIME: 90, GOLDEN_TIME: 20, PEN_P: 0.75, PEN_STEP: 0.9, ADDED_MAX: 10,
   GROUP_SIZE: 2,
   /* league points: win, draw, loss. A season is a single round robin: every club meets every other club once (17 weeks with
      18 clubs, 9 matches a week); a longer season repeats it with home and away swapped. */
@@ -331,7 +334,7 @@ const CONFIG = {
   LIVE: {
     start: '2026-11-04T22:00',   // 'YYYY-MM-DD' (that day at the first band's time) or 'YYYY-MM-DDTHH:MM' — overridden by BUILD_START
     bands: [{ from: '00:00', every: 2 }],
-    utcOffset: 3, gap: 10, salt: 'satisfying-lig-live-2', keepChampions: 50,
+    utcOffset: 3, gap: 5, salt: 'satisfying-lig-live-2', keepChampions: 50,
   },
 };
 const DT = 1 / CONFIG.STEP_HZ;
@@ -639,6 +642,8 @@ class Game {
        (then a golden goal for at most CONFIG.GOLDEN_TIME seconds, then penalties). clock = screen seconds played. */
     this.timed = o.matchTime > 0 && o.teams.length === 2; this.matchTime = this.timed ? o.matchTime : 0;
     this.knockout = !!o.knockout; this.clock = 0; this.extra = false; this.pens = null; this.draw = false;
+    this.extraStart = 0;         // clock when the golden goal began
+    this.added = 0;              // clock when the running added time began (0: none)
     if (this.timed) this.cx = CONFIG.FINAL_CX;
     this.slowmo = null; this.slowmoCd = 0;
     this.spawnBlock = 0;
@@ -683,7 +688,14 @@ class Game {
   /* final duel: scores start at 0–0 and the first team to CONFIG.FINAL_GOALS goals wins (lives = goals still allowed) */
   startDuelScore() { for (const i of this.activeTeams()) { const T = this.teams[i]; T.lives = this.timed ? Infinity : CONFIG.FINAL_GOALS; T.score = 0; } }
   /* timed match: seconds left on the clock (the golden goal has its own clock) */
-  timeLeft() { return this.extra ? Math.max(0, this.matchTime + CONFIG.GOLDEN_TIME - this.clock) : Math.max(0, this.matchTime - this.clock); }
+  timeLeft() { return this.extra ? Math.max(0, this.extraStart + CONFIG.GOLDEN_TIME - this.clock) : Math.max(0, this.matchTime - this.clock); }
+  /* added time: the ball is in a goal's half and moving towards that goal — up / down only (vy), sideways movement does not count */
+  attacking() {
+    const b = this.balls.find(x => x.state === 'live');
+    if (!b) return false;                                     // in the net / about to respawn: nothing to wait for
+    const mid = this.rectCy();
+    return (b.vy < 0 && b.y < mid) || (b.vy > 0 && b.y > mid);
+  }
   activeTeams() { const a = []; for (const T of this.teams) if (!T.eliminated) a.push(T.i); return a; }
   liveBalls() { return this.balls.filter(b => b.state === 'live'); }
 
@@ -1317,12 +1329,19 @@ class Game {
   }
   /* timed match: full time (the score decides; level → draw, or golden goal in a knockout match), end of the golden goal → penalties */
   checkClock() {
-    const [A, B] = this.teams;
-    if (!this.extra && this.clock >= this.matchTime) {
+    const [A, B] = this.teams, end = this.extra ? this.extraStart + CONFIG.GOLDEN_TIME : this.matchTime;
+    if (this.clock < end) return;
+    /* time is up, but the ball is on its way to a goal: added time until it turns back (or goes in), at most ADDED_MAX seconds */
+    if (this.attacking() && this.clock < end + CONFIG.ADDED_MAX) {
+      if (!this.added) { this.added = this.clock; this.emit('addedTime', {}); }
+      return;
+    }
+    this.added = 0;
+    if (!this.extra) {
       if (A.score !== B.score) this.finish(A.score > B.score ? 0 : 1);
       else if (!this.knockout) { this.draw = true; this.finish(-1); }
-      else { this.extra = true; this.emit('goldenGoal', {}); }
-    } else if (this.extra && this.clock >= this.matchTime + CONFIG.GOLDEN_TIME) this.startPens();
+      else { this.extra = true; this.extraStart = this.clock; this.emit('goldenGoal', {}); }
+    } else this.startPens();
   }
   /* penalty shoot-out: drawn at once from the match's RNG (5 each, then sudden death), shown one kick every PEN_STEP seconds */
   startPens() {
@@ -2443,15 +2462,16 @@ const HUD = {
     outlinedText(ctx, '–', SX, y + 1, `44px ${FONT_BIG}`, 'rgba(255,255,255,0.6)', null, 0);
     /* centre: the clock */
     const T = g.matchTime, gold = g.extra || g.pens, left = g.timeLeft();
-    const shown = g.pens ? 'PENALTIES' : g.winnerSet || g.over ? 'FULL TIME' : gold ? `GOLDEN GOAL ${Math.ceil(left)}` : (() => {
-      const t = Math.min(T, Math.floor(g.clock)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; })();
+    /* added time (the ball is on its way to a goal when the time is up): "1:30+" / "GOLDEN GOAL +" */
+    const shown = g.pens ? 'PENALTIES' : g.winnerSet || g.over ? 'FULL TIME' : gold ? `GOLDEN GOAL ${g.added ? '+' : Math.ceil(left)}` : (() => {
+      const t = Math.min(T, Math.floor(g.clock)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}${g.added ? '+' : ''}`; })();
     const hot = !gold && !g.winnerSet && left <= 10;
     const col = gold ? '#FFD54F' : hot ? '#FF5252' : '#ffffff';
     const cx = 540, pulse = hot ? 1 + 0.15 * Math.max(0, 1 - (Math.ceil(left) - left) * 4) : 1;
     ctx.save(); ctx.translate(cx, y - 2); ctx.scale(pulse, pulse);
     outlinedText(ctx, shown, 0, 0, fit(shown, 48, 170), col, null, 0);
     ctx.restore();
-    const frac = g.pens ? 1 : gold ? clamp01((g.clock - T) / CONFIG.GOLDEN_TIME) : clamp01(g.clock / T), bw = 150;
+    const frac = g.pens ? 1 : gold ? clamp01((g.clock - g.extraStart) / CONFIG.GOLDEN_TIME) : clamp01(g.clock / T), bw = 150;
     roundRect(ctx, cx - bw / 2, y + 26, bw, 5, 2.5); ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
     if (frac > 0) { roundRect(ctx, cx - bw / 2, y + 26, bw * frac, 5, 2.5); ctx.fillStyle = col; ctx.fill(); }
     ctx.restore();
@@ -3958,7 +3978,7 @@ const Live = {
   on: !/[?&]studio\b/.test(location.search),
   CACHE_KEY: 'arenaLive_v3',
   AV: 2,                    // saved-state format: 2 = 1v1 league (W/D/L table) with the season archive; older states are not trusted as caches
-  HOLD: 4,                  // seconds the final table stays after the end screen
+  HOLD: 0,                  // seconds the final table stays after the end screen (the table + countdown screen follows anyway)
   RESYNC_GAP: 60e3,         // the page slept longer than this (ms): reload from the newest saved state
   offset: 0, skew: 0, phase: 'loading', progress: null, cur: null, pending: null, st: null, simT: 0,
   sound: false, lastClean: null, lastFrame: 0,
@@ -4165,6 +4185,60 @@ const Live = {
       try { const r = await fetch('live-state.json', { cache: 'no-cache' }); if (r.ok) this.checkNewSite(await r.json()); } catch (e) { /* offline: try later */ }
     }, 600e3);
   },
+  /* --- browser tab title ---------------------------------------------------------------------------------------------------
+     Between matches: the countdown to the next kick-off ("⏱ 1:05 · RMA–BAR"); while a match is on: a ball running left and right
+     ("··⚽···· RMA–BAR"). It must keep going in a background tab, where browsers slow timers down (Chrome: to once a minute after
+     5 minutes) and stop drawing: a tiny Web Worker sends the tick (worker timers are not throttled like that), and the title is
+     worked out from the clock alone — the match state itself only advances while the page is visible. */
+  TITLE_W: 7,
+  startTitle() {
+    this.titleBase = document.title || 'Satisfying Lig';
+    const tick = () => { try { this.titleTick(); } catch (e) { /* keep ticking */ } };
+    try {
+      const w = new Worker(URL.createObjectURL(new Blob(['setInterval(function () { postMessage(0); }, 250);'], { type: 'text/javascript' })));
+      w.onmessage = tick;
+    } catch (e) { setInterval(tick, 250); }
+  },
+  /* the clubs of a match as "RMA–BAR" (home first) */
+  codes(ids) {
+    const d = League.data, t = ids.map(id => d.teams.find(x => x.id === id) || League.poolTeam(id)).filter(Boolean);
+    return t.length === 2 ? `${t[0].code}–${t[1].code}` : '';
+  },
+  /* the next match's clubs as LiveScreen shows them (only while the league state is up to date) */
+  nextIds() {
+    const d = League.data, plan = App.seasonPlan(), cm = App.cupMatch();
+    return cm ? [cm.a, cm.b].filter(Boolean) : plan && d.week <= d.seasonLength ? ((plan.weeks[d.week - 1] || [])[d.weekMatch - 1] || []) : [];
+  },
+  titleText(now) {
+    if (this.phase === 'loading' || this.phase === 'error') return this.titleBase;
+    let on = false, next = 0, vs = '';
+    if (this.cur) {
+      /* the ball runs from kick-off (intro included) until the final whistle; during the end table the countdown is back */
+      const end = this.cur.start + this.cur.dur * 1000, play = end - (CONFIG.END_DURATION + this.HOLD) * 1000;
+      if (now < play) { on = true; vs = this.codes(this.cur.s.opts.teams.map(t => t.id)); }
+      else {                                                     // after the whistle (also in a background tab, where the state is not advanced yet)
+        next = Math.max(this.slot(this.cur.n + 1), end + this.cfg().gap * 1000);
+        const d = League.data, plan = App.seasonPlan(), s = this.cur.s;
+        if (!s.cup && plan) {                                    // the league match after this one (a playoff's next pairing depends on its result)
+          const last = s.weekMatch >= s.perWeek, w = last ? s.week + 1 : s.week, m = last ? 1 : s.weekMatch + 1;
+          if (w <= d.seasonLength) vs = this.codes((plan.weeks[w - 1] || [])[m - 1] || []);
+        }
+      }
+    } else {
+      next = this.nextStart(); vs = this.codes(this.nextIds());
+      if (next <= now) on = true;                                // kicked off in a background tab
+    }
+    if (on) {
+      const W = this.TITLE_W, k = Math.floor(now / 250) % (2 * (W - 1)), pos = k < W ? k : 2 * (W - 1) - k;
+      return Array.from({ length: W }, (_, i) => (i === pos ? '⚽' : '·')).join('') + (vs ? ' ' + vs : '') + ' · CANLI';
+    }
+    const sec = Math.max(0, Math.ceil((next - now) / 1000)), h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, ss = String(sec % 60).padStart(2, '0');
+    return `⏱ ${h ? h + ':' + String(m).padStart(2, '0') : m}:${ss}${vs ? ' · ' + vs : ''} · Satisfying Lig`;
+  },
+  titleTick() {
+    const t = this.titleText(this.now());
+    if (t !== document.title) document.title = t;
+  },
   /* best starting point for time t: the furthest saved state whose last match had ended by t. The build's base is always a
      candidate (a league that changed rules starts from it, never from scratch); a brand-new league starts fresh. */
   async loadState(t) {
@@ -4199,6 +4273,7 @@ const Live = {
     document.body.classList.add('live');
     this.bootAt = Date.now();
     this.watchSite();
+    this.startTitle();
     League.data = this.freshLeague();
     UI.init();
     fitCanvas(); window.addEventListener('resize', fitCanvas);
