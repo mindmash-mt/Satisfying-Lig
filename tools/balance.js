@@ -4,6 +4,7 @@
   Her maç bir 1'e 1 maçtır (CONFIG.MATCH_TIME saniye; ilk takım ev sahibi, üst kale).
   Kullanım:  node tools/balance.js [maç sayısı] [--eleme]     (--eleme: berabere biterse altın gol + penaltı)
   Örnek:     node tools/balance.js 400
+  Başka seed'lerle: SEED0=777777 node tools/balance.js 4000
   Ayar denemek için: CFG='{"BALL_SPEED":650,"FINAL_GOAL_FRAC":0.5}' node tools/balance.js
 */
 const fs = require('fs'), path = require('path');
@@ -25,7 +26,7 @@ const run = (opts) => {
 let goals = 0, saves = 0, own = 0, draws = 0, home = 0, golden = 0, pens = 0, esc = 0;
 const scr = [], hist = {};
 for (let i = 0; i < N; i++) {
-  const seed = 1000 + i * 7919, rng = new RNG(seed ^ 0x51ED27);
+  const seed = (+process.env.SEED0 || 1000) + i * 7919, rng = new RNG(seed ^ 0x51ED27);
   const teams = rng.shuffle(teamsAll).slice(0, 2), theme = rng.pick(THEME_IDS);
   const { r, screen } = run({ mode: 'match', teams, seed, theme, lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout });
   goals += r.goals; saves += r.saves; own += r.ownGoals; esc += r.escapes; scr.push(screen);

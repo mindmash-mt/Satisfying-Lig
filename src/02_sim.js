@@ -60,6 +60,7 @@ class Game {
        (then a golden goal for at most CONFIG.GOLDEN_TIME seconds, then penalties). clock = screen seconds played. */
     this.timed = o.matchTime > 0 && o.teams.length === 2; this.matchTime = this.timed ? o.matchTime : 0;
     this.knockout = !!o.knockout; this.clock = 0; this.extra = false; this.pens = null; this.draw = false;
+    if (this.timed) this.cx = CONFIG.FINAL_CX;
     this.slowmo = null; this.slowmoCd = 0;
     this.spawnBlock = 0;
     this.nextPU = o.powerups ? this.rng.range(CONFIG.PU_MIN, CONFIG.PU_MAX) : Infinity;
@@ -175,7 +176,7 @@ class Game {
   initPlayers() {
     const mk = (team, x, y, cap) => this.makePlayer(team, x, y, cap);
     if (this.finalDuel) {
-      /* direct final (only 2 teams): captain + one team-mate each */
+      /* direct final / 1v1 match (only 2 teams): captain + team-mates */
       const [top, bottom] = this.rectTeams;
       for (const t of [top, bottom]) {
         const side = t === top ? -1 : 1, flank = t === top ? 1 : -1;
@@ -183,6 +184,13 @@ class Game {
         this.players.push(mk(t, cx, cy, true));
         const m = this.duelMateSpot(t, top, this.W, this.H, cx);
         this.players.push(mk(t, m.x, m.y, false));
+        /* a 1v1 match: CONFIG.TEAM_PLAYERS outfield players — the third starts in the middle of its own half, in front of its box,
+           a fourth or more spread across the own half */
+        const n = this.timed ? Math.max(2, CONFIG.TEAM_PLAYERS) : 2;
+        for (let k = 2; k < n; k++) {
+          const off = k === 2 ? 0 : (k % 2 ? -1 : 1) * 0.36 * Math.ceil((k - 2) / 2) / Math.max(1, Math.ceil((n - 3) / 2));
+          this.players.push(mk(t, this.cx + off * this.W, this.rectCy() + side * this.H * (k === 2 ? 0.34 : 0.1), false));
+        }
       }
     } else {
       for (const g of this.geo.goals) {
