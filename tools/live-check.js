@@ -7,7 +7,7 @@
   3) Takvim: günde 308 maç, bant geçişleri (05:00 / 09:00 / 19:00) doğru saatte.
   4) Taşma kuralı: aralık zorla 1 dakikaya indirilir (maçlar sığmaz) → maçlar asla üst üste binmez, hiçbir maç
      planlı saatinden önce başlamaz, takvim kilitlenmez ve normal aralığa dönülünce gecikme erir.
-  5) --long: gerçek takvimle 48 saatlik hızlandırılmış koşu (gün ve bant geçişleri, ~13 sezon, şampiyon sınırı).
+  5) --long: gerçek takvimle 48 saatlik hızlandırılmış koşu (gün ve bant geçişleri, ~10 sezon: 51 grup + 12 eleme maçı, şampiyon sınırı).
   Kullanım: node tools/live-check.js [maç sayısı] [--long]
 */
 const fs = require('fs'), path = require('path');
@@ -45,6 +45,13 @@ const runAll = () => {
     let n = 0; while (!g.over) { g.step(DT); n++; }
     out.push({ n, r: g.getResult(), b: g.balls.map(b => [b.x, b.y, b.vx, b.vy]) });
   }
+  /* promotion playoff matches: two clubs, the final-duel pitch */
+  for (let i = 0; i < N; i++) {
+    const seed = (0x85EBCA6B * (i + 1)) >>> 0, rng = new RNG(seed ^ 0x51ED27);
+    const g = new Game({ mode: 'arena', teams: rng.shuffle(teams).slice(0, 2), seed, theme: rng.pick(THEME_IDS), lives: 1, speedMult: 1, powerups: false });
+    let n = 0; while (!g.over) { g.step(DT); n++; }
+    out.push({ n, r: g.getResult(), b: g.balls.map(b => [b.x, b.y, b.vx, b.vy]) });
+  }
   out.push(planSeason(teams.map(t => t.id), 17, 6, new RNG(12345)));
   return JSON.stringify(out);
 };
@@ -58,7 +65,7 @@ const poisoned = runAll();
 Object.assign(Math, keep);
 const same = normal === poisoned;
 if (!same) fail++;
-console.log(`${N} maç + sezon fikstürü, Math kütüphanesi bozulmuşken: ${same ? 'birebir aynı ✅' : 'FARKLI ❌ (simülasyon hâlâ Math.sin/cos/… kullanıyor)'}`);
+console.log(`${N} grup maçı + ${N} eleme (1v1) maçı + sezon fikstürü, Math kütüphanesi bozulmuşken: ${same ? 'birebir aynı ✅' : 'FARKLI ❌ (simülasyon hâlâ Math.sin/cos/… kullanıyor)'}`);
 
 /* 3–5) timetable, overrun rule, long run (the real engine: src/07_live.js through tools/live-node.js) */
 (async () => {
@@ -94,7 +101,7 @@ console.log(`${N} maç + sezon fikstürü, Math kütüphanesi bozulmuşken: ${sa
     L.CONFIG.LIVE.start = '2026-11-04'; L.Live._slots = null;
     const log = await runUntil(L, L.Live.slot(0) + 48 * 3600e3);
     const d = L.League.data, late = log.filter(x => x.start > x.slot).length, longest = Math.max(...log.map(x => x.end - x.start)) / 1000;
-    ok(sane(log, L.CONFIG.LIVE.gap) && log.length === 616 && d.season >= 12 && d.champions.length <= L.CONFIG.LIVE.keepChampions,
+    ok(sane(log, L.CONFIG.LIVE.gap) && log.length === 616 && d.season >= 10 && d.champions.length <= L.CONFIG.LIVE.keepChampions,
       `48 saat: ${log.length} maç, ${d.season - 1} sezon bitti, ertelenen maç ${late}, en uzun maç ${longest.toFixed(0)} sn (${((Date.now() - t0) / 1000).toFixed(0)} sn'de hesaplandı)`);
   }
   process.exit(fail ? 1 : 0);

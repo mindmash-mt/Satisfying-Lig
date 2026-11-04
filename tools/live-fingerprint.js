@@ -12,9 +12,10 @@ const crypto = require('crypto');
 const { loadLive } = require('./live-node.js');
 const { Live, League, App } = loadLive();
 const out = [];
-const play = (k) => { for (let i = 0; i < k; i++) { const m = Live.computeNext(); out.push([m.s.seed, m.dur]); Live.record(m); } };
-play(4);                                          // 4 matches: every club plays, table + tie order + durations
-League.endSeason(); Live.closeMatch({ start: 0, dur: 0 });   // season change: champion, relegation, reserve queue
+const play = (k) => { for (let i = 0; i < k; i++) { const m = Live.computeNext(); out.push([m.s.seed, m.dur, m.s.cup || null]); Live.record(m); } };
+League.data.seasonLength = 2;                     // a short season: 6 group matches, then the 12 promotion playoff matches
+play(18);                                         // the whole season: every club plays, table + tie order + durations, playoff draw and bracket,
+                                                  // then the season change inside closeMatch (champion, relegation, promotion, pool)
 play(1);                                          // next season's fixture and a match with the new clubs
 const d = League.data;
 out.push(d.teams.map(t => t.id), d.reserve.map(t => t.id), d.champions, d.tieOrder, App.seasonPlan().weeks, League.ranking().map(x => [x.t.id, x.r]), d.history);

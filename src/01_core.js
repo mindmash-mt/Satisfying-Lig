@@ -33,7 +33,11 @@ const CONFIG = {
   INTRO_DURATION: 3.4,
   END_DURATION: 7.0,
   FORM_COUNT: 3,       // league table: each club's last N match places (1ST 2ND …), shown in the rightmost column
-  RELEGATE_COUNT: 3,   // at the end of a season the last N teams leave the league and the next N from the reserve queue join
+  RELEGATE_COUNT: 3,   // at the end of a season the last N teams leave the league and N clubs of the pool come in
+  /* promotion playoff: after the group matches of the season the pool clubs play a single-leg knockout (see League.cupShape);
+     champion, runner-up and the third-place winner go up. It needs exactly CUP_SIZE clubs in the pool and RELEGATE_COUNT 3;
+     with any other pool the first RELEGATE_COUNT clubs of the pool queue come in instead. */
+  CUP_SIZE: 12,
   HARD_TIME_LIMIT: 300,
   /* the public site's live league (07_live.js), a league that never stops. Istanbul time (UTC+3 all year).
      bands: from each `from` until the next band, one group match every `every` minutes (a day = 308 matches).
@@ -68,8 +72,8 @@ const DEFAULT_TEAMS = [
   { name: 'Beşiktaş',           code: 'BJK', c1: '#111111', c2: '#FFFFFF' },
   { name: 'Galatasaray',        code: 'GAL', c1: '#A90432', c2: '#FDB912' },
 ];
-/* clubs waiting to come in: when a season ends the last RELEGATE_COUNT teams leave (and join the back of this queue),
-   the first RELEGATE_COUNT clubs of the queue take their place */
+/* the pool of clubs outside the league: after the group matches they play the promotion playoff and its top 3 take the
+   place of the league's last RELEGATE_COUNT teams, who join the pool (the pool order only matters for the fallback queue) */
 const RESERVE_TEAMS = [
   { name: 'Napoli',        code: 'NAP', c1: '#12A0D7', c2: '#FFFFFF' },
   { name: 'Roma',          code: 'ROM', c1: '#8E1F2F', c2: '#F0BC42' },

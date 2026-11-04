@@ -82,6 +82,8 @@ const Live = {
   freshLeague() { const d = League.normalize(null); d.liveCount = 0; d.liveSeasonStart = 0; d.liveLastEnd = 0; return d; },
   /* live match number of a season's group match */
   matchIndex(week, wm) { return (League.data.liveSeasonStart || 0) + (week - 1) * App.perWeek() + (wm - 1); },
+  /* ...and of the i-th promotion playoff match (they follow the season's group matches) */
+  cupIndex(i) { return (League.data.liveSeasonStart || 0) + League.data.seasonLength * App.perWeek() + i; },
   /* a match's length on screen (s): intro, the match at its time scale (slow motion), end table, hold.
      Steps the game to its end, frame by frame at 60 fps exactly like the live player. */
   timeGame(g) {
@@ -105,9 +107,9 @@ const Live = {
   },
   /* write a computed match into the league (identical to watching it: same steps, same League.record) */
   record(m) { League.record(m.s, m.g.getResult(), m.g.teams[m.g.winner].id); this.closeMatch(m); },
-  /* after a match: season over → champion, relegation, new season; then the next live match */
+  /* after a match: season over (group matches AND the promotion playoff) → champion, relegation/promotion, new season; then the next live match */
   closeMatch(m) {
-    const d = League.data, ended = d.week > d.seasonLength;
+    const d = League.data, ended = League.seasonOver();
     if (ended) { League.endSeason(); d.champions = d.champions.slice(-this.cfg().keepChampions); }
     d.liveCount = (d.liveCount || 0) + 1;
     d.liveLastEnd = m.start + Math.round(m.dur * 1000);
@@ -189,7 +191,7 @@ const Live = {
   ui() {
     const tabs = document.createElement('nav');
     tabs.id = 'liveTabs';
-    tabs.innerHTML = `<button data-tab="live" class="on">⚽ Canlı</button><button data-tab="table">Lig tablosu</button><button data-tab="fixture">Fikstür</button>`;
+    tabs.innerHTML = `<button data-tab="live" class="on">⚽ Canlı</button><button data-tab="table">Lig tablosu</button><button data-tab="fixture">Fikstür</button><button data-tab="cup">Eleme</button>`;
     const pane = document.createElement('div');
     pane.id = 'livePane'; pane.className = 'hidden';
     $('stage').appendChild(tabs); $('stage').appendChild(pane);
@@ -220,18 +222,18 @@ const Live = {
     document.querySelectorAll('#liveTabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     $('livePane').classList.toggle('hidden', tab === 'live');
     this.renderPane();
-    if (tab === 'fixture') { const cur = document.querySelector('#livePane .fx-week.cur'); if (cur) cur.scrollIntoView({ block: 'start' }); }
+    if (tab === 'fixture' || tab === 'cup') { const cur = document.querySelector('#livePane .fx-week.cur'); if (cur) cur.scrollIntoView({ block: 'start' }); }
     else $('livePane').scrollTop = 0;
   },
   /* the open tab is redrawn only when the league changes (a match ends, a new one starts) */
   renderPane() {
     if (this.tab === 'live' || this.phase === 'loading') return;
     const d = League.data, s = App.setup;
-    const live = this.phase === 'match' && s && !d.history.some(h => h.week === s.week && h.weekMatch === s.weekMatch) ? `${s.week}-${s.weekMatch}` : '';
+    const live = this.phase === 'match' && s ? (s.cup ? 'cup-' + s.cup : !d.history.some(h => h.week === s.week && h.weekMatch === s.weekMatch) ? `${s.week}-${s.weekMatch}` : '') : '';
     const key = [this.tab, d.season, d.history.length, this.count(), live].join('|');
     if (key === this.paneKey) return;
     this.paneKey = key;
-    $('livePane').innerHTML = `<div class="lp-in">${this.tab === 'table' ? LivePages.table() : LivePages.fixture(live)}</div>`;
+    $('livePane').innerHTML = `<div class="lp-in">${this.tab === 'table' ? LivePages.table() : this.tab === 'cup' ? LivePages.cup(live) : LivePages.fixture(live)}</div>`;
   },
   /* join a computed match that is on: replay it from its kick-off up to now */
   startMatch(m) {
@@ -301,26 +303,29 @@ const LiveScreen = {
       return;
     }
     const d = League.data, next = L.nextStart();
-    const plan = App.seasonPlan(), ids = plan && d.week <= d.seasonLength ? ((plan.weeks[d.week - 1] || [])[d.weekMatch - 1] || []) : [];
+    const plan = App.seasonPlan(), cm = App.cupMatch();
+    const ids = cm ? [cm.a, cm.b].filter(Boolean) : plan && d.week <= d.seasonLength ? ((plan.weeks[d.week - 1] || [])[d.weekMatch - 1] || []) : [];
+    const sc = cm ? League.seasonChange() : null;           // playoffs on: the final table already shows the champion and the relegated clubs
     const rows = League.ranking().map((x, i) => {
       const f = League.formOf(x.t.id), gd = x.r.gf - x.r.ga;
       return { id: x.t.id, name: x.t.name, c1: x.t.c1, c2: x.t.c2, today: false, oldRank: i, newRank: i,
+        champ: !!sc && x.t.id === sc.champion.id, out: !!sc && sc.out.some(t => t.id === x.t.id),
         oldPts: x.r.pts, newPts: x.r.pts, played: x.r.played, dPlayed: 0, oldGd: gd, newGd: gd, place: null, delta: null, oldForm: f, newForm: f };
     });
     const last = d.champions.length ? d.champions[d.champions.length - 1] : null;
-    const sub = d.history.length ? `SEASON ${d.season} · AFTER ${d.history.length} MATCHES` : last ? `🏆 ${upTR(last.name)} · SEASON ${last.season} CHAMPIONS` : `SEASON ${d.season}`;
+    const sub = cm ? `SEASON ${d.season} · FINAL TABLE · PROMOTION PLAYOFFS` : d.history.length ? `SEASON ${d.season} · AFTER ${d.history.length} MATCHES` : last ? `🏆 ${upTR(last.name)} · SEASON ${last.season} CHAMPIONS` : `SEASON ${d.season}`;
     LeagueTable.draw(ctx, rows, 'LEAGUE TABLE', sub, { tt: 99, post: false, alpha: 1 });
     /* next match box */
     const X0 = 70, W = 880, y = 1668, h = 200;
     roundRect(ctx, X0, y, W, h, 28);
     ctx.fillStyle = 'rgba(0,200,83,0.13)'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#00E676'; ctx.stroke();
-    outlinedText(ctx, `NEXT · WEEK ${d.week} · GROUP MATCH ${d.weekMatch}`, X0 + 30, y + 42, `44px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
+    outlinedText(ctx, cm ? `NEXT · PLAYOFF · ${cupName(cm.k)[0]}` : `NEXT · WEEK ${d.week} · GROUP MATCH ${d.weekMatch}`, X0 + 30, y + 42, `44px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
     outlinedText(ctx, `KICK-OFF ${L.clock(next)} (TR)`, X0 + W - 30, y + 42, `600 24px ${FONT_UI}`, '#00E676', null, 0, 'right');
     const s = Math.max(0, Math.ceil((next - now) / 1000));
     const hh = Math.floor(s / 3600), mm = Math.floor(s / 60) % 60, ss = s % 60, p2 = (v) => String(v).padStart(2, '0');
     outlinedText(ctx, `${hh ? hh + ':' : ''}${p2(mm)}:${p2(ss)}`, X0 + W / 2, y + 128, `110px ${FONT_BIG}`, '#ffffff', null, 0);
     outlinedText(ctx, 'STARTS IN', X0 + 30, y + 128, `600 24px ${FONT_UI}`, 'rgba(255,255,255,0.6)', null, 0, 'left');
-    const codes = ids.map(id => (d.teams.find(t => t.id === id) || {}).code).filter(Boolean).join(' · ');
+    const codes = ids.map(id => (d.teams.find(t => t.id === id) || League.poolTeam(id) || {}).code).filter(Boolean).join(' · ');
     outlinedText(ctx, codes, X0 + W / 2, y + 180, `600 24px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
   },
 };
@@ -357,7 +362,48 @@ const LivePages = {
     }).join('');
     return `<h2>Lig tablosu</h2><div class="lp-sub">Sezon ${d.season} · ${d.history.length} / ${d.seasonLength * App.perWeek()} maç oynandı</div>${this.champ()}
       <table class="lp-table"><thead><tr><th>#</th><th>Takım</th><th title="Oynanan">O</th><th title="Puan">P</th><th class="opt" title="Birincilik">1.</th><th class="opt" title="Atılan gol">AG</th><th class="opt" title="Yenilen gol">YG</th><th title="Averaj">AV</th><th title="Son ${CONFIG.FORM_COUNT} maçtaki sırası (en sağdaki en yeni)">Son ${CONFIG.FORM_COUNT}</th></tr></thead><tbody>${rows}</tbody></table>
-      <div class="lp-legend">Puan: ${d.points.slice(0, CONFIG.GROUP_SIZE).map((p, i) => `${i + 1}. → ${p}`).join(' · ')} · Kırmızı çizgili son ${CONFIG.RELEGATE_COUNT} takım sezon sonunda ligden düşer.</div>${this.champs()}`;
+      <div class="lp-legend">Puan: ${d.points.slice(0, CONFIG.GROUP_SIZE).map((p, i) => `${i + 1}. → ${p}`).join(' · ')} · Kırmızı çizgili son ${CONFIG.RELEGATE_COUNT} takım sezon sonunda ligden düşer${League.cupOn() ? `; yerlerine havuzdaki ${CONFIG.CUP_SIZE} takımın eleme maçlarında ilk 3'e girenler çıkar (Eleme sekmesi)` : ''}.</div>${this.champs()}`;
+  },
+  /* kick-off of a playoff match: the actual one once played (or next), the planned slot otherwise */
+  cupKickoff(i, m) {
+    if (m.res && m.res.date) { const t = Date.parse(m.res.date); return { t, late: t - Live.slot(Live.cupIndex(i)) > 1000 }; }
+    const n = Live.cupIndex(i);
+    if (n === Live.count()) { const t = Live.nextStart(); return { t, late: t - Live.slot(n) > 1000 }; }
+    return { t: Live.slot(n), late: false };
+  },
+  /* the "Eleme" tab: the promotion playoff of the pool clubs, played after the season's group matches */
+  cup(live) {
+    const d = League.data, total = CONFIG.CUP_SIZE;
+    const head = `<h2>Yükselme eleme maçları</h2>`;
+    if (!League.cupOn()) return `${head}<div class="lp-sub">Bu ligde eleme maçı yok: havuz ${total} takım değil, sezon sonunda havuzun sıradaki takımları ligdekilerle yer değiştirir.</div>`;
+    const guide = `<div class="lp-legend">Sezonun grup maçları bittikten sonra havuzdaki ${total} takım kura ile eşleşir ve tek maçlık eleme oynar (ilk 2 golü atan kazanır, rövanş yok). `
+      + `Kurada ilk 4 takım 1. turu bay geçer. <b>Final galibi, finalist ve 3.lük maçının galibi</b> ligi yükselir; ligin son ${CONFIG.RELEGATE_COUNT} takımı havuza düşer.</div>`;
+    const c = League.cup(), ms = League.cupMatches();
+    if (!c) {
+      return `${head}<div class="lp-sub">Sezon ${d.season} · grup maçları bitince başlar (${d.history.length} / ${d.seasonLength * App.perWeek()} maç oynandı)</div>${this.champ()}${guide}`
+        + `<h3 class="lp-h3">Havuzdaki takımlar</h3><ul class="lp-pool">${d.reserve.map(t => `<li>${this.dot(t)}${esc(t.name)}</li>`).join('')}</ul>`;
+    }
+    const nm = (id, ph) => { const t = League.poolTeam(id); return t ? `<li>${this.dot(t)}<span class="nm">${esc(t.name)}</span>` : `<li class="tbd"><span class="nm">${ph}</span>`; };
+    /* a slot whose club is not decided yet: "Çeyrek final 1 galibi" */
+    const tbd = (ref) => ref[0] === 's' ? '—' : `${cupName(ref.slice(1))[1]} ${ref[0] === 'w' ? 'galibi' : 'mağlubu'}`;
+    const rounds = CUP_ROUNDS_TR.map((rn, r) => {
+      const list = ms.filter(m => m.r === r);
+      const cur = list.some(m => !m.res) && !ms.some(m => m.r < r && !m.res);
+      const body = list.map(m => {
+        const K = this.cupKickoff(m.i, m), isLive = live === 'cup-' + m.k, def = CUP_SHAPE[m.i];
+        const side = (id, ref, win) => nm(id, tbd(ref)) + (m.res ? `<span class="pt ${win ? 'g' : 'r'}">${win ? m.res.sw : m.res.sl}</span>` : '') + '</li>';
+        const badge = m.res ? '<span class="b done">Bitti</span>' : isLive ? '<span class="b live">● CANLI</span>' : '';
+        const aWin = !!m.res && m.res.winner === m.a;
+        return `<div class="fx-match${m.res ? ' done' : ''}${isLive ? ' live' : ''}"><div class="fx-head"><b>${cupName(m.k)[1]}</b><span>${Live.clock(K.t)}${K.late ? ' · ertelendi' : ''}</span>${badge}</div>`
+          + `<ol class="res">${side(m.a, def.a, aWin)}${side(m.b, def.b, !!m.res && !aWin)}</ol></div>`;
+      }).join('');
+      const k0 = this.cupKickoff(list[0].i, list[0]).t;
+      const byes = r === 0 ? `<div class="lp-legend" style="margin:0 0 4px">Bay geçenler: ${c.draw.slice(0, 4).map(id => esc((League.poolTeam(id) || {}).name || '?')).join(', ')}</div>` : '';
+      return `<section class="fx-week${cur ? ' cur' : ''}"><h3>${rn}<span>${this.day(k0)} · ${Live.clock(k0)}</span></h3>${byes}${body}</section>`;
+    }).join('');
+    const top = League.cupTop3();
+    const done = top ? `<div class="lp-note">🔺 Yükselenler: <b>${top.map(t => esc(t.name)).join(', ')}</b></div>` : '';
+    return `${head}<div class="lp-sub">Sezon ${d.season} · ${ms.filter(m => m.res).length} / ${ms.length} maç oynandı</div>${this.champ()}${done}${guide}${rounds}`;
   },
   fixture(live) {
     const d = League.data, plan = App.seasonPlan();
@@ -382,6 +428,6 @@ const LivePages = {
       }).join('');
       return `<section class="fx-week${cur ? ' cur' : ''}"><h3>Hafta ${w}<span>${this.day(k0)} · ${Live.clock(k0)}–${Live.clock(k1)}</span></h3>${matches}</section>`;
     }).join('');
-    return `<h2>Sezon ${d.season} fikstürü</h2><div class="lp-sub">${d.seasonLength} hafta · her takım haftada bir maç · maç saatleri (TSİ): ${this.bandsText()}</div>${this.champ()}${weeks}`;
+    return `<h2>Sezon ${d.season} fikstürü</h2><div class="lp-sub">${d.seasonLength} hafta · her takım haftada bir maç · maç saatleri (TSİ): ${this.bandsText()}${League.cupOn() ? ' · grup maçlarından sonra havuz kulüplerinin yükselme eleme maçları var (Eleme sekmesi)' : ''}</div>${this.champ()}${weeks}`;
   },
 };
