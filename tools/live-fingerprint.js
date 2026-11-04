@@ -3,8 +3,8 @@
   Canlı lig "parmak izi": simülasyonun SONUÇLARINI özetleyen kısa bir hash. build.sh bunu BUILD_SIM_HASH olarak
   sayfaya yazar; tarayıcı önbelleği ve live-state.json yalnızca aynı parmak iziyle geçerlidir.
   Yalnızca görünümü değiştiren düzenlemeler (çizim, panel, sekmeler) parmak izini değiştirmez, kaydedilmiş lig
-  durumları geçerli kalır. Maç sonuçlarını, fikstürü, puanlamayı, sıralamayı, sezon geçişini ya da maç sürelerini
-  değiştiren her düzenleme parmak izini değiştirir. Lig yine de SIFIRLANMAZ: yayın iş akışı (tools/live-base.js) ligi
+  durumları geçerli kalır. Maç sonuçlarını, fikstürü, puanlamayı, sıralamayı, sezon geçişini, maç sürelerini ya da maç
+  takvimini (CONFIG.LIVE.bands / gap) değiştiren her düzenleme parmak izini değiştirir. Lig yine de SIFIRLANMAZ: yayın iş akışı (tools/live-base.js) ligi
   o anki hâliyle dondurur ("taban") ve yeni kurallar bir sonraki maçtan itibaren o durumun üzerinden devam eder.
   Kullanım: node tools/live-fingerprint.js   → 12 karakterlik hash
 */
@@ -18,5 +18,7 @@ play(30);                                         // the whole season: every clu
                                                   // then the season change inside closeMatch (champion, relegation, promotion, pool)
 play(1);                                          // next season's fixture and a match with the new clubs
 const d = League.data;
+/* the timetable too: changing it freezes the league (base) and the new timetable starts from there, like a rule change */
+out.push(CONFIG.LIVE.bands, CONFIG.LIVE.gap);
 out.push(d.teams.map(t => t.id), d.reserve.map(t => t.id), d.champions, d.tieOrder, App.seasonPlan().weeks, League.ranking().map(x => [x.t.id, x.r]), d.history);
 process.stdout.write(crypto.createHash('sha1').update(JSON.stringify(out)).digest('hex').slice(0, 12) + '\n');

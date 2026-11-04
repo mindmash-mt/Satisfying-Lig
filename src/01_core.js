@@ -35,7 +35,7 @@ const CONFIG = {
      The clock runs on screen time (slow-motion moments count too), so a match is MATCH_TIME seconds long on screen.
      A draw is a draw in the league; a promotion playoff match that is level goes to a golden goal (at most GOLDEN_TIME seconds)
      and then to a penalty shoot-out (PEN_P: chance a penalty goes in, PEN_STEP: seconds per penalty on screen). */
-  MATCH_TIME: 60, GOLDEN_TIME: 30, PEN_P: 0.75, PEN_STEP: 0.9,
+  MATCH_TIME: 90, GOLDEN_TIME: 30, PEN_P: 0.75, PEN_STEP: 0.9,
   GROUP_SIZE: 2,
   /* league points: win, draw, loss. A season is a single round robin: every club meets every other club once (17 weeks with
      18 clubs, 9 matches a week); a longer season repeats it with home and away swapped. */
@@ -52,15 +52,16 @@ const CONFIG = {
   CUP_SIZE: 12,
   HARD_TIME_LIMIT: 300,
   /* the public site's live league (07_live.js), a league that never stops. Istanbul time (UTC+3 all year).
-     bands: from each `from` until the next band, one match every `every` minutes (one band, every 3 minutes: 480 matches a day).
+     bands: from each `from` until the next band, one match every `every` minutes (one band, every 2 minutes: 720 matches a day).
      The first match is at `start`. On the site `start` is set by the first deploy of a new salt (tools/live-start.js →
      BUILD_START: the league starts a few minutes after it goes live); `start` here is only the fallback for local builds.
      gap: seconds between a match that ran over and the next one.
-     Changing start / bands / gap / salt starts a NEW live league: all browsers drop their saved state.
-     Changing the simulation (results, scoring, balance) does NOT: the league is frozen as it stands and the new rules play on from there (tools/live-base.js). */
+     Changing start / salt starts a NEW live league: all browsers drop their saved state.
+     Changing the simulation (results, scoring, balance) or the timetable (bands, gap) does NOT: the league is frozen as it stands
+     and the new rules / timetable play on from there (tools/live-base.js). */
   LIVE: {
     start: '2026-11-04T22:00',   // 'YYYY-MM-DD' (that day at the first band's time) or 'YYYY-MM-DDTHH:MM' — overridden by BUILD_START
-    bands: [{ from: '00:00', every: 3 }],
+    bands: [{ from: '00:00', every: 2 }],
     utcOffset: 3, gap: 10, salt: 'satisfying-lig-live-2', keepChampions: 50,
   },
 };

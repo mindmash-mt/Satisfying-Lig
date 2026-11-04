@@ -1,8 +1,8 @@
 # Satisfying Lig ⚽
 
-Kendi kendine oynayan, **hiç durmayan canlı bir "satisfying" futbol ligi**: günün her saatinde **her 3 dakikada bir 1'e 1 maç** oynanır, her maç **60 saniye** sürer; siteye giren herkes aynı maçı aynı anda izler. Tek dosyalık bir tarayıcı uygulamasıdır; sunucu gerekmez. Ayrıca Reels/TikTok/Shorts videosu üreten bir **stüdyo** modu vardır (`?studio`).
+Kendi kendine oynayan, **hiç durmayan canlı bir "satisfying" futbol ligi**: günün her saatinde **her 2 dakikada bir 1'e 1 maç** oynanır, her maç **90 saniye** sürer; siteye giren herkes aynı maçı aynı anda izler. Tek dosyalık bir tarayıcı uygulamasıdır; sunucu gerekmez. Ayrıca Reels/TikTok/Shorts videosu üreten bir **stüdyo** modu vardır (`?studio`).
 
-Her maçta iki kulüp dikey bir futbol sahasında karşılaşır: her takımın bir kalecisi ve sahada 3 oyuncusu (biri kaptan) vardır. Top duvarlara çarptıkça hızlanır, kaleciler topu takip eder. 60 saniyenin sonunda **çok gol atan kazanır**; berabere biterse beraberliktir. Sonuç kalıcı bir **lig tablosuna** işlenir (galibiyet 3, beraberlik 1 puan).
+Her maçta iki kulüp dikey bir futbol sahasında karşılaşır: her takımın bir kalecisi ve sahada 3 oyuncusu (biri kaptan) vardır. Top duvarlara çarptıkça hızlanır, kaleciler topu takip eder. 90 saniyenin sonunda **çok gol atan kazanır**; berabere biterse beraberliktir. Sonuç kalıcı bir **lig tablosuna** işlenir (galibiyet 3, beraberlik 1 puan).
 
 - Kurulum yok: `index.html` dosyasını Chrome'da açmanız yeterli.
 - Dikey 1080×1920 (9:16) video, 60 FPS, sesli kayıt.
@@ -18,36 +18,36 @@ Site adresi: https://mindmash-mt.github.io/Satisfying-Lig/ — **hiç durmayan b
 - **Maç sırasında:** maçın kendisi. Geç gelen kişi maçı baştan değil, **kaldığı yerden** izler; herkes aynı anda aynı maçı görür. Maçtan önce `WEEK 5 MATCHES` ekranı (haftanın 9 maçı: oynananlar skorlarıyla, sıradaki, kalanlar), maçtan sonra animasyonlu lig tablosu gelir.
 - **Maçlar arasında:** güncel lig tablosu, sıradaki eşleşme (ev sahibi solda) ve **geri sayım**.
 - Üstteki sekmeler: **⚽ Canlı** (yayın), **Lig tablosu** (O, G, B, M, AG, YG, AV, P, son 3 maç; düşme hattındaki son 3 takım kırmızı çizgili; son şampiyonlar), **Fikstür** (sezonun bütün haftaları ve her maçın saati; oynananlar skorlarıyla, oynanan maç `● CANLI`, geciken maç `ertelendi` etiketiyle), **Eleme** (havuzdaki 12 kulübün yükselme eleme tablosu: turlar, skorlar, altın gol / penaltılar, bay geçenler, sıradaki maç) ve **Geçmiş** (biten sezonların tablosu ve yükselme eleme sonuçları; eski 6'lı grup formatındaki ligin sezonları da; bkz. [Geçmiş sezonlar](#geçmiş-sezonlar)). Sekmeler açıkken yayın arka planda saate göre ilerler.
-- Alttaki çubuk: ses düğmesi (tarayıcı kuralları gereği kapalı başlar) ve "Her 3 dk'da bir maç · 60 sn · sıradaki 21:03".
+- Alttaki çubuk: ses düğmesi (tarayıcı kuralları gereği kapalı başlar) ve "Her 2 dk'da bir maç · 90 sn · sıradaki 21:04".
 
 ### Maç takvimi
 
-Günün her saatinde **her 3 dakikada bir maç**: günde **480 maç**. 3 dakikalık bir aralık şöyle geçer:
+Günün her saatinde **her 2 dakikada bir maç**: günde **720 maç**. 2 dakikalık bir aralık şöyle geçer:
 
 | Süre | Ekranda |
 |---|---|
 | ~5 sn | `WEEK 5 MATCHES`: haftanın 9 maçı |
-| **60 sn** | Maç (üst şeritte hafta · skor · saat; son 10 saniye kırmızı ve sesli) |
+| **90 sn** | Maç (üst şeritte hafta · süre · skor; son 10 saniye kırmızı ve sesli) |
 | ~13 sn | `FULL TIME` + animasyonlu lig tablosu (+3 / +1 / +0, ▲▼, son 3 maç) |
-| ~100 sn | Lig tablosu, sıradaki maç ve geri sayım |
+| ~11 sn | Lig tablosu, sıradaki maç ve geri sayım |
 
-Bir sezon 17 hafta × 9 maç = **153 lig maçı** ve ardından **12 maçlık yükselme elemesidir** (bkz. [Sezon sonu](#sezon-sonu-şampiyon-yükselme-elemesi-ve-takım-değişimi)): toplam 165 maç ≈ **8 saat 15 dakika**, yani günde ~2,9 sezon biter. Şampiyon belirlenir, son 3 takım düşer, elemede ilk 3'e giren 3 havuz kulübü gelir ve yeni sezon bir sonraki maçta başlar. Her takım 27 dakikada bir sahaya çıkar. Şampiyonlar listesinde son 50 sezon tutulur.
+Bir sezon 17 hafta × 9 maç = **153 lig maçı** ve ardından **12 maçlık yükselme elemesidir** (bkz. [Sezon sonu](#sezon-sonu-şampiyon-yükselme-elemesi-ve-takım-değişimi)): toplam 165 maç ≈ **5 saat 30 dakika**, yani günde ~4,4 sezon biter. Şampiyon belirlenir, son 3 takım düşer, elemede ilk 3'e giren 3 havuz kulübü gelir ve yeni sezon bir sonraki maçta başlar. Her takım 18 dakikada bir sahaya çıkar. Şampiyonlar listesinde son 50 sezon tutulur.
 
 **Başlangıç:** yeni bir lig, ilk yayınından **birkaç dakika sonra** kendiliğinden başlar (`tools/live-start.js`, bkz. [Nasıl çalışıyor](#nasıl-çalışıyor-sunucusuz-ücretsiz)). Başlangıç saati o yayında bir kez belirlenir ve sonraki her yayında aynen korunur.
 
-**Taşma kuralı (kilitlenme olmaz):** bir maç, ekranları dahil sıradaki maçın saatine kadar bitmezse sıradaki maç önceki bitince 10 sn sonra başlar (`gap`). Lig maçları her zaman ~79 sn, altın gol ve penaltıya giden bir eleme maçı en fazla ~2,5 dakika sürdüğü için bu hiç olmaz; kural yalnızca güvence için var. `node tools/live-check.js` aralığı zorla 1 dakikaya indirip maçların üst üste binmediğini ve takvimin kendini toparladığını test eder.
+**Taşma kuralı (kilitlenme olmaz):** bir maç, ekranları dahil sıradaki maçın saatine kadar bitmezse sıradaki maç önceki bitince 10 sn sonra başlar (`gap`). Lig maçları her zaman ~109 sn sürer ve 2 dakikaya sığar. Altın gole giden bir eleme maçı ise ekranlarıyla en fazla ~2,5 dakika sürebilir: o zaman sonraki birkaç maç birkaç saniye ile en fazla ~45 sn geç başlar (Fikstür'de `ertelendi`), gecikme her aralıkta ~11 sn erir. 48 saatlik testte 1440 maçın 80'i geç başladı, en büyük gecikme 44 sn. `node tools/live-check.js` aralığı zorla 1 dakikaya indirip maçların üst üste binmediğini ve takvimin kendini toparladığını test eder.
 
 Ayar `src/01_core.js` dosyasındaki `CONFIG.LIVE`:
 
 ```js
 LIVE: {
   start: '2026-11-04T22:00',   // yalnızca yerel derleme için; sitede başlangıcı ilk yayın belirler (BUILD_START)
-  bands: [{ from: '00:00', every: 3 }],
+  bands: [{ from: '00:00', every: 2 }],
   utcOffset: 3, gap: 10, salt: 'satisfying-lig-live-2', keepChampions: 50,
 },
 ```
 
-`start`, `bands`, `gap` ya da `salt` değişirse canlı lig **yeni bir lig** olarak baştan kurulur; bütün tarayıcılar kayıtlı durumu bırakır. Yeni bir lig başlatmanın doğru yolu `salt`'ı değiştirmektir: ilk yayın yeni başlangıç saatini kendisi seçer ve eski ligin şampiyonlarını ve biten sezonlarını Geçmiş'e taşır. (Bunlar ligin kimliğidir. **Simülasyonu değiştirmek ligi sıfırlamaz**, bkz. aşağıdaki [Kural değişikliği ligi sıfırlamaz](#kural-değişikliği-ligi-sıfırlamaz).)
+`start` ya da `salt` değişirse canlı lig **yeni bir lig** olarak baştan kurulur; bütün tarayıcılar kayıtlı durumu bırakır. **Takvimi (`bands`, `gap`) değiştirmek ligi sıfırlamaz:** lig o anki hâliyle dondurulur ve yeni takvim, son oynanan maçın bitişinden sonraki ilk aralıkta başlar (kural değişikliği gibi, bkz. aşağıda). Yeni bir lig başlatmanın doğru yolu `salt`'ı değiştirmektir: ilk yayın yeni başlangıç saatini kendisi seçer ve eski ligin şampiyonlarını ve biten sezonlarını Geçmiş'e taşır. (`salt` ve `start` ligin kimliğidir. **Simülasyonu değiştirmek ligi sıfırlamaz**, bkz. aşağıdaki [Kural değişikliği ligi sıfırlamaz](#kural-değişikliği-ligi-sıfırlamaz).)
 
 ### Geçmiş sezonlar
 
@@ -64,8 +64,8 @@ Simülasyon deterministiktir: aynı seed + aynı takımlar = birebir aynı maç.
 1. Bitmiş maçlar çizilmeden simüle edilir (bir maç ~0,04 sn).
 2. O an oynanan maç saate göre ileri sarılır ve oradan gerçek zamanlı oynar.
 3. Hesaplanan lig tarayıcıda saklanır (`localStorage`, `arenaLive_v3`); bir sonraki ziyarette yalnızca yeni maçlar hesaplanır. Kayıtlı durumun hash'i `<kural>:<lig kimliği>[@<taban>]` biçimindedir; başka kurala ya da tabana ait durum geçersiz sayılır.
-4. **Checkpoint:** GitHub Pages iş akışı her yayında ve **15 dakikada bir** ligin o anki durumunu `live-state.json` olarak yayınlar (`tools/live-state.js`). Tarayıcısız çalışır (Node) ve sitede yayında olan son checkpoint'ten devam eder; süre lig yaşlandıkça uzamaz. Siteye ilk girenler en fazla son 15 dakikanın maçlarını (en fazla 5 maç) kendileri hesaplar. Checkpoint yalnızca hızlandırır; yoksa tarayıcı aynı sonucu kendisi hesaplar (kural değişmişse tabandan). Hesaplama başarısız olursa yayındaki son checkpoint aynen yeniden yayınlanır.
-5. **Başlangıç (`live-start.json`):** iş akışı her yayında önce `tools/live-start.js`'i çalıştırır. Yayındaki `live-start.json` bu `salt`'a aitse aynen taşınır. Yoksa ve yayındaki checkpoint bu `salt`'ın ligine aitse başlangıç onun lig kimliğinden geri okunur (dosya kaybolsa bile lig yeniden başlamaz). İkisi de yoksa bu `salt` ilk kez yayınlanıyordur: başlangıç = **şimdi + 4 dakika** (İstanbul saati, dakikaya yuvarlanmış; ilk maç ondan sonraki ilk 3 dakikalık aralıkta). `build.sh` dosyayı sayfaya gömer (`BUILD_START`). Yayındaki dosyalar okunamazsa (404 dışında bir hata) yayın durur.
+4. **Checkpoint:** GitHub Pages iş akışı her yayında ve **15 dakikada bir** (zamanlanmış) ligin o anki durumunu `live-state.json` olarak yayınlar (`tools/live-state.js`). Tarayıcısız çalışır (Node) ve sitede yayında olan son checkpoint'ten devam eder; süre lig yaşlandıkça uzamaz. **Not:** GitHub zamanlanmış iş akışlarını garanti etmez; bu repoda pratikte günde birkaç kez çalışıyor. Bu durumda siteye ilk girenler son checkpoint'ten bu yana oynanan maçları kendileri hesaplar (bir maç ~0,06 sn; saatlerce eski bir checkpoint bile birkaç saniye sürer). Checkpoint yalnızca hızlandırır; yoksa tarayıcı aynı sonucu kendisi hesaplar (kural değişmişse tabandan). Hesaplama başarısız olursa yayındaki son checkpoint aynen yeniden yayınlanır.
+5. **Başlangıç (`live-start.json`):** iş akışı her yayında önce `tools/live-start.js`'i çalıştırır. Yayındaki `live-start.json` bu `salt`'a aitse aynen taşınır. Yoksa ve yayındaki checkpoint bu `salt`'ın ligine aitse başlangıç onun lig kimliğinden geri okunur (dosya kaybolsa bile lig yeniden başlamaz). İkisi de yoksa bu `salt` ilk kez yayınlanıyordur: başlangıç = **şimdi + 4 dakika** (İstanbul saati, dakikaya yuvarlanmış; ilk maç ondan sonraki ilk 2 dakikalık aralıkta). `build.sh` dosyayı sayfaya gömer (`BUILD_START`). Yayındaki dosyalar okunamazsa (404 dışında bir hata) yayın durur.
 6. **Yeni site:** açık bir sayfa 10 dakikada bir yayındaki checkpoint'e bakar; site başka bir lig ya da başka kurallarla yeniden yayınlanmışsa kendini yeniler (en fazla 10 dakikada bir).
 7. **Cihaz saati:** telefonun saati yanlışsa site, GitHub Pages yanıtındaki saate göre düzeltir.
 8. **Sekme uyursa:** sekme 1 dakikadan uzun arka planda kalıp geri gelince lig en yeni kayıtlı durumdan yeniden kurulur ve o anki maça katılır.
@@ -84,14 +84,16 @@ Neden gerekli: lig tarayıcıda maç maç hesaplanır, kural değişince aynı g
 2. Pages iş akışı her yayında siteyi derlemeden önce `tools/live-base.js`'i çalıştırır. Yayındaki son checkpoint (`live-state.json`) başka bir parmak iziyle üretilmişse, o checkpoint yeni sitenin **tabanı** olur (`live-base.json`) ve `build.sh` onu sayfaya gömer (`BUILD_BASE`, ~16 KB).
 3. Tarayıcılar ve checkpoint üreteci ligi tabandan başlatır (hiçbir zaman ligin başından değil). Tabandan sonraki maçlar yeni kurallarla oynanır.
 4. Kural aynı kaldıkça (15 dakikalık yayınlar, görünüm düzenlemeleri) taban aynen taşınır. Bir sonraki kural değişikliği tabanı yine o anki checkpoint'ten yeniler (birikimli).
+5. Yayındaki checkpoint saatlerce eski olabilir; bu yüzden `tools/live-base.js` dondurmadan önce onu **yayındaki sitenin kendi koduyla** (`index.html`) şu ana kadar ilerletir. Ziyaretçilerin gördüğü bütün maçlar korunur.
+6. Takvim değişikliği de bir kural değişikliğidir (`bands` ve `gap` parmak izine dahil): taban, son maçının bitişinden sonraki ilk aralıkta yeni takvimle devam eder.
 
 Bilmeniz gerekenler:
 
-- **Tek istisna, son checkpoint ile yayın arasındaki maçlardır** (en fazla ~15 dk, 5 maç): bunlar yeni kurallarla yeniden oynanır. Yayından önce izlenmiş bir maçın sonucu değişebilir.
+- **Tek istisna, yayın anında oynanmakta olan maçtır**: o maç yeni kurallarla yeniden oynanır (sitedeki kod indirilemezse son checkpoint'ten sonraki bütün maçlar yeniden oynanır).
 - Puanlama ve hız gibi kurallar kayıtlı durumda saklandığı için ligin kuralları her zaman `CONFIG`'den alınır (`Live.applyRules`). Puanlama değişince tabloda eski maçların puanı **yeniden yazılmaz**, yeni puanlama sonraki maçlardan itibaren işler. Başlamış bir sezonun uzunluğu sezon bitene kadar korunur, yeni uzunluk bir sonraki sezonda başlar.
 - Takım kadrosu, adı ve renkleri de kayıtlı durumdadır: `DEFAULT_TEAMS` / `RESERVE_TEAMS` düzenlemeleri çalışan ligi etkilemez (kadro zaten yükselme/düşmeyle değişir).
 - Lig verisinin **biçimini** değiştirirseniz (yeni alan, yeniden adlandırma), eski kayıtların açılabilmesi için `League.normalize`'a geçiş ekleyin.
-- Zaman çizelgesini (`bands`, `gap`), `start`'ı ya da `salt`'ı değiştirmek hâlâ **bilinçli bir yeni lig** başlatır: taban ve checkpoint yok sayılır.
+- `start`'ı ya da `salt`'ı değiştirmek hâlâ **bilinçli bir yeni lig** başlatır: taban ve checkpoint yok sayılır. Zaman çizelgesi (`bands`, `gap`) ise ligi sıfırlamaz (yukarıda 6).
 - Yayındaki `live-base.json` / `live-state.json` okunamazsa (404 dışında bir hata) iş akışı **durur** ve eski site yayında kalır; ligi yanlışlıkla sıfırlamaktansa 15 dk sonra yeniden dener. Pages sitesini silip baştan kurarsanız (taban ve `live-start.json` kaybolur), lig yeni bir başlangıç saatiyle baştan başlar.
 
 Testler (`node tools/live-check.js`): dondurulmuş lig yeni kurallarla devam ediyor, geçmiş aynen duruyor, iki bağımsız tarayıcı ve checkpoint'ten devam eden üçüncüsü birebir aynı ligi buluyor, taban kararı her durumda (ilk yayın, aynı kural, kural değişti, ikinci değişiklik, checkpoint yok, yeni lig) ve başlangıç kararı (ilk yayın, sonraki yayınlar, `live-start.json` kaybı, elle saat) doğru.
@@ -104,7 +106,7 @@ Testler (`node tools/live-check.js`): dondurulmuş lig yeni kurallarla devam edi
 
 ## Stüdyo (video üretimi) — `?studio`
 
-`index.html?studio` eski kontrol panelini açar. Bu moddaki lig, canlı ligden tamamen ayrıdır (tarayıcıda `arenaLeague_v2`), maç seed'leri rastgeledir. Kurallar canlı ligle aynıdır: 1'e 1, 60 sn, galibiyet 3 / beraberlik 1 puan.
+`index.html?studio` eski kontrol panelini açar. Bu moddaki lig, canlı ligden tamamen ayrıdır (tarayıcıda `arenaLeague_v2`), maç seed'leri rastgeledir. Kurallar canlı ligle aynıdır: 1'e 1, 90 sn, galibiyet 3 / beraberlik 1 puan.
 
 1. `index.html?studio` adresini güncel **Google Chrome** (masaüstü) ile açın.
 2. Sağdaki panelden **▶ Başlat**'a basın (veya **Boşluk** tuşu). Maç önizleme olarak oynar.
@@ -127,13 +129,13 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 
 ## Oyun kuralları
 
-### 1'e 1 maç (60 sn)
-- Her maç iki kulüp arasındadır. Fikstürde ilk yazılan **ev sahibidir** ve **üst kalede** oynar (skor tabelasında solda). Ev sahipliği sezon boyunca dengelidir (her takım 8–9 maçta ev sahibi); 4000 maçlık testte üst ve alt kale galibiyetleri eşit (%40 / %41, gerisi beraberlik).
+### 1'e 1 maç (90 sn)
+- Her maç iki kulüp arasındadır. Fikstürde ilk yazılan **ev sahibidir** ve **üst kalede** oynar (skor tabelasında solda). Ev sahipliği sezon boyunca dengelidir (her takım 8–9 maçta ev sahibi); 1000 maçlık testte üst ve alt kale galibiyetleri eşit (%42 / %42, gerisi beraberlik).
 - Saha dar ve uzun, dikey bir futbol sahasıdır ve ekranı üst şeridin altından alt kenara, soldan sağa kadar doldurur (1020 × 1660, ortalı). Her takımın bir **kalecisi** ve sahada **3 oyuncusu** vardır: **kaptan** (sarı **C** rozeti) ve iki takım arkadaşı (`TEAM_PLAYERS`); üçüncü oyuncu maça kendi yarı sahasının ortasından, ceza sahasının önünden başlar. Oyuncular sahada serbestçe dolaşır. Sahada her an **tek top** bulunur.
 - **Top:** başlangıç hızıyla ortadan rastgele bir yöne çıkar, her **duvar veya direk** çarpmasında %10 hızlanır (en fazla 2,4 katı). Oyuncu ve kaleci çarpmaları hızı değiştirmez. Gol olunca yeni top 1,1 sn sonra yine başlangıç hızıyla doğar.
 - **Kaptan şutu:** kaptan topa dokunduğunda top rakip kaleye doğru gidiyorsa (kale merkezine `CAPTAIN_AIM_DEG` = 55° içinde) **2 kat hızlı** gider; başka bir şeye çarpınca hız eski değerine döner.
 - **Kaleciler** topu sürekli takip eder; her takımın kalecisine maç başında rastgele bir yetenek atanır.
-- **Süre:** maç **60 saniye** sürer (`CONFIG.MATCH_TIME`). Saat ekran süresine göre işler: ağır çekim anları da saatten düşer, yani maç ekranda tam 60 saniyedir. Ekranın üstünde **tek satırlık bir şerit** vardır: solda hafta ve maç (`WEEK 5 · MATCH 3` + tema), ortada saat ve altında geçen süre çubuğu, sağda skor (ev sahibi solda). Saat son 10 saniyede kırmızıya döner ve her saniye tıklar; altın golde altın rengi `GOLDEN GOAL 21`, penaltılarda `PENALTIES` yazar. Başlangıçta ve bitişte düdük çalar.
+- **Süre:** maç **90 saniye** sürer (`CONFIG.MATCH_TIME`). Saat ekran süresine göre işler: ağır çekim anları da saatten düşer, yani maç ekranda tam 90 saniyedir. Ekranın üstünde **tek satırlık bir şerit** vardır: solda hafta ve maç (`WEEK 5 · MATCH 3` + tema), ortada saat ve altında geçen süre çubuğu, sağda skor (ev sahibi solda). Saat son 10 saniyede kırmızıya döner ve her saniye tıklar; altın golde altın rengi `GOLDEN GOAL 21`, penaltılarda `PENALTIES` yazar. Başlangıçta ve bitişte düdük çalar.
 - **Bitiş düdüğü:** 60. saniyede çizgiyi geçmiş top gol sayılır, havadaki top sayılmaz. Çok gol atan kazanır; skor eşitse **beraberlik**.
 - **Goller:** her gol skora rakip takım lehine yazılır; kalecinin ya da oyuncunun kendi kalesine soktuğu top da (1'e 1'de çok sık olur) rakibin golüdür. Bu yüzden skor, AG ve YG her zaman birbirini tutar. Gol anında sahanın üst yarısında kısa süre `+ ARSENAL GOAL` ve altında yeni skor (`ARS 2 – 1 CHE`) belirir; golü atan takımın kalesinin arkasında her gol için bir mini futbol topu çıkar.
 - **Ağır çekim:** son 10 saniyede skor eşitken ya da fark 1 golken (ve altın golde) top kaleye yaklaşırsa kısa bir ağır çekim ve kamera yakınlaşması olur.
@@ -171,7 +173,7 @@ Ad, 3 harfli kod ve renkler panelden **✏️ Takımları düzenle** ile değiş
 
 Tablo sıralaması: **Puan → averaj (AV) → atılan gol (AG) → aralarındaki maç(lar) (eşit takımlar arasındaki puan, sonra averaj) → sezonluk kura**. Hâlâ eşit kalan takımlar için ad sırası yerine her sezon başında bir kez çekilen ve lig verisinde (`tieOrder`) saklanan rastgele kura sırası kullanılır. Tablo sütunları: O, G, B, M, AG, YG, AV, P, Son 3 (G yeşil, B gri, M kırmızı; en sağdaki en yeni). Puanlar panelden değiştirilebilir (canlı ligde `CONFIG.POINTS`).
 
-60 saniyelik 1000 maçlık testte (varsayılan ayarlar): maç başına ortalama **4,3 gol**, **%19 beraberlik**; en sık skorlar 3–2, 2–1, 3–1, 2–2, 4–1.
+90 saniyelik 1000 maçlık testte (varsayılan ayarlar): maç başına ortalama **6,5 gol**, **%16 beraberlik**; en sık skorlar 4–3, 4–2, 3–2, 5–2, 3–3.
 
 ### Sezon sonu: şampiyon, yükselme elemesi ve takım değişimi
 Sezonun son haftası (17) oynanınca **tabloda 1. olan takım şampiyon** olur ve kaydedilir; tablonun **son 3 takımı** (`RELEGATE_COUNT`) ligden düşer. Düşenlerin yerini **havuzdaki kulüpler** doldurur. Havuzda 12 kulüp vardır (Napoli, Roma, Atalanta, Tottenham, Aston Villa, Benfica, Porto, Ajax, Sevilla, Marseille, Sporting CP, Trabzonspor + sonradan düşenler) ve **lig maçları bittikten sonra** kendi aralarında **tek maçlık (rövanşsız) yükselme elemesi** oynarlar:
@@ -184,7 +186,7 @@ Sezonun son haftası (17) oynanınca **tabloda 1. olan takım şampiyon** olur v
 | 3.lük maçı + Final | 2 | yarı final mağlupları 3.lük maçını oynar |
 
 - Kura, lig maçları biter bitmez sezonun seed'iyle çekilir ve lig verisinde (`cup`) saklanır: aynı sezon aynı kura, her tarayıcıda aynı. Maçlar tablodaki sırayla, tek tek oynanır (toplam **12 maç**). Kurada ilk yazılan ev sahibidir.
-- Her eleme maçı lig maçıyla aynıdır (**60 sn**) ama **berabere bitemez**: skor eşitse en fazla **30 sn altın gol** oynanır (ilk golü atan kazanır, `GOLDEN_TIME`); yine gol olmazsa **penaltı atışları** (5'er atış, sonra tek atış; sahanın ortasında tablo hâlinde, her atış ~0,9 sn). Testlerde eleme maçlarının ~%19'u altın gole gidiyor, ~%0,5'i penaltıya kalıyor. Eleme maçı puan getirmez, tabloya işlenmez.
+- Her eleme maçı lig maçıyla aynıdır (**90 sn**) ama **berabere bitemez**: skor eşitse en fazla **30 sn altın gol** oynanır (ilk golü atan kazanır, `GOLDEN_TIME`); yine gol olmazsa **penaltı atışları** (5'er atış, sonra tek atış; sahanın ortasında tablo hâlinde, her atış ~0,9 sn). Testlerde eleme maçlarının ~%16'sı altın gole gidiyor, ~%0,4'ü penaltıya kalıyor. Eleme maçı puan getirmez, tabloya işlenmez.
 - **Yükselenler:** final galibi, finalist ve 3.lük maçının galibi (`FIN` + `3RD`). Düşen 3 takım havuza girer; havuz hep 12 kulüp kalır, düşenler en erken **bir sonraki sezonun** elemesine katılır.
 - Eleme bitince tablo, hafta ve maç geçmişi sıfırlanır; yeni sezon 1. haftadan başlar. Biten sezon (stüdyo / günlük otomasyonda) `data/active/seasons/season-N.json` dosyasına (şampiyon, çıkanlar, gelenler, son tablo, maç geçmişi, **eleme kurası ve sonuçları**) arşivlenir.
 - Sezonun son maçının açıklama metninde şampiyon ve düşenler yazılır, "eleme belirleyecek" notu düşülür; elemenin finalinin açıklamasında yükselenler ve düşenler yazılır. Tarayıcıda panel durumu gösterir ve eleme bittiğinde **Yeni sezonu başlat** düğmesi geçişi yapar; günlük otomasyon (`tools/daily.js`) her çalıştırmada bir eleme turunu oynatır, eleme bitince geçişi kendiliğinden yapar.
@@ -245,13 +247,13 @@ Eskiden aktif lig, Claude Code'da tanımlı bir zamanlanmış görevle her gece 
 
 ## Denge
 
-Varsayılan ayarlarla 60 saniyelik 1000 maçlık testte (`node tools/balance.js 1000`): ortalama **4,3 gol**, **%19 beraberlik**; 4000 maçta üst kale (ev sahibi) ve alt kale galibiyeti eşit (%40 / %41). Eleme maçlarında (`--eleme`) ~%19 maç altın gole, ~%0,5'i penaltıya gider; en uzun eleme maçı ~111 sn.
+Varsayılan ayarlarla 90 saniyelik 1000 maçlık testte (`node tools/balance.js 1000`): ortalama **6,5 gol**, **%16 beraberlik**; üst kale (ev sahibi) ve alt kale galibiyeti eşit (%42 / %42). Eleme maçlarında (`--eleme`) ~%16 maç altın gole, ~%0,4'ü penaltıya gider; en uzun eleme maçı ~130 sn (ekranlarıyla ~2,5 dk).
 
 Önemli ayarlar `src/01_core.js` dosyasının başındaki `CONFIG` nesnesinde:
 
 | Ayar | Varsayılan | Anlamı |
 |---|---|---|
-| `MATCH_TIME` | 60 | Maç süresi (ekran saniyesi) |
+| `MATCH_TIME` | 90 | Maç süresi (ekran saniyesi) |
 | `GOLDEN_TIME` | 30 | Eleme maçında beraberlikte altın gol süresi (sn); sonra penaltılar |
 | `PEN_P` / `PEN_STEP` | 0.75 / 0.9 | Penaltının gol olma olasılığı / ekranda her atışın süresi (sn) |
 | `POINTS` | 3, 1, 0 | Galibiyet, beraberlik, mağlubiyet puanı |
@@ -267,7 +269,7 @@ Varsayılan ayarlarla 60 saniyelik 1000 maçlık testte (`node tools/balance.js 
 | `INTRO_DURATION` / `END_DURATION` | 5 / 9 | Maç öncesi ve maç sonu ekranlarının süresi (sn) |
 | `FORM_COUNT` | 3 | Lig tablosunun en sağındaki son maç sayısı (`LAST 3`) |
 | `RELEGATE_COUNT` / `CUP_SIZE` | 3 / 12 | Sezon sonunda düşen / yükselen takım sayısı; yükselme elemesine katılan havuz kulübü sayısı |
-| `LIVE` | her 3 dk | Canlı ligin takvimi, taşma payı ve seed tohumu (bkz. [Canlı lig](#canlı-lig-site)) |
+| `LIVE` | her 2 dk | Canlı ligin takvimi, taşma payı ve seed tohumu (bkz. [Canlı lig](#canlı-lig-site)) |
 
 ---
 
@@ -279,7 +281,7 @@ build.sh            src/ parçalarını index.html'de birleştirir
 src/
   00_head.html      HTML iskeleti, panel ve stiller
   01_core.js        CONFIG, takımlar (lig + havuz), seed'li RNG, matematik, sezon fikstürü (tek devreli lig)
-  02_sim.js         Fizik ve oyun mantığı (saha, top, kaleci, oyuncu, 60 sn'lik maç, altın gol, penaltılar)
+  02_sim.js         Fizik ve oyun mantığı (saha, top, kaleci, oyuncu, 90 sn'lik maç, altın gol, penaltılar)
   03_fx_audio.js    Temalar, görsel efektler, Web Audio ile sentezlenen sesler
   04_render.js      Canvas çizimi, üst şerit (hafta · saat · skor), penaltı tablosu, maç öncesi / sonu ekranları
   05_app.js         Lig (puan, sıralama, eleme), kayıt, kontrol paneli, denge testi, ana döngü
@@ -290,9 +292,9 @@ tools/
   live-check.js     Canlı lig testleri: determinizm, takvim, fikstür, maç kuralları, sıralama, taşma kuralı, taban, başlangıç (--long: 48 saatlik koşu)
   live-start.js     Yeni ligin başlangıcını ilk yayında belirler, sonraki yayınlarda korur; eski ligin arşivini taşır (live-start.json)
   live-state.js     live-state.json checkpoint'ini üretir (Pages iş akışı 15 dakikada bir çalıştırır)
-  live-base.js      Kural değişince ligi dondurur: yayındaki checkpoint → live-base.json (Pages iş akışı her yayında çalıştırır)
+  live-base.js      Kural ya da takvim değişince ligi dondurur: yayındaki checkpoint, yayındaki kodla şu ana ilerletilip → live-base.json (Pages iş akışı her yayında çalıştırır)
   live-fingerprint.js  Simülasyon parmak izi (build.sh → BUILD_SIM_HASH)
-  live-node.js      Canlı lig motorunu tarayıcısız (Node) yükler
+  live-node.js      Canlı lig motorunu tarayıcısız (Node) yükler: kaynaktan ya da derlenmiş bir sayfadan (loadPage)
   daily.js          Stüdyo ligi: maçları oynatır, MP4 üretir, lig verisini günceller
 data/
   active/           Aktif lig (league.json, STANDINGS.md, seasons/)
@@ -309,7 +311,7 @@ data/
 Terminalden denge testi (Node.js 18+):
 
 ```bash
-node tools/balance.js 1000            # 1000 lig maçı (60 sn)
+node tools/balance.js 1000            # 1000 lig maçı (90 sn)
 node tools/balance.js 1000 --eleme    # eleme maçı: altın gol + penaltılar
 node tools/live-check.js              # canlı lig testleri (--long: 48 saatlik koşu)
 CFG='{"FINAL_GOAL_FRAC":0.45}' node tools/balance.js   # ayar denemek için

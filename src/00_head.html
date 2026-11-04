@@ -5,7 +5,7 @@
   index.html?studio → aşağıdaki stüdyo (kontrol paneli, önizleme, video kaydı). Stüdyo kullanımı:
   1) Maç başlatma: Sağdaki panelden mod/ayarları seçin, "▶ Başlat" (veya Boşluk tuşu). Her maç rastgele bir seed ile kurulur (görünmez; oynanan maçların seed'i maç geçmişinde saklanır).
   2) Kayıt alma: "● Kaydet ve Başlat" maçı sıfırdan 1x hızda oynatır, bitiş ekranından sonra video dosyasını otomatik indirir (sekme açık/görünür kalmalı).
-  3) Hafta: Başlıkta "WEEK 3 · MATCH 2" yazar (1v1, 60 sn). Haftanın son maçı kaydedilince hafta kendiliğinden ilerler; "📅 Yeni hafta" ile elle de geçilir.
+  3) Hafta: Başlıkta "WEEK 3 · MATCH 2" yazar (1v1, 90 sn). Haftanın son maçı kaydedilince hafta kendiliğinden ilerler; "📅 Yeni hafta" ile elle de geçilir.
   4) Tabloyu yedekleme: "⬇ Tabloyu dışa aktar" JSON indirir; "⬆ Tabloyu içe aktar" ile geri yüklenir. Veriler localStorage'da (arenaLeague_v2) da tutulur.
   5) Deneme maçları için "Test maçı" kutusunu işaretleyin — sonuç tabloya yazılmaz. "⚖️ Denge testi" 100 maçı çizimsiz simüle eder.
 -->
@@ -192,7 +192,7 @@
 
     <section>
       <h2>Ayarlar</h2>
-      <div class="hint" style="margin-top:0">Her maç, sezon fikstüründeki sıradaki <b>1'e 1 maçtır</b> (60 sn, ilk yazılan takım ev sahibi, üst kale).</div>
+      <div class="hint" style="margin-top:0">Her maç, sezon fikstüründeki sıradaki <b>1'e 1 maçtır</b> (90 sn, ilk yazılan takım ev sahibi, üst kale).</div>
       <label>Tema
         <select id="theme"><option value="auto">Otomatik (rastgele)</option><option value="classic">⚽ Classic</option><option value="snow">❄️ Snow</option><option value="rain">🌧️ Rain</option><option value="night">🌙 Night</option></select>
       </label>
@@ -238,7 +238,7 @@
       <details>
         <summary>❓ Yardım</summary>
         <ul>
-          <li><b>Başlat</b> (veya Boşluk): fikstürdeki sıradaki 1'e 1 maçı (60 sn) yeni bir rastgele seed ile oynatır. Galibiyet 3, beraberlik 1, mağlubiyet 0 puan.</li>
+          <li><b>Başlat</b> (veya Boşluk): fikstürdeki sıradaki 1'e 1 maçı (90 sn) yeni bir rastgele seed ile oynatır. Galibiyet 3, beraberlik 1, mağlubiyet 0 puan.</li>
           <li><b>Fikstür:</b> tek devreli lig: her takım her takımla bir kez karşılaşır (18 takım → 17 hafta × 9 maç). Fikstür sezon başında bir kez oluşturulur ve sezon bitene kadar değişmez; ev sahipliği dengelidir. Takım sayısı çift olmalıdır; takımlar ve sezon uzunluğu yalnızca sezon başında değiştirilebilir.</li>
           <li><b>Kaydet ve Başlat</b>: maçı sıfırdan 1x gerçek zamanlı oynatır; bitiş ekranından sonra video otomatik iner. Kayıt sırasında sekmeyi arka plana atmayın (tarayıcı çizimi yavaşlatır).</li>
           <li>Kayıtlı (test olmayan) her maçtan sonra maç numarası artar ve maç geçmişine o maçın (görünmeyen) seed'i kaydedilir. Haftada her takım bir kez oynar; haftanın son maçından sonra hafta kendiliğinden ilerler (<b>Yeni hafta</b> ile elle de geçilebilir; haftada oynanmamış maç varsa uyarı çıkar, çünkü atlanan maçlar bir daha oynanmaz).</li>

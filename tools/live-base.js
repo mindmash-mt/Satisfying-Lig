@@ -12,10 +12,13 @@
       tabandan önceki her şey (tablo, şampiyonlar, geçmiş, sezon) olduğu gibi kalır.
     • Kural aynı kaldıkça (15 dakikalık yayınlar, görünüm değişiklikleri) taban aynen taşınır: yayındaki live-base.json
       yeniden yayınlanır. Taban birikimlidir: sonraki bir kural değişikliği yine o anki checkpoint'ten tabanı yeniler.
-    • Yeniden belirlenen tek şey, son checkpoint ile yayın arasındaki maçlardır (en fazla ~15 dk): bunlar yeni
-      kurallarla yeniden oynanır.
+    • Yayındaki checkpoint saatlerce eski olabilir (GitHub 15 dakikalık zamanlamayı seyrek çalıştırır). Bu yüzden dondurmadan
+      önce checkpoint, yayındaki sitenin kendi koduyla (index.html) şu ana kadar ilerletilir: ziyaretçilerin gördüğü bütün maçlar
+      korunur, yalnızca o an oynanmakta olan maç yeni kurallarla yeniden oynanır.
 
-  Lig kimliği (salt, start, takvim, gap) değişirse bilinçli olarak yeni bir lig başlar: taban ve checkpoint yok sayılır.
+  Maç takvimi (bands, gap) değişince de lig aynı şekilde dondurulur: yeni takvim, tabanın son maçının bitişinden sonraki ilk
+  aralıkta başlar (07_live.js sched()). Lig kimliği (salt, start) değişirse bilinçli olarak yeni bir lig başlar: taban ve
+  checkpoint yok sayılır.
 
   Yayındaki dosyalar okunamazsa (404 dışında bir hata) araç HATA verir ve yayın yapılmaz: yanlışlıkla ligi sıfırlamaktansa
   eski site yayında kalır, 15 dakika sonra yeniden denenir.
@@ -33,7 +36,8 @@ const ROOT = path.join(__dirname, '..');
    parts:     Live.parts (bir durumun hash'ini { sim, league, base } olarak ayırır)
    Döner: { action: 'keep' | 'rebase' | 'none', base, why } */
 function decide({ cur, prevBase, pub, parts }) {
-  const sameLeague = (x) => x && x.league === cur.league;
+  /* a base written while the timetable was part of the league's identity (<salt>:<start>:<bands>:<gap>) is the same league */
+  const sameLeague = (x) => x && (x.league === cur.league || String(x.league || '').startsWith(cur.league + ':'));
   /* the lineage continues: same league, same rules as the published base */
   if (prevBase && prevBase.data && sameLeague(prevBase) && prevBase.sim === cur.sim)
     return { action: 'keep', base: prevBase, why: `kural değişmedi: taban ${prevBase.id} (${prevBase.count} maç) aynen taşınıyor` };
@@ -74,7 +78,7 @@ const readJSON = (f, name) => { if (f.absent) return null; try { return JSON.par
 
 async function main() {
   const out = path.resolve(process.argv[2] || path.join(ROOT, 'dist', 'live-base.json'));
-  const { loadLive } = require('./live-node.js');
+  const { loadLive, loadPage } = require('./live-node.js');
   const sim = require('child_process').execFileSync('node', [path.join(__dirname, 'live-fingerprint.js')]).toString().trim();
   /* the league's start chosen by tools/live-start.js (run before this, next to the output) is part of the league's identity */
   const sf = path.join(path.dirname(out), 'live-start.json'), start = fs.existsSync(sf) ? JSON.parse(fs.readFileSync(sf, 'utf8')) : null;
@@ -83,6 +87,27 @@ async function main() {
   const prevBase = readJSON(await fetchPublished('live-base.json'), 'live-base.json');
   const pub = readJSON(await fetchPublished('live-state.json'), 'live-state.json');
   const r = decide({ cur, prevBase, pub, parts: (h) => Live.parts(h) });
+  /* the published checkpoint can be hours old (GitHub runs the 15-minute schedule rarely): play it on to now with the code that is
+     live on the site (its index.html), so the freeze keeps every match the visitors have already seen. Only the match being played
+     right now is replayed under the new rules. On any problem the checkpoint is frozen as it is. */
+  if (r.action === 'rebase' && pub && r.base.data === pub.data) {
+    try {
+      const page = await fetchPublished('index.html');
+      if (page.absent) throw new Error('index.html yok');
+      const P = loadPage(page.text), d = P.Live.parseState(pub);
+      if (!d) throw new Error('checkpoint yayındaki koda ait değil');
+      P.Live.adopt(d);
+      const now = Date.now(), t0 = Date.now();
+      await P.Live.catchUp(0, () => now);
+      P.Live.snapshot();
+      const adv = JSON.parse(P.Live.lastClean), data = adv.data;
+      if ((data.liveCount || 0) > (pub.data.liveCount || 0)) {
+        const id = crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex').slice(0, 10);
+        r.base = Object.assign({}, r.base, { id, count: data.liveCount, savedAt: adv.savedAt, data });
+        r.why += `; yayındaki kodla şu ana ilerletildi: ${pub.data.liveCount} → ${data.liveCount} maç (${((Date.now() - t0) / 1000).toFixed(1)} sn)`;
+      }
+    } catch (e) { console.warn(`⚠️ Checkpoint şu ana ilerletilemedi (${e.message}); olduğu gibi donduruluyor.`); }
+  }
   fs.mkdirSync(path.dirname(out), { recursive: true });
   if (r.base) fs.writeFileSync(out, JSON.stringify(r.base)); else fs.rmSync(out, { force: true });
   console.log(`Canlı lig tabanı [${r.action}] (kural ${sim}): ${r.why}`);
