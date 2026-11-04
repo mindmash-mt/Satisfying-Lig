@@ -264,7 +264,7 @@
 </div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 <script>
-const BUILD_SIM_HASH = '720cc6eeddbc';
+const BUILD_SIM_HASH = '8b5f32a18bd7';
 const BUILD_BASE = null;
 const BUILD_START = null;
 /* =====================================================================
@@ -289,8 +289,9 @@ const CONFIG = {
   FINAL_SLOWMO_GAME: 0.375, FINAL_SLOWMO_TS: 0.25, FINAL_SLOWMO_DIST: 120,
   /* the 1v1 pitch fills the frame from just under the top bar (title · score · clock) to the bottom edge; the goal tally
      (mini balls behind each net) still fits above / below it */
-  FINAL_W: 820, FINAL_H: 1660, FINAL_GOALS: 2,   // final duel: first to FINAL_GOALS goals wins (narrower, longer pitch)
+  FINAL_W: 1020, FINAL_H: 1660, FINAL_GOALS: 2,   // final duel: first to FINAL_GOALS goals wins (narrower, longer pitch)
   FINAL_DY: 37,   // the pitch's centre sits this much below the arena centre (top goal line y 182, bottom 1842)
+  FINAL_CX: 540,  // a 1v1 pitch is centred in the frame (x 30–1050, as wide as the top bar); the old arena keeps CX
   TOPBAR_Y: 60,   // centre of the one-line top bar of a 1v1 match
   /* final duel: 2 players per team, one is the captain. A captain touch that sends the ball toward the rival goal
      (within CAPTAIN_AIM_DEG of the goal centre) makes it CAPTAIN_SHOT_MULT × faster until it hits anything else. */
@@ -635,6 +636,7 @@ class Game {
        (then a golden goal for at most CONFIG.GOLDEN_TIME seconds, then penalties). clock = screen seconds played. */
     this.timed = o.matchTime > 0 && o.teams.length === 2; this.matchTime = this.timed ? o.matchTime : 0;
     this.knockout = !!o.knockout; this.clock = 0; this.extra = false; this.pens = null; this.draw = false;
+    if (this.timed) this.cx = CONFIG.FINAL_CX;
     this.slowmo = null; this.slowmoCd = 0;
     this.spawnBlock = 0;
     this.nextPU = o.powerups ? this.rng.range(CONFIG.PU_MIN, CONFIG.PU_MAX) : Infinity;
@@ -1859,7 +1861,7 @@ const Renderer = {
     const k = FX.cam.k;
     if (k > 0.002) {
       ctx.beginPath(); ctx.rect(0, 108, 1080, 1812); ctx.clip();   // below the top bar
-      const z = 1 + 0.3 * k, C = { x: CONFIG.CX, y: CONFIG.CY };
+      const z = 1 + 0.3 * k, C = { x: g.cx, y: CONFIG.CY };
       const Fx = C.x + (FX.cam.x - C.x) * 0.55 * k, Fy = C.y + (FX.cam.y - C.y) * 0.55 * k;
       ctx.translate(C.x, C.y); ctx.scale(z, z); ctx.translate(-Fx, -Fy);
     }
@@ -1893,7 +1895,7 @@ const Renderer = {
 
   shape(g, vis, geo, alpha, scale, rot) {
     if (alpha <= 0.003) return;
-    const ctx = this.ctx, cx = CONFIG.CX, cy = CONFIG.CY;
+    const ctx = this.ctx, cx = g.cx, cy = CONFIG.CY;
     ctx.save();
     ctx.globalAlpha = alpha;
     if (scale !== 1) { ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy); }
@@ -2366,8 +2368,8 @@ const HUD = {
     /* 1v1 match: everything in one line on top (title · score · clock), the pitch fills the rest of the frame */
     if (g.timed) {
       this.topBar(ctx, g, app);
-      this.announcement(ctx, CONFIG.CY + CONFIG.FINAL_DY - CONFIG.FINAL_H * 0.27);
-      if (g.pens) this.penalties(ctx, g, SX);
+      this.announcement(ctx, CONFIG.CY + CONFIG.FINAL_DY - CONFIG.FINAL_H * 0.27, g.cx);
+      if (g.pens) this.penalties(ctx, g, g.cx);
       return;
     }
     /* title */
@@ -2396,7 +2398,7 @@ const HUD = {
     if (this.duelA > 0.02) { ctx.save(); ctx.globalAlpha = this.duelA; this.duelScore(ctx, g, SX); ctx.restore(); }
     this.announcement(ctx, 394);
   },
-  /* 1v1 match: one line above the pitch — title + theme (left), the score (centre), the clock (right; last 10 s red, golden goal gold).
+  /* 1v1 match: one line above the pitch — title + theme (left), the clock (centre; last 10 s red, golden goal gold), the score (right).
      A thin bar under the clock shows the time played. */
   topBar(ctx, g, app) {
     const y = CONFIG.TOPBAR_Y, X0 = 30, X1 = 1050, H = 84;
@@ -2410,36 +2412,36 @@ const HUD = {
       return `${weight}${fs}px ${FONT_BIG}`;
     };
     /* left: "WEEK 5 · MATCH 5" + theme icon */
-    const title = app.title || '', tf = fit(title, 36, 270);
+    const title = app.title || '', tf = fit(title, 36, 250);
     outlinedText(ctx, title, X0 + 24, y + 2, tf, '#ffffff', null, 0, 'left');
     ctx.font = tf; const tw = ctx.measureText(title).width;
     ctx.font = `26px ${FONT_UI}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText(THEME_DEFS[g.themeId].icon, X0 + 24 + tw + 8, y);
-    /* centre: ● LIV 2 – 4 JUV ● (home on the left); a score pops when it changes */
-    const [A, B] = g.teams, SX = 535;
+    /* right: ● LIV 2 – 4 JUV ● (home on the left); a score pops when it changes */
+    const [A, B] = g.teams, SX = X1 - 182;
     const pop = (T) => { const p = g.t - (T.hitT >= 0 ? T.hitT : -9); return p < 0.5 ? 1 + 0.35 * Math.sin(p / 0.5 * Math.PI) : 1; };
     const dot = (T, x) => { ctx.beginPath(); ctx.arc(x, y, 12, 0, TAU); ctx.fillStyle = T.c1; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = T.c2; ctx.stroke(); };
-    dot(A, SX - 158); dot(B, SX + 158);
-    outlinedText(ctx, A.code, SX - 140, y + 3, `44px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
-    outlinedText(ctx, B.code, SX + 140, y + 3, `44px ${FONT_BIG}`, '#ffffff', null, 0, 'right');
-    for (const [T, x, O] of [[A, SX - 40, B], [B, SX + 40, A]]) {
+    dot(A, SX - 148); dot(B, SX + 148);
+    outlinedText(ctx, A.code, SX - 130, y + 3, `44px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
+    outlinedText(ctx, B.code, SX + 130, y + 3, `44px ${FONT_BIG}`, '#ffffff', null, 0, 'right');
+    for (const [T, x, O] of [[A, SX - 34, B], [B, SX + 34, A]]) {
       const k = pop(O);
       ctx.save(); ctx.translate(x, y + 3); ctx.scale(k, k);
       outlinedText(ctx, String(T.score), 0, 0, `56px ${FONT_BIG}`, '#ffffff', null, 0);
       ctx.restore();
     }
     outlinedText(ctx, '–', SX, y + 1, `44px ${FONT_BIG}`, 'rgba(255,255,255,0.6)', null, 0);
-    /* right: the clock */
+    /* centre: the clock */
     const T = g.matchTime, gold = g.extra || g.pens, left = g.timeLeft();
     const shown = g.pens ? 'PENALTIES' : g.winnerSet || g.over ? 'FULL TIME' : gold ? `GOLDEN GOAL ${Math.ceil(left)}` : (() => {
       const t = Math.min(T, Math.floor(g.clock)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; })();
     const hot = !gold && !g.winnerSet && left <= 10;
     const col = gold ? '#FFD54F' : hot ? '#FF5252' : '#ffffff';
-    const cx = X1 - 110, pulse = hot ? 1 + 0.15 * Math.max(0, 1 - (Math.ceil(left) - left) * 4) : 1;
+    const cx = 540, pulse = hot ? 1 + 0.15 * Math.max(0, 1 - (Math.ceil(left) - left) * 4) : 1;
     ctx.save(); ctx.translate(cx, y - 2); ctx.scale(pulse, pulse);
-    outlinedText(ctx, shown, 0, 0, fit(shown, 48, 180), col, null, 0);
+    outlinedText(ctx, shown, 0, 0, fit(shown, 48, 170), col, null, 0);
     ctx.restore();
-    const frac = g.pens ? 1 : gold ? clamp01((g.clock - T) / CONFIG.GOLDEN_TIME) : clamp01(g.clock / T), bw = 160;
+    const frac = g.pens ? 1 : gold ? clamp01((g.clock - T) / CONFIG.GOLDEN_TIME) : clamp01(g.clock / T), bw = 150;
     roundRect(ctx, cx - bw / 2, y + 26, bw, 5, 2.5); ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
     if (frac > 0) { roundRect(ctx, cx - bw / 2, y + 26, bw * frac, 5, 2.5); ctx.fillStyle = col; ctx.fill(); }
     ctx.restore();
@@ -2512,7 +2514,7 @@ const HUD = {
   },
 
   /* single announcement lane above the pitch */
-  announcement(ctx, y) {
+  announcement(ctx, y, x = 510) {
     const a = FX.ann;
     if (!a) return;
     const t = FX.ut - a.t;
@@ -2521,7 +2523,7 @@ const HUD = {
     const s = easeOutBack(t / 0.35, 2.4);
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.translate(510, y); ctx.scale(s, s);
+    ctx.translate(x, y); ctx.scale(s, s);
     if (a.kind === 'big') {
       let fs = 118; ctx.font = `${fs}px ${FONT_BIG}`;
       while (ctx.measureText(a.text).width > 880 && fs > 50) { fs -= 4; ctx.font = `${fs}px ${FONT_BIG}`; }

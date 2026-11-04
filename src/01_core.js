@@ -20,8 +20,9 @@ const CONFIG = {
   FINAL_SLOWMO_GAME: 0.375, FINAL_SLOWMO_TS: 0.25, FINAL_SLOWMO_DIST: 120,
   /* the 1v1 pitch fills the frame from just under the top bar (title · score · clock) to the bottom edge; the goal tally
      (mini balls behind each net) still fits above / below it */
-  FINAL_W: 820, FINAL_H: 1660, FINAL_GOALS: 2,   // final duel: first to FINAL_GOALS goals wins (narrower, longer pitch)
+  FINAL_W: 1020, FINAL_H: 1660, FINAL_GOALS: 2,   // final duel: first to FINAL_GOALS goals wins (narrower, longer pitch)
   FINAL_DY: 37,   // the pitch's centre sits this much below the arena centre (top goal line y 182, bottom 1842)
+  FINAL_CX: 540,  // a 1v1 pitch is centred in the frame (x 30–1050, as wide as the top bar); the old arena keeps CX
   TOPBAR_Y: 60,   // centre of the one-line top bar of a 1v1 match
   /* final duel: 2 players per team, one is the captain. A captain touch that sends the ball toward the rival goal
      (within CAPTAIN_AIM_DEG of the goal centre) makes it CAPTAIN_SHOT_MULT × faster until it hits anything else. */
