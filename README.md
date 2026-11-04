@@ -43,7 +43,7 @@ LIVE: {
 },
 ```
 
-`start`, `bands`, `gap` ya da `salt` değişirse canlı lig **yeni bir lig** olarak baştan kurulur; bütün tarayıcılar kayıtlı durumu bırakır.
+`start`, `bands`, `gap` ya da `salt` değişirse canlı lig **yeni bir lig** olarak baştan kurulur; bütün tarayıcılar kayıtlı durumu bırakır. (Bunlar ligin kimliğidir. **Simülasyonu değiştirmek ligi sıfırlamaz**, bkz. aşağıdaki [Kural değişikliği ligi sıfırlamaz](#kural-değişikliği-ligi-sıfırlamaz).)
 
 ### Nasıl çalışıyor (sunucusuz, ücretsiz)
 
@@ -51,8 +51,8 @@ Simülasyon deterministiktir: aynı seed + aynı takımlar = birebir aynı maç.
 
 1. Bitmiş maçlar çizilmeden simüle edilir (bir maç ~0,14 sn).
 2. O an oynanan maç saate göre ileri sarılır ve oradan gerçek zamanlı oynar.
-3. Hesaplanan lig tarayıcıda saklanır (`localStorage`, `arenaLive_v2`); bir sonraki ziyarette yalnızca yeni maçlar hesaplanır.
-4. **Checkpoint:** GitHub Pages iş akışı her yayında ve **15 dakikada bir** ligin o anki durumunu `live-state.json` olarak yayınlar (`tools/live-state.js`). Tarayıcısız çalışır (Node, ~15 sn) ve sitede yayında olan son checkpoint'ten devam eder; süre lig yaşlandıkça uzamaz. Siteye ilk girenler en fazla son 15 dakikanın maçlarını (gece en fazla 5 maç) kendileri hesaplar. Checkpoint yalnızca hızlandırır; yoksa tarayıcı aynı sonucu kendisi hesaplar. Hesaplama başarısız olursa yayındaki son checkpoint aynen yeniden yayınlanır.
+3. Hesaplanan lig tarayıcıda saklanır (`localStorage`, `arenaLive_v2`); bir sonraki ziyarette yalnızca yeni maçlar hesaplanır. Kayıtlı durumun hash'i `<kural>:<lig kimliği>[@<taban>]` biçimindedir; başka kurala ya da tabana ait durum geçersiz sayılır.
+4. **Checkpoint:** GitHub Pages iş akışı her yayında ve **15 dakikada bir** ligin o anki durumunu `live-state.json` olarak yayınlar (`tools/live-state.js`). Tarayıcısız çalışır (Node, ~15 sn) ve sitede yayında olan son checkpoint'ten devam eder; süre lig yaşlandıkça uzamaz. Siteye ilk girenler en fazla son 15 dakikanın maçlarını (gece en fazla 5 maç) kendileri hesaplar. Checkpoint yalnızca hızlandırır; yoksa tarayıcı aynı sonucu kendisi hesaplar (kural değişmişse tabandan). Hesaplama başarısız olursa yayındaki son checkpoint aynen yeniden yayınlanır.
 5. **Cihaz saati:** telefonun saati yanlışsa site, GitHub Pages yanıtındaki saate göre düzeltir.
 6. **Sekme uyursa:** sekme 1 dakikadan uzun arka planda kalıp geri gelince lig en yeni kayıtlı durumdan yeniden kurulur ve o anki maça katılır.
 
@@ -60,7 +60,27 @@ Simülasyon deterministiktir: aynı seed + aynı takımlar = birebir aynı maç.
 
 **Tarayıcılar arası aynılık:** `Math.sin/cos/atan2/hypot/exp/pow` tarayıcıdan tarayıcıya son basamakta farklı sonuç verebilir; kaotik bir simülasyonda bu, Safari ile Chrome'da farklı maçlar demektir. Bu yüzden simülasyon yalnızca IEEE 754'te birebir tanımlı işlemlerle (`+ − × ÷ √`) yazılmış kendi fonksiyonlarını (`DM`, `src/01_core.js`) kullanır. `node tools/live-check.js` bunu doğrular: tarayıcının matematik kütüphanesi bozulmuşken bile maçlar birebir aynı çıkmalı.
 
-> ⚠️ **Simülasyonu değiştirmek = yeni lig.** `build.sh`, simülasyonun sonuçlarından bir parmak izi çıkarır (`tools/live-fingerprint.js`) ve sayfaya yazar. Kayıtlı lig durumları yalnızca aynı parmak iziyle geçerlidir. Yalnızca görünümü değiştiren düzenlemeler (çizim, panel, sekmeler, yazılar) parmak izini değiştirmez. Maç sonuçlarını, fikstürü, puanlamayı, sıralamayı, sezon geçişini ya da maç sürelerini değiştiren bir düzenleme (ör. denge ayarı) parmak izini değiştirir. O zaman `CONFIG.LIVE.start`'ı bugüne ya da ileri bir tarihe alın, canlı lig yeni bir lig olarak başlasın. Unutulursa checkpoint iş akışı ligin başından binlerce maçı yeniden hesaplamayı reddeder ve hata verir.
+### Kural değişikliği ligi sıfırlamaz
+
+Maç sonuçlarını, fikstürü, puanlamayı (`CONFIG.POINTS`), sezon uzunluğunu, sıralamayı, sezon geçişini, maç sürelerini ya da denge ayarlarını değiştirmek **ligi sıfırlamaz**. Lig oynadığı yerden, yeni kurallarla devam eder; tablo, geçmiş, sezon ve şampiyonlar olduğu gibi kalır.
+
+Neden gerekli: lig tarayıcıda maç maç hesaplanır, kural değişince aynı geçmiş artık aynı çıkmaz ve eski kodu saklamadığımız için geçmişi yeniden hesaplayamayız. Bu yüzden geçmiş **dondurulur**:
+
+1. `build.sh`, simülasyonun sonuçlarından bir parmak izi çıkarır (`tools/live-fingerprint.js`) ve sayfaya `BUILD_SIM_HASH` olarak yazar. Yalnızca görünümü değiştiren düzenlemeler (çizim, panel, sekmeler, yazılar) parmak izini değiştirmez; sonuçları etkileyen her düzenleme değiştirir.
+2. Pages iş akışı her yayında siteyi derlemeden önce `tools/live-base.js`'i çalıştırır. Yayındaki son checkpoint (`live-state.json`) başka bir parmak iziyle üretilmişse, o checkpoint yeni sitenin **tabanı** olur (`live-base.json`) ve `build.sh` onu sayfaya gömer (`BUILD_BASE`, ~16 KB).
+3. Tarayıcılar ve checkpoint üreteci ligi tabandan başlatır (hiçbir zaman ligin başından değil). Tabandan sonraki maçlar yeni kurallarla oynanır.
+4. Kural aynı kaldıkça (15 dakikalık yayınlar, görünüm düzenlemeleri) taban aynen taşınır. Bir sonraki kural değişikliği tabanı yine o anki checkpoint'ten yeniler (birikimli).
+
+Bilmeniz gerekenler:
+
+- **Tek istisna, son checkpoint ile yayın arasındaki maçlardır** (en fazla ~15 dk, birkaç maç): bunlar yeni kurallarla yeniden oynanır. Yayından önce izlenmiş bir maçın sonucu değişebilir.
+- Puanlama, can sayısı ve hız gibi kurallar kayıtlı durumda saklandığı için ligin kuralları her zaman `CONFIG`'den alınır (`Live.applyRules`). Puanlama değişince tabloda eski maçların puanı **yeniden yazılmaz**, yeni puanlama sonraki maçlardan itibaren işler. Başlamış bir sezonun uzunluğu sezon bitene kadar korunur, yeni uzunluk bir sonraki sezonda başlar.
+- Takım kadrosu, adı ve renkleri de kayıtlı durumdadır: `DEFAULT_TEAMS` / `RESERVE_TEAMS` düzenlemeleri çalışan ligi etkilemez (kadro zaten yükselme/düşmeyle değişir).
+- Lig verisinin **biçimini** değiştirirseniz (yeni alan, yeniden adlandırma), eski kayıtların açılabilmesi için `League.normalize`'a geçiş ekleyin.
+- Zaman çizelgesini (`bands`, `gap`), `start`'ı ya da `salt`'ı değiştirmek hâlâ **bilinçli bir yeni lig** başlatır: taban ve checkpoint yok sayılır.
+- Yayındaki `live-base.json` / `live-state.json` okunamazsa (404 dışında bir hata) iş akışı **durur** ve eski site yayında kalır; ligi yanlışlıkla sıfırlamaktansa 15 dk sonra yeniden dener. Pages sitesini silip baştan kurarsanız (taban kaybolur), lig `CONFIG.LIVE.start`'tan yeniden hesaplanır.
+
+Testler (`node tools/live-check.js`): dondurulmuş lig yeni kurallarla devam ediyor, geçmiş aynen duruyor, iki bağımsız tarayıcı ve checkpoint'ten devam eden üçüncüsü birebir aynı ligi buluyor, taban kararı her durumda (ilk yayın, aynı kural, kural değişti, ikinci değişiklik, checkpoint yok, yeni lig) doğru.
 
 **Geçmişi izleme:** `index.html?now=2026-11-04T12:00:30+03:00` siteyi geçmişteki o anki hâliyle gösterir (yalnızca o tarayıcıda; lig değişmez). Gelecek bir an verilirse yok sayılır, aksi halde sonuçlar maçtan önce görülebilirdi.
 
@@ -264,6 +284,7 @@ tools/
   balance.js        Terminalden denge testi (Node.js)
   live-check.js     Canlı lig testleri: determinizm, takvim, taşma kuralı (--long: 48 saatlik koşu)
   live-state.js     live-state.json checkpoint'ini üretir (Pages iş akışı 15 dakikada bir çalıştırır)
+  live-base.js      Kural değişince ligi dondurur: yayındaki checkpoint → live-base.json (Pages iş akışı her yayında çalıştırır)
   live-fingerprint.js  Simülasyon parmak izi (build.sh → BUILD_SIM_HASH)
   live-node.js      Canlı lig motorunu tarayıcısız (Node) yükler
   daily.js          Stüdyo ligi: maçları oynatır, MP4 üretir, lig verisini günceller

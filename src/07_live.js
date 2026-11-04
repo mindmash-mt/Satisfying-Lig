@@ -11,6 +11,8 @@
    A match starts at its slot, or GAP seconds after the previous match ended if that one ran over (never seen
    in 3000 test matches, but it can never jam: the overrun is absorbed by the next slots). A match's length
    on screen is computed from its own simulation, so every browser agrees on it too.
+   Changing the simulation never restarts the league: the Pages workflow freezes the league as it stands (BUILD_BASE) and the new
+   rules play on from there (see hash() / applyRules() below and tools/live-base.js).
    The studio (old panel: preview, recording, videos) is at ?studio. Debug: ?now=<past ISO time>.
    ===================================================================== */
 const Live = {
@@ -70,16 +72,44 @@ const Live = {
     h ^= h >>> 16; h = Math.imul(h, 0x85EBCA6B); h ^= h >>> 13;
     return (h >>> 0) || 1;
   },
-  /* saved states are only valid for the same results (BUILD_SIM_HASH = fingerprint of the simulation, see build.sh)
-     and the same league start / timetable */
-  hash() {
+  /* A saved state (browser cache, checkpoint, base) is only valid for the exact timeline it belongs to:
+       hash = <sim>:<league>[@<base id>]
+     • league: the league's identity — salt, start, timetable. Changing any of them starts a NEW league.
+     • sim:    BUILD_SIM_HASH, the fingerprint of the simulation's results (see build.sh). Changing the simulation does NOT
+               restart the league: the deploy freezes the league as it stands and the new rules play on from there (the base).
+     • base:   BUILD_BASE.id — the frozen state the new rules continue from (absent while the league never changed rules). */
+  league() {
     const c = this.cfg();
-    return [typeof BUILD_SIM_HASH !== 'undefined' ? BUILD_SIM_HASH : 'dev', c.salt, c.start, c.bands.map(b => b.from + '/' + b.every).join(','), c.gap].join(':');
+    return [c.salt, c.start, c.bands.map(b => b.from + '/' + b.every).join(','), c.gap].join(':');
   },
+  sim() { return typeof BUILD_SIM_HASH !== 'undefined' ? BUILD_SIM_HASH : 'dev'; },
+  baseId() { return typeof BUILD_BASE !== 'undefined' && BUILD_BASE && BUILD_BASE.data ? String(BUILD_BASE.id) : ''; },
+  hash() { return this.sim() + ':' + this.league() + (this.baseId() ? '@' + this.baseId() : ''); },
+  /* the parts of any saved state's hash (also for hashes written before bases existed): { sim, league, base }; sim/league null if foreign */
+  parts(hash) {
+    const [rest, base = ''] = String(hash || '').split('@'), L = this.league();
+    return rest.endsWith(':' + L) ? { sim: rest.slice(0, -(L.length + 1)), league: L, base } : { sim: null, league: null, base };
+  },
+  /* the frozen starting state of this build (a copy: playing must never touch it), or null */
+  baseState() { return this.baseId() ? JSON.parse(JSON.stringify(BUILD_BASE.data)) : null; },
   count() { return League.data.liveCount || 0; },
 
   /* --- league state ------------------------------------------------------ */
   freshLeague() { const d = League.normalize(null); d.liveCount = 0; d.liveSeasonStart = 0; d.liveLastEnd = 0; return d; },
+  /* The rules a live league plays by always come from CONFIG, never from what a saved state carries (League.normalize keeps a
+     saved league's points / lives / speed / season length). So a league frozen before a rule change plays the new rules from
+     its next match on; matches already played stay as they were. A season that has begun keeps its length until it ends.
+     Idempotent: states taken after this ran come out unchanged. */
+  applyRules(d = League.data) {
+    d.points = CONFIG.POINTS.slice();
+    d.settings = League.defaultSettings();
+    if (!(d.history.length > 0 || d.week > 1 || d.weekMatch > 1 || d.cup)) d.seasonLength = CONFIG.SEASON_LENGTH;
+  },
+  /* make a saved state the live league (null = a brand-new league) */
+  adopt(d) {
+    League.data = d ? Object.assign(League.normalize(d), { liveCount: d.liveCount || 0, liveSeasonStart: d.liveSeasonStart || 0, liveLastEnd: d.liveLastEnd || 0 }) : this.freshLeague();
+    this.applyRules();
+  },
   /* live match number of a season's group match */
   matchIndex(week, wm) { return (League.data.liveSeasonStart || 0) + (week - 1) * App.perWeek() + (wm - 1); },
   /* ...and of the i-th promotion playoff match (they follow the season's group matches) */
@@ -110,7 +140,7 @@ const Live = {
   /* after a match: season over (group matches AND the promotion playoff) → champion, relegation/promotion, new season; then the next live match */
   closeMatch(m) {
     const d = League.data, ended = League.seasonOver();
-    if (ended) { League.endSeason(); d.champions = d.champions.slice(-this.cfg().keepChampions); }
+    if (ended) { League.endSeason(); this.applyRules(d); d.champions = d.champions.slice(-this.cfg().keepChampions); }
     d.liveCount = (d.liveCount || 0) + 1;
     d.liveLastEnd = m.start + Math.round(m.dur * 1000);
     if (ended) d.liveSeasonStart = d.liveCount;
@@ -132,12 +162,13 @@ const Live = {
       return r.ok ? this.parseState(await r.json()) : null;
     } catch (e) { return null; }
   },
-  /* best starting point for time t: the furthest saved state whose last match had ended by t */
+  /* best starting point for time t: the furthest saved state whose last match had ended by t. The build's base is always a
+     candidate (a league that changed rules starts from it, never from scratch); a brand-new league starts fresh. */
   async loadState(t) {
-    const cands = [this.parseState(this.lastClean), this.readCache(), await this.readCheckpoint()];
+    const cands = [this.parseState(this.lastClean), this.readCache(), await this.readCheckpoint(), this.baseState()];
     t = this.now();
     const pick = cands.filter(d => d && (d.liveLastEnd || 0) <= t).sort((a, b) => (b.liveCount || 0) - (a.liveCount || 0))[0];
-    League.data = pick ? Object.assign(League.normalize(pick), { liveCount: pick.liveCount || 0, liveSeasonStart: pick.liveSeasonStart || 0, liveLastEnd: pick.liveLastEnd || 0 }) : this.freshLeague();
+    this.adopt(pick);
     this.snapshot();
   },
   /* play every match that has ended by now; returns the match that is on (computed), or null.

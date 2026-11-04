@@ -4,6 +4,9 @@ name: GitHub Pages
 # Site, canlı ligi kendi kendine oynatır (src/07_live.js). 15 dakikalık yayın yalnızca live-state.json
 # checkpoint'ini tazeler: siteye ilk girenler en fazla son birkaç maçı kendileri hesaplar.
 # Checkpoint tarayıcısız üretilir (Node, ~15 sn) ve yayındaki son checkpoint'ten devam eder.
+# Simülasyon değişirse lig SIFIRLANMAZ: yayındaki son checkpoint yeni sitenin "tabanı" olur (tools/live-base.js,
+# live-base.json) ve yeni kurallar o durumdan devam eder. Yayındaki dosyalar okunamazsa yayın durur (lig yanlışlıkla
+# sıfırlanmasın; 15 dk sonra yeniden denenir).
 # Repo herkese açık olduğu için Actions dakikaları ücretsizdir.
 # Depo ayarlarında: Settings → Pages → Source: "GitHub Actions" seçilmelidir.
 on:
@@ -34,12 +37,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Derle
-        run: |
-          mkdir -p dist
-          ./build.sh dist/index.html
       - id: pages
         uses: actions/configure-pages@v5
+      - name: Canlı lig tabanı (kural değiştiyse ligi dondurur; başarısız olursa yayın DURUR)
+        env:
+          LIVE_URL: ${{ steps.pages.outputs.base_url }}/
+        run: node tools/live-base.js dist/live-base.json
+      - name: Derle
+        run: LIVE_BASE=dist/live-base.json ./build.sh dist/index.html
       - name: Canlı lig checkpoint'i (yalnızca hızlandırır; başarısız olursa site yine çalışır)
         continue-on-error: true
         env:
