@@ -840,7 +840,7 @@ const IntroScreen = {
       ctx.save(); ctx.translate(X0 + W / 2, y + ch / 2); ctx.scale(k, k); ctx.translate(-(X0 + W / 2), -(y + ch / 2));
       roundRect(ctx, X0, y, W, ch, 28);
       ctx.fillStyle = now ? 'rgba(0,200,83,0.15)' : 'rgba(255,255,255,0.07)'; ctx.fill();
-      if (now) { ctx.lineWidth = 4; ctx.strokeStyle = '#00E676'; ctx.stroke(); }
+      if (now || m.hi) { ctx.lineWidth = 4; ctx.strokeStyle = m.hi ? '#FFD54F' : '#00E676'; ctx.stroke(); }
       outlinedText(ctx, m.label, X0 + 30, y + 38, `46px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
       const badge = done ? 'FULL TIME' : now ? 'PLAYING NOW' : (intro.later || 'LATER TODAY');
       outlinedText(ctx, badge, X0 + W - 30, y + 38, `600 24px ${FONT_UI}`, now ? '#00E676' : 'rgba(255,255,255,0.55)', null, 0, 'right');
@@ -850,8 +850,9 @@ const IntroScreen = {
         roundRect(ctx, cx - 8, cy - rowH / 2 + 3, 416, rowH - 6, 16);
         ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fill();
         let nx = cx + 16;
+        const score = t.txt !== undefined;      // a 1v1 playoff match: goals instead of places and points
         if (done) {
-          outlinedText(ctx, t.place === 1 ? '🏆' : ordinal(t.place), cx + 38, cy + 2, t.place === 1 ? `30px ${FONT_UI}` : `34px ${FONT_BIG}`, t.place === 1 ? '#fff' : 'rgba(255,255,255,0.8)', null, 0);
+          outlinedText(ctx, t.place === 1 ? '🏆' : score ? '–' : ordinal(t.place), cx + 38, cy + 2, t.place === 1 ? `30px ${FONT_UI}` : `34px ${FONT_BIG}`, t.place === 1 ? '#fff' : 'rgba(255,255,255,0.8)', null, 0);
           nx = cx + 82;
         }
         ctx.beginPath(); ctx.arc(nx + 12, cy, 13, 0, TAU); ctx.fillStyle = t.c1; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = t.c2; ctx.stroke();
@@ -859,7 +860,8 @@ const IntroScreen = {
         let fs = Math.min(40, Math.round(rowH * 0.6)); ctx.font = `${fs}px ${FONT_BIG}`;
         while (ctx.measureText(upTR(t.name)).width > maxW && fs > 20) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
         outlinedText(ctx, upTR(t.name), nx + 34, cy + 2, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
-        if (done) outlinedText(ctx, `+${t.pts}`, cx + 400 - 8, cy + 2, `40px ${FONT_BIG}`, t.pts > 0 ? LeagueTable.GREEN : LeagueTable.RED, 'rgba(0,0,0,0.6)', 5, 'right');
+        if (done && score) outlinedText(ctx, t.txt, cx + 400 - 8, cy + 2, `44px ${FONT_BIG}`, t.place === 1 ? '#FFD54F' : '#ffffff', 'rgba(0,0,0,0.6)', 5, 'right');
+        else if (done) outlinedText(ctx, `+${t.pts}`, cx + 400 - 8, cy + 2, `40px ${FONT_BIG}`, t.pts > 0 ? LeagueTable.GREEN : LeagueTable.RED, 'rgba(0,0,0,0.6)', 5, 'right');
       });
       ctx.restore();
     });
@@ -871,10 +873,59 @@ const IntroScreen = {
    END SCREEN  (one animated league table, which stays on screen to the end; after the season's last match the champion / relegated rows are marked)
    ===================================================================== */
 const EndScreen = {
+  /* after the playoff final: the season's moves — the clubs that go up, then the clubs that go down */
+  summary(ctx, sm, et) {
+    const SX = 510, X0 = 70, W = 880, rh = 112;
+    const ts = easeOutBack(et / 0.4, 2);
+    ctx.save(); ctx.translate(SX, 215); ctx.scale(ts, ts);
+    outlinedText(ctx, `SEASON ${sm.season} DONE`, 0, 0, `104px ${FONT_BIG}`, '#ffffff', null, 0);
+    ctx.restore();
+    outlinedText(ctx, `🏆 ${upTR(sm.champion.name)} · CHAMPIONS`, SX, 282, `600 30px ${FONT_UI}`, '#FFD54F', null, 0);
+    const block = (list, y0, head, col, mark, t0) => {
+      outlinedText(ctx, head, X0, y0, `64px ${FONT_BIG}`, col, null, 0, 'left');
+      list.forEach((t, i) => {
+        const k = easeOutBack((et - t0 - 0.18 * i) / 0.4, 2);
+        if (k <= 0.01) return;
+        const y = y0 + 30 + i * (rh + 14);
+        ctx.save(); ctx.globalAlpha *= clamp01(k); ctx.translate(X0 + (1 - clamp01(k)) * 360, 0);
+        roundRect(ctx, 0, y, W, rh, 24);
+        ctx.fillStyle = rgba(t.c1, 0.28); ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = col; ctx.stroke();
+        ctx.fillStyle = t.c1; roundRect(ctx, 0, y, 14, rh, 7); ctx.fill();
+        outlinedText(ctx, mark, 60, y + rh / 2 + 2, `54px ${FONT_UI}`, col, null, 0);
+        ctx.beginPath(); ctx.arc(130, y + rh / 2, 22, 0, TAU); ctx.fillStyle = t.c1; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = t.c2; ctx.stroke();
+        let fs = 58; ctx.font = `${fs}px ${FONT_BIG}`;
+        while (ctx.measureText(upTR(t.name)).width > 640 && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
+        outlinedText(ctx, upTR(t.name), 176, y + rh / 2 + 2, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
+        ctx.restore();
+      });
+    };
+    block(sm.up, 420, 'PROMOTED ▲', LeagueTable.GREEN, '▲', 0.5);
+    block(sm.down, 420 + 30 + 3 * (rh + 14) + 90, 'RELEGATED ▼', LeagueTable.RED, '▼', 1.6);
+  },
   draw(ctx, e, et) {
     ctx.save();
     ctx.fillStyle = `rgba(4,6,12,${clamp01(et / 0.35)})`;
     ctx.fillRect(0, 0, 1080, 1920);
+    if (e.cup) {
+      /* promotion playoff match: the round's results; after the final the season summary takes over */
+      ctx.globalAlpha = clamp01(et / 0.3);
+      if (e.summary && et > 3.2) {
+        ctx.globalAlpha = clamp01((et - 3.2) / 0.35);
+        this.summary(ctx, e.summary, et - 3.2);
+      } else {
+        const fade = e.summary ? clamp01((3.2 - et) / 0.3) : 1;
+        ctx.globalAlpha *= fade;
+        IntroScreen.matches(ctx, e.cup, et);
+      }
+      for (const p of FX.endParts) {
+        if (et > 2.3) break;
+        ctx.save(); ctx.globalAlpha = clamp01((2.3 - et) / 0.3); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.fillStyle = p.color; ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2 * (0.3 + 0.7 * Math.abs(Math.cos(p.rot))));
+        ctx.restore();
+      }
+      ctx.restore();
+      return;
+    }
     const se = e.seasonEnd;
     LeagueTable.draw(ctx, e.rows, 'LEAGUE TABLE', se ? `🏆 ${upTR(se.champion.name)} · SEASON ${se.season} CHAMPIONS` : 'AFTER ' + e.title, { tt: et, post: true, alpha: clamp01(et / 0.3) });
     for (const p of FX.endParts) {

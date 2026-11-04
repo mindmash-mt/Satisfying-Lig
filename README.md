@@ -17,7 +17,7 @@ Site adresi: https://mindmash-mt.github.io/Satisfying-Lig/ — **hiç durmayan b
 
 - **Maç sırasında:** maçın kendisi. Geç gelen kişi maçı baştan değil, **kaldığı yerden** izler; herkes aynı anda aynı maçı görür. Maçtan önce `WEEK 5 MATCHES` ekranı, maçtan sonra animasyonlu lig tablosu gelir.
 - **Maçlar arasında:** güncel lig tablosu ve bir sonraki maça **geri sayım**.
-- Üstteki sekmeler: **⚽ Canlı** (yayın), **Lig tablosu** (O, P, 1., AG, YG, AV, son 3 maç; düşme hattındaki son 3 takım kırmızı çizgili; son şampiyonlar) ve **Fikstür** (sezonun bütün haftaları ve her maçın saati; oynananlar sıralama ve puanlarla, oynanan maç `● CANLI`, geciken maç `ertelendi` etiketiyle). Sekmeler açıkken yayın arka planda saate göre ilerler.
+- Üstteki sekmeler: **⚽ Canlı** (yayın), **Lig tablosu** (O, P, 1., AG, YG, AV, son 3 maç; düşme hattındaki son 3 takım kırmızı çizgili; son şampiyonlar) **Fikstür** (sezonun bütün haftaları ve her maçın saati; oynananlar sıralama ve puanlarla, oynanan maç `● CANLI`, geciken maç `ertelendi` etiketiyle) ve **Eleme** (havuzdaki 12 kulübün yükselme eleme tablosu: turlar, skorlar, bay geçenler, sıradaki maç). Sekmeler açıkken yayın arka planda saate göre ilerler.
 - Alttaki çubuk: ses düğmesi (tarayıcı kuralları gereği kapalı başlar) ve "Her 3 dk'da bir maç · sıradaki 21:03".
 
 ### Maç takvimi
@@ -29,7 +29,7 @@ Site adresi: https://mindmash-mt.github.io/Satisfying-Lig/ — **hiç durmayan b
 | 19:00 – 05:00 | 3 dk | 200 |
 | **Toplam** | | **308** |
 
-Lig **4 Kasım 2026 00:36**'de başladı. Bir sezon 17 hafta × 3 grup maçı = 51 maçtır, yani günde ~6 sezon biter: şampiyon belirlenir, son 3 takım düşer, yedeklerden 3 kulüp gelir ve yeni sezon bir sonraki maçta başlar. Şampiyonlar listesinde son 50 sezon tutulur.
+Lig **4 Kasım 2026 00:36**'de başladı. Bir sezon 17 hafta × 3 grup maçı = 51 maç ve ardından 12 maçlık yükselme elemesidir (bkz. [Sezon sonu](#sezon-sonu-şampiyon-ve-takım-değişimi)); toplam 63 maç, yani günde ~4,9 sezon biter: şampiyon belirlenir, son 3 takım düşer, elemede ilk 3'e giren 3 havuz kulübü gelir ve yeni sezon bir sonraki maçta başlar. Şampiyonlar listesinde son 50 sezon tutulur.
 
 **Taşma kuralı (kilitlenme olmaz):** bir maç, ekranları dahil sıradaki maçın saatine kadar bitmezse sıradaki maç önceki bitince 10 sn sonra başlar (`gap`). Gecikme birikmez, sonraki aralıklarda erir. 3000 test maçında en uzun maç (giriş + maç + bitiş tablosu) 165 sn sürdü, yani 3 dakikalık aralığa her zaman sığdı. Kural yalnızca güvence için var. `node tools/live-check.js` aralığı zorla 1 dakikaya indirip maçların üst üste binmediğini ve takvimin kendini toparladığını test eder.
 
@@ -102,7 +102,7 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 - **Goller:** Gol, topa en son dokunan takımın hanesine yazılır (oyuncu **veya kaleci**). Kendi kalesine atılan goller (ve hiçbir takımın dokunmadığı toptan giren goller) ne bir takımın `AG`'sine ne de yiyenin `YG`'sine yazılır (yiyen takım yine elenir; final düellosu skorunu ise yine değiştirir). Böylece ligdeki toplam AG ile toplam YG hep eşittir. Atılan goller lig tablosunda (`AG`) birikir.
 - **Gol sayacı:** Her takımın kalesinin arkasında, takım adının dışında, o maçta attığı her gol için bir mini futbol topu belirir (gol anında büyüyerek çıkar, takım renginde halka yayar). Çok gol atılırsa toplar küçülür ve ikinci sıraya geçer. Elenen takımın topları da kalır; sayı bitiş ekranındaki `⚽` gol sütunuyla aynıdır (kendi kalesine atılan goller sayılmaz).
 - **Maç öncesi (~3,4 sn, `INTRO_DURATION`):** **`TODAY'S MATCHES`** ekranı: o gün (hafta) oynanmış grup maçları sonuçlarıyla (`FULL TIME`, her takımın sırası ve `+puan`), sıradaki maç (`PLAYING NOW`, hangi takımların oynayacağı) ve oynanacak maçlar (`LATER TODAY`) fikstür olarak listelenir. Ardından maç ekranı açılır.
-- **Maç sonu (~7 sn, `END_DURATION`):** tek ekranda **güncel tüm puan durumu**. Önce her takımın o maçtaki sırası (`1ST`, `2ND`…) ve aldığı puan çıkar: puan alanlar yeşil `+4`, alamayanlar kırmızı `+0`. Sonra puanlar sayarak güncellenir ve takımlar yeni sıralarına kayar (▲/▼). Video bu tabloda biter. Eski kazanan kartı, maç sonucu ve ilk 8 tablosu kaldırıldı. Sezonun son maçında şampiyon altın, ligden çıkacak son 3 takım kırmızı çerçeveyle işaretlenir ve başlıkta şampiyon yazar.
+- **Maç sonu (~7 sn, `END_DURATION`):** tek ekranda **güncel tüm puan durumu**. Önce her takımın o maçtaki sırası (`1ST`, `2ND`…) ve aldığı puan çıkar: puan alanlar yeşil `+4`, alamayanlar kırmızı `+0`. Sonra puanlar sayarak güncellenir ve takımlar yeni sıralarına kayar (▲/▼). Video bu tabloda biter. Eski kazanan kartı, maç sonucu ve ilk 8 tablosu kaldırıldı. Sezonun son grup maçında şampiyon altın, ligden çıkacak son 3 takım kırmızı çerçeveyle işaretlenir ve başlıkta şampiyon yazar. **Eleme maçlarının** bitiş ekranı o turun kartlarıdır (skorlarla, oynanan maç altın çerçeveli); elemenin finalinde 3,2 sn sonra **sezon özeti** gelir: yükselen 3 ve düşen 3 kulüp.
 - **Tablo sütunları:** sıra, takım, `P` (oynanan), `GD` (averaj), maçtaki sıra + puan, `PTS` ve en sağda **`LAST 3`**: takımın bu sezonki son 3 maçtaki sırası (`1ST`, `2ND`, `3RD`…; eskiden yeniye, en sağdaki en yeni). 1. altın, 2. gümüş, 3. bronz, 4. gri, puan alınamayan 5.–6. kırmızı; henüz oynanmamış maçlar boş (`–`) kalır. Maçı oynayan takımlarda eski sonuçlar sola kayar, yeni sıra sağdan belirir. Sayı `CONFIG.FORM_COUNT` ile değiştirilebilir.
 - **Gol** yiyen takım elenir:
   - Kalesi takım renginde parlayan bir duvarla **kapanır** (kapanan kale duvar gibi davranır).
@@ -139,7 +139,7 @@ Ad, 3 harfli kod ve renkler panelden **✏️ Takımları düzenle** ile değiş
 - Sezon başladıktan sonra takım listesi ve sezon uzunluğu değiştirilemez; bu sayede fikstür sabit kalır. Yeni sezon başlatılınca (takım değişiminden sonra) yeni fikstür oluşturulur.
 - Panel haftanın gruplarını ve açılır **Sezon fikstürü** listesini (tüm haftalar, en az/en çok karşılaşma sayısı) gösterir.
 - Başlıkta `WEEK 3 · GROUP MATCH 2` yazar. Haftanın son grup maçı kaydedilince hafta kendiliğinden ilerler. **📅 Yeni hafta** ile elle de geçilebilir; haftada oynanmamış grup maçı varsa hangi maçların (ve kaç takımın) atlanacağını gösteren bir **uyarı** çıkar ve onay istenir, çünkü atlanan maçlar bir daha oynanmaz.
-- Sezonun son haftası bitince yeni maç kurulmaz; önce yeni sezon başlatılır.
+- Sezonun son haftası bitince grup maçı kurulmaz: önce yükselme elemesi oynanır, o da bitince yeni sezon başlatılır.
 
 ### Puanlama
 | Sıra | 1 | 2 | 3 | 4 | 5 | 6 |
@@ -148,18 +148,28 @@ Ad, 3 harfli kod ve renkler panelden **✏️ Takımları düzenle** ile değiş
 
 İlk 4 puan alır, 5. ve 6. sıra `+0 PTS` alır. Bütün gruplar 6 takımlık olduğu için her maçın beklenen puanı her takım için aynıdır. Puanlar panelden değiştirilebilir; eski varsayılan 10-7-5-4-3-2-1 ile kaydedilmiş bir lig açılışta yeni varsayılana geçer. Tablo sıralaması: **Puan → birincilik sayısı → ikincilik sayısı → üçüncülük sayısı → dördüncülük sayısı → atılan gol (AG) → sezonluk kura**. Averaj (AV) sütunu bilgi amaçlı gösterilir ama sıralamada kullanılmaz: yenilen gol zaten maçtaki bitiş sırasına bağlı olduğundan (ör. finalde yenilen ikinci 2 gol yer) sırayı iki kez sayardı. Hâlâ eşit kalan takımlar için ad sırası yerine, her sezon başında bir kez çekilen ve `league.json`'da (`tieOrder`) saklanan rastgele kura sırası kullanılır; böylece alfabede önde olmak avantaj sağlamaz. Tablo sütunları: O, P, 1st, AG, YG, AV, Son 3 (son 3 maçtaki sırası, en sağdaki en yeni).
 
-### Sezon sonu: şampiyon ve takım değişimi
-Sezonun son haftası (varsayılan 17) oynanınca **final maçı yoktur**: tabloda **1. olan takım şampiyon** olur ve kaydedilir. Ardından:
-- Tablonun **son 3 takımı** (`RELEGATE_COUNT`) ertesi sezon ligde yer almaz.
-- Yerlerine **yedek kuyruğundaki ilk 3 kulüp** gelir. Kuyruk sırayla: Napoli, Roma, Atalanta, Tottenham, Aston Villa, Benfica, Porto, Ajax, Sevilla, Marseille, Sporting CP, Trabzonspor. Ligden çıkan takımlar kuyruğun sonuna eklenir; yani sıra gelince geri dönebilirler.
-- Tablo, hafta ve maç geçmişi sıfırlanır; yeni sezon 1. haftadan başlar. Biten sezon `data/active/seasons/season-N.json` dosyasına (şampiyon, çıkanlar, gelenler, son tablo, maç geçmişi) arşivlenir.
-- Sezonun son maçının açıklama metninde şampiyon, ligden çıkanlar ve gelenler yazılır. Tarayıcıda panel aynı bilgiyi gösterir ve **Yeni sezonu başlat** düğmesi geçişi yapar; günlük otomasyon (`tools/daily.js`) bunu kendiliğinden yapar.
+### Sezon sonu: şampiyon, yükselme elemesi ve takım değişimi
+Sezonun son haftası (varsayılan 17) oynanınca **grup maçlarının finali yoktur**: tabloda **1. olan takım şampiyon** olur ve kaydedilir; tablonun **son 3 takımı** (`RELEGATE_COUNT`) ligden düşer (yeri kesinleşir, tablo "final tablosu" olarak kalır). Düşenlerin yerini **havuzdaki kulüpler** doldurur. Havuzda 12 kulüp vardır (Napoli, Roma, Atalanta, Tottenham, Aston Villa, Benfica, Porto, Ajax, Sevilla, Marseille, Sporting CP, Trabzonspor + sonradan düşenler) ve **grup maçları bittikten sonra** kendi aralarında **tek maçlık (rövanşsız) yükselme elemesi** oynarlar:
+
+| Tur | Maç | |
+|---|---|---|
+| 1. tur | 4 | 8 kulüp oynar, kurada ilk 4 çekilen kulüp **bay geçer** |
+| Çeyrek final | 4 | 4 bay kulübü + 4 galip |
+| Yarı final | 2 | |
+| 3.lük maçı + Final | 2 | yarı final mağlupları 3.lük maçını oynar |
+
+- Kura, grup maçları biter bitmez sezonun seed'iyle çekilir ve `league.json`'da (`cup`) saklanır: aynı sezon aynı kura, her tarayıcıda aynı. Maçlar tablodaki sırayla, tek tek oynanır (toplam **12 maç**).
+- Her eleme maçı **1'e 1 düellodur**: 2 kulüp, final düellosu sahası (kaptan + 1 oyuncu), **ilk 2 golü atan kazanır**; beraberlik, uzatma ya da penaltı olmaz (skor 2–0 ya da 2–1). Eleme maçı puan getirmez, tabloya işlenmez.
+- **Yükselenler:** final galibi, finalist ve 3.lük maçının galibi (`FIN` + `3RD`). Düşen 3 takım havuza girer; havuz hep 12 kulüp kalır, düşenler en erken **bir sonraki sezonun** elemesine katılır.
+- Eleme bitince tablo, hafta ve maç geçmişi sıfırlanır; yeni sezon 1. haftadan başlar. Biten sezon `data/active/seasons/season-N.json` dosyasına (şampiyon, çıkanlar, gelenler, son tablo, maç geçmişi, **eleme kurası ve sonuçları**) arşivlenir.
+- Son grup maçının açıklama metninde şampiyon ve düşenler yazılır, "eleme belirleyecek" notu düşülür; elemenin finalinin açıklamasında yükselenler ve düşenler yazılır. Tarayıcıda panel durumu gösterir ve eleme bittiğinde **Yeni sezonu başlat** düğmesi geçişi yapar; günlük otomasyon (`tools/daily.js`) her çalıştırmada bir eleme turunu oynatır, eleme bitince geçişi kendiliğinden yapar.
+- Eleme yalnızca havuzda tam `CONFIG.CUP_SIZE` (12) kulüp varken ve `RELEGATE_COUNT` 3 iken oynanır; başka bir havuz (ör. içe aktarılan dosyada) eski kuyruk kuralıyla çalışır: havuzun ilk `RELEGATE_COUNT` kulübü gelir, düşenler sona eklenir.
 
 ### Kalıcılık ve yedekleme
 - Lig verisi tarayıcının `localStorage`'ında `arenaLeague_v1` anahtarıyla saklanır. Depolama kullanılamazsa uygulama bellekte çalışır ve panelde uyarı gösterir.
 - **⬇ Tabloyu dışa aktar** / **⬆ Tabloyu içe aktar**: takımlar, tablo, hafta, maç geçmişi (seed, tema, takımlar, sonuç) ve sezon fikstürü tek bir JSON dosyasında.
 - **Test maçı** kutusu işaretliyse sonuç tabloya yazılmaz.
-- Sezon uzunluğu varsayılan 17 haftadır; sezon bitince panel şampiyonu ve ligden çıkacak takımları gösterir, **Yeni sezonu başlat** düğmesi sezonu arşivleyip yenisini açar.
+- Sezon uzunluğu varsayılan 17 haftadır; grup maçları bitince panel şampiyonu, ligden çıkacak takımları ve yükselme elemesinin durumunu gösterir; eleme bitince **Yeni sezonu başlat** düğmesi sezonu arşivleyip yenisini açar.
 - Tarayıcıdaki lig, repodaki aktif ligden ayrıdır; tarayıcıda yapılan denemeler aktif lige yansımaz. Aktif ligi tarayıcıda görmek için `data/active/league.json` dosyasını **⬆ Tabloyu içe aktar** ile yükleyin (bkz. [Otomatik günlük maç günü](#otomatik-günlük-maç-günü)).
 
 ---
@@ -185,7 +195,7 @@ Klasörde:
 - `STANDINGS.md`: GitHub'da doğrudan okunabilen lig tablosu (her takımın son maçlardaki sırasıyla) ve son maçlar.
 - `seasons/season-N.json`: biten sezonların arşivi (son tablo, şampiyon, maç geçmişi).
 
-Sezonun son haftası (varsayılan 17. hafta) oynandığında final maçı yoktur; **tabloda 1. olan şampiyon** olur (son maçın videosunda ve açıklama metninde duyurulur). Aynı çalıştırmada sezon arşivlenir, son 3 takım ligden çıkar, yedek kuyruğundaki 3 kulüp gelir ve yeni sezon 1. haftadan başlar (bkz. [Sezon sonu](#sezon-sonu-şampiyon-ve-takım-değişimi)).
+Sezonun son haftası (varsayılan 17. hafta) oynandığında grup maçlarının finali yoktur; **tabloda 1. olan şampiyon** olur (son maçın videosunda ve açıklama metninde duyurulur). Sonraki çalıştırmalar yükselme elemesini oynatır: her çalıştırma bir turu (1. tur, çeyrek final, yarı final, 3.lük maçı + final) videolar. Elemenin son maçını oynatan çalıştırma sezonu arşivler, elemede ilk 3'e giren 3 havuz kulübünü lige alır ve yeni sezon 1. haftadan başlar (bkz. [Sezon sonu](#sezon-sonu-şampiyon-ve-takım-değişimi)). Eleme videoları `sN_playoff_<sıra>_<maç>.mp4` adını taşır.
 
 Videolar ve açıklama metinleri `out/active/<tarih>/` klasörüne yazılır (`--dry-run` ile `out/dry-run/<tarih>/`) (repoya eklenmez): `*.mp4`, `captions.txt`, `summary.json`.
 
@@ -231,6 +241,7 @@ Varsayılan ayarlarla (6 takımlık grup maçı, 1 can) testlerde ortalama maç 
 | `OT_AT` | 45 | `GOAL_GROW` açıkken son elemeden kaç sn sonra uzatma başlar |
 | `DEFAULT_LIVES` | 1 | Takım başına can |
 | `FORM_COUNT` | 3 | Lig tablosunun en sağındaki son maç sırası sayısı (`LAST 3`) |
+| `RELEGATE_COUNT` / `CUP_SIZE` | 3 / 12 | Sezon sonunda düşen / yükselen takım sayısı; yükselme elemesine katılan havuz kulübü sayısı (bkz. [Sezon sonu](#sezon-sonu-şampiyon-ve-takım-değişimi)) |
 | `LIVE` | 05–09: 5 dk · 09–19: 10 dk · 19–05: 3 dk | Canlı ligin başlangıcı, maç takvimi, taşma payı ve seed tohumu (bkz. [Canlı lig](#canlı-lig-site)) |
 
 ---
@@ -242,7 +253,7 @@ index.html          Uygulamanın kendisi (tek dosya, doğrudan açılır)
 build.sh            src/ parçalarını index.html'de birleştirir
 src/
   00_head.html      HTML iskeleti, panel ve stiller
-  01_core.js        CONFIG, takımlar, seed'li RNG, matematik, sezon fikstürü planlayıcısı
+  01_core.js        CONFIG, takımlar (lig + havuz), seed'li RNG, matematik, sezon fikstürü planlayıcısı
   02_sim.js         Fizik ve oyun mantığı (arena, top, kaleci, oyuncu, eleme, final düellosu)
   03_fx_audio.js    Temalar, görsel efektler, Web Audio ile sentezlenen sesler
   04_render.js      Canvas çizimi, HUD ve bitiş ekranı

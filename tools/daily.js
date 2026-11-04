@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
-  Günlük maç günü — aktif ligin bu haftaki kalan grup maçlarını oynatır, her biri için MP4 üretir
-  ve lig verisini günceller. Her sabah zamanlanmış görev çalıştırır; elle çalıştırmak ligi bir hafta ilerletir.
+  Günlük maç günü — aktif ligin bu haftaki kalan grup maçlarını (sezon sonunda: yükselme elemesinin sıradaki turunu)
+  oynatır, her biri için MP4 üretir ve lig verisini günceller. Her sabah zamanlanmış görev çalıştırır; elle çalıştırmak ligi bir hafta ilerletir.
 
   Kullanım:  node tools/daily.js [active] [--dry-run] [--max N] [--bitrate MBPS] [--reset] [--out KLASÖR]
     --dry-run   videoları üretir ama lig verisine hiçbir şey yazmaz (deneme için; çıktı out/dry-run/<tarih>)
@@ -15,8 +15,9 @@
   Sezon arşivi: data/active/seasons/season-<n>.json
   Çıktı:        <out>/*.mp4, <out>/captions.txt, <out>/summary.json
 
-  Sezonun son haftası bittiğinde final oynanmaz: tablonun lideri şampiyon olur, sezon arşivlenir
-  ve yeni sezon 1. haftadan başlar.
+  Sezonun son haftası bittiğinde final oynanmaz: tablonun lideri şampiyon olur, son 3 takım düşer. Ardından havuzdaki
+  12 takım tek maçlık yükselme elemesi oynar (her çalıştırma bir turu oynatır: 1. tur, çeyrek final, yarı final,
+  3.lük maçı + final); ilk 3'e girenler ligi yükselir, sezon arşivlenir ve yeni sezon 1. haftadan başlar.
 
   KEEP_TMP=1 ortam değişkeniyle ara dosyalar (ham H.264 + WAV) silinmez.
 
@@ -73,7 +74,8 @@ function standingsMd(d, rank) {
   const code = (id) => (d.teams.find(t => t.id === id) || {}).code || id;
   const L = [];
   L.push('# Satisfying Lig — Aktif lig', '');
-  L.push(`Sezon **${d.season || 1}** · sıradaki: **Hafta ${d.week} / ${d.seasonLength}**, grup maçı ${d.weekMatch} · bu sezon oynanan maç: **${d.history.length}**`, '');
+  const groupsOver = d.week > d.seasonLength;
+  L.push(`Sezon **${d.season || 1}** · ${groupsOver ? 'grup maçları bitti, **yükselme eleme maçları** sürüyor' : `sıradaki: **Hafta ${d.week} / ${d.seasonLength}**, grup maçı ${d.weekMatch}`} · bu sezon oynanan maç: **${d.history.length}**`, '');
   L.push(`_Son güncelleme: ${now.date} ${istanbul().time} (İstanbul)_`, '');
   L.push('| # | Takım | O | P | 1. | AG | YG | AV | Son maçlar |', '|---:|---|---:|---:|---:|---:|---:|---:|---|');
   rk.forEach((x, i) => { const r = x.r, av = r.gf - r.ga; L.push(`| ${i + 1} | ${x.t.name} | ${r.played} | **${r.pts}** | ${r.wins} | ${r.gf} | ${r.ga} | ${av > 0 ? '+' : ''}${av} | ${formTxt(x.t.id)} |`); });
@@ -87,6 +89,10 @@ function standingsMd(d, rank) {
       L.push(`| ${h.matchNo} | ${when} | ${order} | ${h.theme} | ${Math.round(h.duration)} sn | ${istanbul(new Date(h.date)).date} |`);
     }
     L.push('');
+  }
+  if (d.cup && d.cup.res && Object.keys(d.cup.res).length) {
+    const nm = (id) => (d.reserve.concat(d.teams).find(t => t.id === id) || {}).name || id;
+    L.push('## Yükselme eleme maçları', '', ...Object.entries(d.cup.res).map(([k, r]) => `- ${k}: **${nm(r.winner)}** ${r.sw}–${r.sl} ${nm(r.loser)}`), '');
   }
   if (d.champions.length) {
     L.push('## Şampiyonlar', '', ...d.champions.map(c => `- Sezon ${c.season || '?'}: **${c.name}**`), '');
@@ -158,8 +164,17 @@ function standingsMd(d, rank) {
       d = await renderOne(); played++;
       if (d.week !== startWeek) break;   // week finished
     }
-    /* season over → the table leader is the champion; last teams out, reserve clubs in; new season */
-    if (d.week > d.seasonLength) {
+    /* the group matches are over: one round of the promotion playoff per run (like a week), when this run played no group match */
+    if (d.week > d.seasonLength && !played) {
+      const round = () => page.evaluate(() => { const m = App.cupMatch(); return m ? m.r : -1; });
+      const r0 = await round();
+      while (r0 >= 0 && played < maxMatches) {
+        d = await renderOne(); played++;
+        if (await round() !== r0) break;   // round finished (or the playoff is over)
+      }
+    }
+    /* season over (group matches + playoff) → the table leader is the champion; last teams out, the playoff's top 3 in; new season */
+    if (await page.evaluate(() => League.seasonOver())) {
       archived = await page.evaluate(() => League.endSeason());
       if (!dry) {
         fs.mkdirSync(path.join(dataDir, 'seasons'), { recursive: true });
