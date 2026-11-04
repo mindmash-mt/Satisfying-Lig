@@ -264,7 +264,7 @@
 </div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 <script>
-const BUILD_SIM_HASH = '8b5f32a18bd7';
+const BUILD_SIM_HASH = '8782348f0fce';
 const BUILD_BASE = null;
 const BUILD_START = null;
 /* =====================================================================
@@ -296,9 +296,11 @@ const CONFIG = {
   /* final duel: 2 players per team, one is the captain. A captain touch that sends the ball toward the rival goal
      (within CAPTAIN_AIM_DEG of the goal centre) makes it CAPTAIN_SHOT_MULT × faster until it hits anything else. */
   CAPTAIN_SHOT_MULT: 2, CAPTAIN_AIM_DEG: 55,
+  /* outfield players per club in a 1v1 match (besides the keeper): the captain + team-mates (the old arena final keeps 2) */
+  TEAM_PLAYERS: 3,
   PU_R: 26, PU_LIFE: 8, PU_MIN: 6, PU_MAX: 10, PU_MAX_COUNT: 2, PU_WALL_MARGIN: 80,
   DEFAULT_LIVES: 1, DEFAULT_SPEED_MULT: 1.0,
-  /* every match is a 1v1 league match: two clubs on the duel pitch (keeper + captain + one team-mate each) for MATCH_TIME seconds.
+  /* every match is a 1v1 league match: two clubs on the duel pitch (keeper + captain + team-mates each, see TEAM_PLAYERS) for MATCH_TIME seconds.
      The clock runs on screen time (slow-motion moments count too), so a match is MATCH_TIME seconds long on screen.
      A draw is a draw in the league; a promotion playoff match that is level goes to a golden goal (at most GOLDEN_TIME seconds)
      and then to a penalty shoot-out (PEN_P: chance a penalty goes in, PEN_STEP: seconds per penalty on screen). */
@@ -752,7 +754,7 @@ class Game {
   initPlayers() {
     const mk = (team, x, y, cap) => this.makePlayer(team, x, y, cap);
     if (this.finalDuel) {
-      /* direct final (only 2 teams): captain + one team-mate each */
+      /* direct final / 1v1 match (only 2 teams): captain + team-mates */
       const [top, bottom] = this.rectTeams;
       for (const t of [top, bottom]) {
         const side = t === top ? -1 : 1, flank = t === top ? 1 : -1;
@@ -760,6 +762,13 @@ class Game {
         this.players.push(mk(t, cx, cy, true));
         const m = this.duelMateSpot(t, top, this.W, this.H, cx);
         this.players.push(mk(t, m.x, m.y, false));
+        /* a 1v1 match: CONFIG.TEAM_PLAYERS outfield players — the third starts in the middle of its own half, in front of its box,
+           a fourth or more spread across the own half */
+        const n = this.timed ? Math.max(2, CONFIG.TEAM_PLAYERS) : 2;
+        for (let k = 2; k < n; k++) {
+          const off = k === 2 ? 0 : (k % 2 ? -1 : 1) * 0.36 * Math.ceil((k - 2) / 2) / Math.max(1, Math.ceil((n - 3) / 2));
+          this.players.push(mk(t, this.cx + off * this.W, this.rectCy() + side * this.H * (k === 2 ? 0.34 : 0.1), false));
+        }
       }
     } else {
       for (const g of this.geo.goals) {

@@ -27,9 +27,11 @@ const CONFIG = {
   /* final duel: 2 players per team, one is the captain. A captain touch that sends the ball toward the rival goal
      (within CAPTAIN_AIM_DEG of the goal centre) makes it CAPTAIN_SHOT_MULT × faster until it hits anything else. */
   CAPTAIN_SHOT_MULT: 2, CAPTAIN_AIM_DEG: 55,
+  /* outfield players per club in a 1v1 match (besides the keeper): the captain + team-mates (the old arena final keeps 2) */
+  TEAM_PLAYERS: 3,
   PU_R: 26, PU_LIFE: 8, PU_MIN: 6, PU_MAX: 10, PU_MAX_COUNT: 2, PU_WALL_MARGIN: 80,
   DEFAULT_LIVES: 1, DEFAULT_SPEED_MULT: 1.0,
-  /* every match is a 1v1 league match: two clubs on the duel pitch (keeper + captain + one team-mate each) for MATCH_TIME seconds.
+  /* every match is a 1v1 league match: two clubs on the duel pitch (keeper + captain + team-mates each, see TEAM_PLAYERS) for MATCH_TIME seconds.
      The clock runs on screen time (slow-motion moments count too), so a match is MATCH_TIME seconds long on screen.
      A draw is a draw in the league; a promotion playoff match that is level goes to a golden goal (at most GOLDEN_TIME seconds)
      and then to a penalty shoot-out (PEN_P: chance a penalty goes in, PEN_STEP: seconds per penalty on screen). */

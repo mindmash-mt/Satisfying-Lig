@@ -2,7 +2,7 @@
 
 Kendi kendine oynayan, **hiç durmayan canlı bir "satisfying" futbol ligi**: günün her saatinde **her 3 dakikada bir 1'e 1 maç** oynanır, her maç **60 saniye** sürer; siteye giren herkes aynı maçı aynı anda izler. Tek dosyalık bir tarayıcı uygulamasıdır; sunucu gerekmez. Ayrıca Reels/TikTok/Shorts videosu üreten bir **stüdyo** modu vardır (`?studio`).
 
-Her maçta iki kulüp dikey bir futbol sahasında karşılaşır: her takımın bir kalecisi, bir kaptanı ve bir oyuncusu vardır. Top duvarlara çarptıkça hızlanır, kaleciler topu takip eder. 60 saniyenin sonunda **çok gol atan kazanır**; berabere biterse beraberliktir. Sonuç kalıcı bir **lig tablosuna** işlenir (galibiyet 3, beraberlik 1 puan).
+Her maçta iki kulüp dikey bir futbol sahasında karşılaşır: her takımın bir kalecisi ve sahada 3 oyuncusu (biri kaptan) vardır. Top duvarlara çarptıkça hızlanır, kaleciler topu takip eder. 60 saniyenin sonunda **çok gol atan kazanır**; berabere biterse beraberliktir. Sonuç kalıcı bir **lig tablosuna** işlenir (galibiyet 3, beraberlik 1 puan).
 
 - Kurulum yok: `index.html` dosyasını Chrome'da açmanız yeterli.
 - Dikey 1080×1920 (9:16) video, 60 FPS, sesli kayıt.
@@ -128,8 +128,8 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 ## Oyun kuralları
 
 ### 1'e 1 maç (60 sn)
-- Her maç iki kulüp arasındadır. Fikstürde ilk yazılan **ev sahibidir** ve **üst kalede** oynar (skor tabelasında solda). Ev sahipliği sezon boyunca dengelidir (her takım 8–9 maçta ev sahibi); 1000 maçlık testte üst ve alt kale galibiyetleri eşit (%40 / %40, gerisi beraberlik).
-- Saha dar ve uzun, dikey bir futbol sahasıdır ve ekranı üst şeridin altından alt kenara, soldan sağa kadar doldurur (1020 × 1660, ortalı). Her takımın bir **kalecisi**, bir **kaptanı** (sarı **C** rozeti) ve bir oyuncusu vardır. Sahada her an **tek top** bulunur.
+- Her maç iki kulüp arasındadır. Fikstürde ilk yazılan **ev sahibidir** ve **üst kalede** oynar (skor tabelasında solda). Ev sahipliği sezon boyunca dengelidir (her takım 8–9 maçta ev sahibi); 4000 maçlık testte üst ve alt kale galibiyetleri eşit (%40 / %41, gerisi beraberlik).
+- Saha dar ve uzun, dikey bir futbol sahasıdır ve ekranı üst şeridin altından alt kenara, soldan sağa kadar doldurur (1020 × 1660, ortalı). Her takımın bir **kalecisi** ve sahada **3 oyuncusu** vardır: **kaptan** (sarı **C** rozeti) ve iki takım arkadaşı (`TEAM_PLAYERS`); üçüncü oyuncu maça kendi yarı sahasının ortasından, ceza sahasının önünden başlar. Oyuncular sahada serbestçe dolaşır. Sahada her an **tek top** bulunur.
 - **Top:** başlangıç hızıyla ortadan rastgele bir yöne çıkar, her **duvar veya direk** çarpmasında %10 hızlanır (en fazla 2,4 katı). Oyuncu ve kaleci çarpmaları hızı değiştirmez. Gol olunca yeni top 1,1 sn sonra yine başlangıç hızıyla doğar.
 - **Kaptan şutu:** kaptan topa dokunduğunda top rakip kaleye doğru gidiyorsa (kale merkezine `CAPTAIN_AIM_DEG` = 55° içinde) **2 kat hızlı** gider; başka bir şeye çarpınca hız eski değerine döner.
 - **Kaleciler** topu sürekli takip eder; her takımın kalecisine maç başında rastgele bir yetenek atanır.
@@ -171,7 +171,7 @@ Ad, 3 harfli kod ve renkler panelden **✏️ Takımları düzenle** ile değiş
 
 Tablo sıralaması: **Puan → averaj (AV) → atılan gol (AG) → aralarındaki maç(lar) (eşit takımlar arasındaki puan, sonra averaj) → sezonluk kura**. Hâlâ eşit kalan takımlar için ad sırası yerine her sezon başında bir kez çekilen ve lig verisinde (`tieOrder`) saklanan rastgele kura sırası kullanılır. Tablo sütunları: O, G, B, M, AG, YG, AV, P, Son 3 (G yeşil, B gri, M kırmızı; en sağdaki en yeni). Puanlar panelden değiştirilebilir (canlı ligde `CONFIG.POINTS`).
 
-60 saniyelik 1000 maçlık testte (varsayılan ayarlar): maç başına ortalama **4,2 gol**, **%19 beraberlik**; en sık skorlar 2–1, 3–2, 3–1, 2–2, 4–1.
+60 saniyelik 1000 maçlık testte (varsayılan ayarlar): maç başına ortalama **4,3 gol**, **%19 beraberlik**; en sık skorlar 3–2, 2–1, 3–1, 2–2, 4–1.
 
 ### Sezon sonu: şampiyon, yükselme elemesi ve takım değişimi
 Sezonun son haftası (17) oynanınca **tabloda 1. olan takım şampiyon** olur ve kaydedilir; tablonun **son 3 takımı** (`RELEGATE_COUNT`) ligden düşer. Düşenlerin yerini **havuzdaki kulüpler** doldurur. Havuzda 12 kulüp vardır (Napoli, Roma, Atalanta, Tottenham, Aston Villa, Benfica, Porto, Ajax, Sevilla, Marseille, Sporting CP, Trabzonspor + sonradan düşenler) ve **lig maçları bittikten sonra** kendi aralarında **tek maçlık (rövanşsız) yükselme elemesi** oynarlar:
@@ -245,7 +245,7 @@ Eskiden aktif lig, Claude Code'da tanımlı bir zamanlanmış görevle her gece 
 
 ## Denge
 
-Varsayılan ayarlarla 60 saniyelik 1000 maçlık testte (`node tools/balance.js 1000`): ortalama **4,2 gol**, **%19 beraberlik**, üst kale (ev sahibi) ve alt kale galibiyeti eşit (%40 / %40). Eleme maçlarında (`--eleme`) ~%19 maç altın gole, ~%0,5'i penaltıya gider; en uzun eleme maçı ~104 sn.
+Varsayılan ayarlarla 60 saniyelik 1000 maçlık testte (`node tools/balance.js 1000`): ortalama **4,3 gol**, **%19 beraberlik**; 4000 maçta üst kale (ev sahibi) ve alt kale galibiyeti eşit (%40 / %41). Eleme maçlarında (`--eleme`) ~%19 maç altın gole, ~%0,5'i penaltıya gider; en uzun eleme maçı ~111 sn.
 
 Önemli ayarlar `src/01_core.js` dosyasının başındaki `CONFIG` nesnesinde:
 
@@ -261,6 +261,7 @@ Varsayılan ayarlarla 60 saniyelik 1000 maçlık testte (`node tools/balance.js 
 | `BALL_MAX_MULT` | 2.4 | Hız tavanı (başlangıç hızının katı) |
 | `FINAL_GOAL_FRAC` | 0.54 | Kale ağzı (saha genişliğinin oranı); küçültmek golü azaltır, beraberliği artırır |
 | `FINAL_W` / `FINAL_H` | 1020 / 1660 | Sahanın boyutu: üst şeridin altından alt kenara, x 30–1050 (`FINAL_CX` 540: ortalı; `FINAL_DY` 37: merkezi biraz aşağıda; `TOPBAR_Y` 60: üst şeridin yüksekliği) |
+| `TEAM_PLAYERS` | 3 | Takım başına sahadaki oyuncu sayısı (kaleci hariç; biri kaptan) |
 | `CAPTAIN_SHOT_MULT` / `CAPTAIN_AIM_DEG` | 2 / 55 | Kaptan şutunun hız katı / rakip kaleye yönelme açısı |
 | `KEEPER_GAIN` / `KEEPER_READ` | 3 / 0.3 | Kalecinin tepki hızı / topun yolunu okuma oranı |
 | `INTRO_DURATION` / `END_DURATION` | 5 / 9 | Maç öncesi ve maç sonu ekranlarının süresi (sn) |
