@@ -4,8 +4,9 @@
   1) DM (src/01_core.js) fonksiyonlarının doğruluğu: Math.sin/cos/atan2/exp ile karşılaştırır.
   2) Simülasyonun motorun matematik kütüphanesinden bağımsız olduğu: Math.sin/cos/atan2/hypot/exp/pow/log
      bozulmuşken (farklı bir tarayıcıyı taklit eder) oynanan maçlar normal sonuçlarla bit bit aynı olmalı.
-  3) Takvim: her 3 dakikada bir maç, günde 480 maç; bir maç (giriş + 60 sn + tablo) 3 dakikalık aralığa her zaman sığar.
-  3b) Fikstür: tek devreli lig (her ikili bir kez, ev sahipliği dengeli); 1'e 1 maç kuralları (60 sn, beraberlik, eleme maçında
+  3) Takvim: her 2 dakikada bir maç, günde 720 maç; bir lig maçı (giriş + 90 sn + tablo) 2 dakikalık aralığa her zaman sığar,
+     uzayan eleme maçlarının gecikmesi sonraki aralıklarda erir. Takvim değişince lig dondurulur ve yeni takvimle devam eder.
+  3b) Fikstür: tek devreli lig (her ikili bir kez, ev sahipliği dengeli); 1'e 1 maç kuralları (90 sn, beraberlik, eleme maçında
      altın gol + penaltı), puanlama (3-1-0) ve sıralama (puan → averaj → atılan gol → aralarındaki maç).
   4) Taşma kuralı: aralık zorla 1 dakikaya indirilir (maçlar sığmaz) → maçlar asla üst üste binmez, hiçbir maç
      planlı saatinden önce başlamaz, takvim kilitlenmez ve normal aralığa dönülünce gecikme erir.
@@ -16,7 +17,7 @@
      eski biçimli kayıtlar önbellek olarak kabul edilmez, taban arşivi korur; eski ligin (grup maçları) sezonları da gösterilir.
   5d) Yayında başlangıç (tools/live-start.js): yeni lig yayından birkaç dk sonra başlar, sonraki yayınlarda aynı kalır,
      live-start.json kaybolursa checkpoint'ten geri okunur, eski ligin şampiyonları ve sezonları taşınır.
-  6) --long: gerçek takvimle 48 saatlik hızlandırılmış koşu (960 maç, ~5,8 sezon: 153 lig + 12 eleme maçı, şampiyon sınırı).
+  6) --long: gerçek takvimle 48 saatlik hızlandırılmış koşu (1440 maç, ~8,7 sezon: 153 lig + 12 eleme maçı, şampiyon sınırı).
   Kullanım: node tools/live-check.js [maç sayısı] [--long]
 */
 const fs = require('fs'), path = require('path');
@@ -48,7 +49,7 @@ let fail = 0;
 const runAll = () => {
   const { CONFIG, DEFAULT_TEAMS, Game, RNG, DT, THEME_IDS, planRoundRobin } = load();
   const teams = DEFAULT_TEAMS.map((t, i) => ({ id: 't' + (i + 1), ...t })), out = [];
-  /* league matches (60 s, draws allowed) and playoff matches (golden goal, penalties: a short golden goal so some go to penalties) */
+  /* league matches (90 s, draws allowed) and playoff matches (golden goal, penalties: a short golden goal so some go to penalties) */
   for (const knockout of [false, true]) for (let i = 0; i < N; i++) {
     if (knockout) CONFIG.GOLDEN_TIME = 3;
     const seed = ((knockout ? 0x85EBCA6B : 0x9E3779B9) * (i + 1)) >>> 0, rng = new RNG(seed ^ 0x51ED27);
@@ -86,10 +87,10 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
   {
     const { Live, CONFIG } = loadLive(), c = (n) => Live.clock(Live.slot(n));
     CONFIG.LIVE.start = '2026-11-04T22:00'; Live._slots = null; Live._sched = null;
-    ok(Live.slots().length === 480 && c(0) === '22:00' && c(1) === '22:03' && c(20) === '23:00' && c(40) === '00:00' && Live.slot(480) - Live.slot(0) === 864e5,
-      'Takvim: her 3 dk\'da bir, günde 480 maç · 22:00, 22:03 … 23:00 … 00:00 (gün geçişi)');
+    ok(Live.slots().length === 720 && c(0) === '22:00' && c(1) === '22:02' && c(30) === '23:00' && c(60) === '00:00' && Live.slot(720) - Live.slot(0) === 864e5,
+      'Takvim: her 2 dk\'da bir, günde 720 maç · 22:00, 22:02 … 23:00 … 00:00 (gün geçişi)');
     CONFIG.LIVE.start = '2026-11-04T22:01'; Live._sched = null;
-    ok(c(0) === '22:03' && c(1) === '22:06', 'Başlangıç saati aralığa denk gelmezse ilk maç sıradaki 3 dk\'da (22:01 → 22:03)');
+    ok(c(0) === '22:02' && c(1) === '22:04', 'Başlangıç saati aralığa denk gelmezse ilk maç sıradaki 2 dk\'da (22:01 → 22:02)');
     const start = { salt: CONFIG.LIVE.salt, start: '2026-11-05T09:17' }, B = loadLive({ start });
     ok(B.Live.cfg().start === '2026-11-05T09:17' && B.Live.clock(B.Live.slot(0)) === '09:18' && B.Live.league().includes('2026-11-05T09:17') && loadLive({ start: { ...start, salt: 'başka' } }).Live.cfg().start === loadLive().CONFIG.LIVE.start,
       'Yayının seçtiği başlangıç (BUILD_START, 09:17 → ilk maç 09:18) bu salt için geçerli, ligin kimliğine dahil; başka salt\'ın başlangıcı yok sayılıyor');
@@ -101,6 +102,7 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     const plan = App.seasonPlan(), ids = League.data.teams.map(t => t.id), st = fixtureStats(ids, plan.weeks);
     ok(plan.weeks.length === 17 && plan.weeks.every(w => w.length === 9 && new Set(w.flat()).size === 18) && st.min === 1 && st.max === 1 && st.homeMin >= 8 && st.homeMax <= 9,
       `Fikstür: 17 hafta × 9 maç, her takım haftada 1 maç, her ikili tam 1 kez karşılaşıyor, her takım ${st.homeMin}–${st.homeMax} maçta ev sahibi`);
+    const G0 = CONFIG.GOLDEN_TIME;
     const play = (knockout, seed, golden) => {
       if (golden !== undefined) CONFIG.GOLDEN_TIME = golden;
       const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout });
@@ -115,10 +117,34 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     let gg = null, pens = null;
     for (let s = 1; s < 600 && !gg; s++) { const x = play(true, s, 30); if (x.r.golden && !x.r.pens) gg = x; }
     for (let s = 1; s < 600 && !pens; s++) { const x = play(true, s, 0.3); if (x.r.pens) pens = x; }
-    CONFIG.GOLDEN_TIME = 30;
+    CONFIG.GOLDEN_TIME = G0;
     const pw = pens && pens.g.teams[pens.g.winner], pl = pens && pens.g.teams[1 - pens.g.winner];
     ok(gg && pens && gg.g.winner >= 0 && gg.r.teams[gg.g.winner].score === gg.r.teams[1 - gg.g.winner].score + 1 && !pens.r.draw && pw.score === pl.score && pw.pen > pl.pen && pens.g.pens.kicks.length >= 6,
       `Eleme maçı berabere bitmez: altın gol (${gg && gg.r.teams.map(t => t.score).join('–')}), sonra penaltılar (${pens && `${pw.score}–${pl.score}, pen. ${pw.pen}–${pl.pen}`})`);
+    /* added time: when the time is up while the ball is in a goal's half moving towards it (up / down), the match goes on
+       until the ball turns back or goes in (at most ADDED_MAX s); it never ends while that is still the case */
+    {
+      let n = 0, withAdded = 0, bad = 0, maxAdd = 0;
+      for (let s = 1; s <= 150; s++) {
+        const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 5000 + s, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout: false });
+        let added = false;
+        g.onEvent = (t) => {
+          if (t === 'addedTime') added = true;
+          if (t === 'win') {
+            const over = g.clock - CONFIG.MATCH_TIME;
+            if (g.attacking() && over < CONFIG.ADDED_MAX) bad++;
+            if (added) maxAdd = Math.max(maxAdd, over);
+            const b = g.balls.find(x => x.state === 'live');
+            if (!added && over > 0.05) bad++;                     // no added time → ends right at full time
+            if (added && b && over < CONFIG.ADDED_MAX && ((b.vy < 0 && b.y < g.rectCy()) || (b.vy > 0 && b.y > g.rectCy()))) bad++;
+          }
+        };
+        while (!g.over) g.step(DT);
+        n++; if (added) withAdded++;
+      }
+      ok(bad === 0 && withAdded > 10 && withAdded < n && maxAdd <= CONFIG.ADDED_MAX + 0.01,
+        `Uzatma: ${n} maçın ${withAdded}'inde süre bittiğinde top kaleye gidiyordu → maç top geri dönene / gol olana kadar sürdü (en uzun +${maxAdd.toFixed(1)} sn); top kaleye giderken hiç bitmedi`);
+    }
     /* scoring and ranking on a hand-made table */
     const d = League.data, [a, b, c] = d.teams.map(t => t.id);
     const res = (x, y, sx, sy) => ({ teams: [{ id: x, code: x, score: sx, saves: 0 }, { id: y, code: y, score: sy, saves: 0 }] });
@@ -157,7 +183,7 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
   {
     const L = loadLive();
     L.CONFIG.LIVE.start = '2026-11-04T00:00'; L.CONFIG.LIVE.bands = [{ from: '00:00', every: 1 }, { from: '01:00', every: 3 }]; L.Live._slots = null; L.Live._sched = null;
-    const log = await runUntil(L, L.Live.slot(0) + 3 * 3600e3);
+    const log = await runUntil(L, L.Live.slot(0) + 8 * 3600e3);
     const late = log.map(x => x.start - x.slot), back = log.findIndex((x, i) => i > 60 && x.start === x.slot);
     ok(sane(log, L.CONFIG.LIVE.gap) && log.length > 60 && back > 0,
       `Taşma kuralı (00–01 arası her 1 dk, maçlar sığmıyor): ${log.length} maç, üst üste binen yok, en büyük gecikme ${Math.round(Math.max(...late) / 60e3)} dk, normal aralıkta ${log[back] ? L.Live.clock(log[back].start) : '—'}'de saatine döndü`);
@@ -209,7 +235,7 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     ok(other.Live.parseState(B3.Live.lastClean) === null && loadLive({ simHash: 'x' }).Live.parseState(B3.Live.lastClean) === null,
       'Başka tabanın / başka kuralın checkpoint\'i geçersiz sayılıyor');
     /* a freeze exactly between two seasons: the new season length applies at once */
-    const E = loadLive(); shortSeason(E, 2); await E.Live.catchUp(0, () => T(E, 30)); E.Live.snapshot();
+    const E = loadLive(); shortSeason(E, 2); for (let i = 0; i < 30; i++) E.Live.record(E.Live.computeNext()); E.Live.snapshot();   // exactly the 30 matches of season 1
     const eb = mk(JSON.parse(E.Live.lastClean).data), F = fromBase(eb);
     ok(eb.data.season === 2 && eb.data.history.length === 0 && F.League.data.seasonLength === 3, 'Sezonlar arasında dondurulan lig: yeni sezon uzunluğu (3 hafta) hemen geçerli');
   }
@@ -277,7 +303,7 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     r = run(bs('S1', 142), null);                     ok(r.action === 'rebase' && r.base.data.liveCount === 142, 'Taban kararı: checkpoint yok → önceki tabandan devam (lig sıfırlanmıyor)');
     r = run(bs('S1', 200), st('S1', 150));            ok(r.action === 'rebase' && r.base.data.liveCount === 200, 'Taban kararı: elde en ileri durum seçilir');
     r = run(bs('S1', 142), st('S1', 190, 'b1'), { league: lg + 'x', sim: 'S2' });
-    ok(r.action === 'none' && st('S1', 1).hash.endsWith(lg), 'Taban kararı: lig kimliği (start/takvim/salt) değişti → yeni lig, eski durum yok sayılır');
+    ok(r.action === 'none' && st('S1', 1).hash.endsWith(lg), 'Taban kararı: lig kimliği (start/salt) değişti → yeni lig, eski durum yok sayılır');
   }
   /* 5d) the league's start at its first deploy (tools/live-start.js) */
   {
@@ -297,20 +323,43 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     r = decide({ cfg, prev: { salt: 'eski', start: '2026-01-01T00:00' }, pub: null, now, manual: '2026-11-05T09:00' });
     ok(r.action === 'new' && r.start.start === '2026-11-05T09:00' && !r.start.legacy, 'Başlangıç: elle verilen saat (LIVE_START), checkpoint yoksa eski lig arşivi yok');
   }
-  /* 3c) every match fits its 3-minute slot */
-  if (process.argv.includes('--long')) {
-    const L = loadLive(), t0 = Date.now();
-    L.CONFIG.LIVE.start = '2026-11-04T00:00'; L.Live._slots = null; L.Live._sched = null;
-    const log = await runUntil(L, L.Live.slot(0) + 48 * 3600e3);
-    const d = L.League.data, late = log.filter(x => x.start > x.slot).length, longest = Math.max(...log.map(x => x.dur)), lg = Math.max(...log.filter(x => !x.cup).map(x => x.dur));
-    ok(sane(log, L.CONFIG.LIVE.gap) && log.length === 960 && late === 0 && longest < 180 - L.CONFIG.LIVE.gap && d.season >= 6 && d.champions.length <= L.CONFIG.LIVE.keepChampions,
-      `48 saat: ${log.length} maç, ${d.season - 1} sezon bitti, ertelenen maç ${late}, en uzun lig maçı ${lg.toFixed(0)} sn, en uzun eleme maçı ${longest.toFixed(0)} sn (${((Date.now() - t0) / 1000).toFixed(0)} sn'de hesaplandı)`);
-  } else {
-    const L = loadLive(); L.Live.adopt(null);
-    const log = await runUntil(L, L.Live.slot(180) + 1);
-    const longest = Math.max(...log.map(x => x.dur));
-    ok(sane(log, L.CONFIG.LIVE.gap) && log.every(x => x.start === x.slot) && longest < 180 - L.CONFIG.LIVE.gap && log.some(x => x.cup),
-      `Bir sezon (165 maç + yeni sezonun ilkleri): her maç saatinde başladı, en uzun maç ${longest.toFixed(0)} sn < 3 dk (bir maç ~${L.CONFIG.INTRO_DURATION + L.CONFIG.MATCH_TIME + L.CONFIG.END_DURATION + L.Live.HOLD} sn)`);
+  /* 3c) a timetable change does not reset the league: frozen in a base, the new timetable starts after the base's last match.
+     Also: a state written while the timetable was part of the league's identity belongs to the same league. */
+  {
+    const A = loadLive(); A.CONFIG.LIVE.bands = [{ from: '00:00', every: 3 }]; A.Live._slots = null; A.Live._sched = null; A.Live.adopt(null);
+    await A.Live.catchUp(0, () => A.Live.slot(12) + 1); A.Live.snapshot();
+    const frozen = JSON.parse(A.Live.lastClean).data, lg = A.Live.league();
+    const N = loadLive({ simHash: 'new', base: { id: 'tt', league: lg, sim: 'new', count: frozen.liveCount, data: frozen } }); N.Live.adopt(N.Live.baseState());
+    const s0 = N.Live.slot(frozen.liveCount), grid = (t) => Math.ceil((t + 3 * 3600e3) / 120e3) * 120e3 - 3 * 3600e3;
+    ok(frozen.liveCount === 12 && s0 === grid(frozen.liveLastEnd) && N.Live.slot(frozen.liveCount + 1) - s0 === 120e3 && N.Live.nextStart() === s0,
+      `Takvim değişikliği (3 dk → 2 dk) ligi sıfırlamıyor: 12 maçlık lig dondu, 13. maç eski son maçın bitişinden sonraki ilk 2 dk aralığında (${N.Live.clock(s0)}), sonrakiler 2 dk arayla`);
+    const oldHash = `abc123:${lg}:00:00/3:10@b1`, P = N.Live.parts(oldHash), { decide } = require('./live-base.js');
+    const r = decide({ cur: { league: lg, sim: 'S2' }, prevBase: { id: 'b1', league: lg + ':00:00/3:10', sim: 'S1', count: 5, data: { liveCount: 5 } }, pub: { hash: oldHash, data: { liveCount: 9 } }, parts: (h) => N.Live.parts(h) });
+    ok(P.sim === 'abc123' && P.league === lg && P.base === 'b1' && N.Live.parts('abc123:başka:2026-01-01T00:00').league === null && r.action === 'rebase' && r.base.data.liveCount === 9,
+      'Takvimli eski hash (<kural>:<salt>:<start>:<takvim>:<gap>) aynı lig sayılıyor; taban kararı onu dondurup devam ediyor');
+  }
+  /* 3c') the publish workflow plays the published checkpoint on with the PUBLISHED page's own code (tools/live-node.js loadPage):
+     the same league as the engine loaded from src/ */
+  {
+    const tmp = path.join(require('os').tmpdir(), `live-check-page-${process.pid}.html`);
+    require('child_process').execFileSync('sh', [path.join(__dirname, '..', 'build.sh'), tmp], { stdio: 'ignore' });
+    const html = fs.readFileSync(tmp, 'utf8'); fs.rmSync(tmp, { force: true });
+    const { loadPage } = require('./live-node.js'), P = loadPage(html), S = loadLive({ simHash: P.Live.sim() });
+    const t = S.Live.slot(25) + 1;
+    await P.Live.catchUp(0, () => t); await S.Live.catchUp(0, () => t); P.Live.snapshot(); S.Live.snapshot();
+    ok(P.League.data.liveCount > 20 && JSON.stringify(P.League.data.history) === JSON.stringify(S.League.data.history) && P.Live.hash() === S.Live.hash(),
+      `Yayındaki sayfanın kendi koduyla ilerletilen lig (${P.League.data.liveCount} maç), kaynaktan yüklenen motorla birebir aynı`);
+  }
+  /* 3d) every league match fits its 2-minute slot; a playoff match that runs over only delays the next few matches */
+  {
+    const long = process.argv.includes('--long'), L = loadLive(), t0 = Date.now();
+    L.CONFIG.LIVE.start = '2026-11-04T00:00'; L.Live._slots = null; L.Live._sched = null; L.Live.adopt(null);
+    const hours = long ? 48 : 6.5, log = await runUntil(L, L.Live.slot(0) + hours * 3600e3);
+    const d = L.League.data, lg = Math.max(...log.filter(x => !x.cup).map(x => x.dur)), cup = Math.max(...log.filter(x => x.cup).map(x => x.dur), 0);
+    const lateness = log.map(x => x.start - x.slot), worst = Math.max(...lateness);
+    const lateLeague = log.filter((x, i) => !x.cup && lateness[i] > 0).length, n = log.length;
+    ok(sane(log, L.CONFIG.LIVE.gap) && lg < 120 - L.CONFIG.LIVE.gap && worst < 4 * 60e3 && log.some(x => x.cup) && (!long || (n === 48 * 30 && d.season >= 9)),
+      `${hours} saat: ${n} maç${long ? `, ${d.season - 1} sezon bitti` : ''} · en uzun lig maçı ${lg.toFixed(0)} sn (< 2 dk), en uzun eleme maçı ${cup.toFixed(0)} sn · en büyük gecikme ${Math.round(worst / 1000)} sn, geciken lig maçı ${lateLeague} (${((Date.now() - t0) / 1000).toFixed(0)} sn'de hesaplandı)`);
   }
   process.exit(fail ? 1 : 0);
 })();

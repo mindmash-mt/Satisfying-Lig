@@ -31,9 +31,9 @@ const START_DELAY = 4;              // minutes between the deploy and the first 
    Döner: { action: 'keep' | 'recover' | 'new', start, why, legacy } */
 function decide({ cfg, prev, pub, now, manual }) {
   if (prev && prev.salt === cfg.salt && prev.start) return { action: 'keep', start: prev, why: `lig ${prev.start}'te başladı; aynen taşınıyor` };
-  /* league id in a state's hash: <sim>:<salt>:<start>:<bands>:<gap>[@base] */
+  /* league id in a state's hash: <sim>:<salt>:<start>[@base] (older: <sim>:<salt>:<start>:<bands>:<gap>[@base]) */
   const id = pub && typeof pub.hash === 'string' ? pub.hash.split('@')[0] : '';
-  const m = id.match(/^[^:]*:([^:]+):(\d{4}-\d\d-\d\dT\d\d:\d\d|\d{4}-\d\d-\d\d):/);
+  const m = id.match(/^[^:]*:([^:]+):(\d{4}-\d\d-\d\dT\d\d:\d\d|\d{4}-\d\d-\d\d)(?::|$)/);
   if (m && m[1] === cfg.salt) {
     const legacy = prev && prev.legacy ? prev.legacy : null;
     return { action: 'recover', start: { salt: cfg.salt, start: m[2], legacy }, why: `live-start.json yok; başlangıç (${m[2]}) yayındaki checkpoint'ten geri okundu` };

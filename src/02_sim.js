@@ -60,6 +60,8 @@ class Game {
        (then a golden goal for at most CONFIG.GOLDEN_TIME seconds, then penalties). clock = screen seconds played. */
     this.timed = o.matchTime > 0 && o.teams.length === 2; this.matchTime = this.timed ? o.matchTime : 0;
     this.knockout = !!o.knockout; this.clock = 0; this.extra = false; this.pens = null; this.draw = false;
+    this.extraStart = 0;         // clock when the golden goal began
+    this.added = 0;              // clock when the running added time began (0: none)
     if (this.timed) this.cx = CONFIG.FINAL_CX;
     this.slowmo = null; this.slowmoCd = 0;
     this.spawnBlock = 0;
@@ -104,7 +106,14 @@ class Game {
   /* final duel: scores start at 0–0 and the first team to CONFIG.FINAL_GOALS goals wins (lives = goals still allowed) */
   startDuelScore() { for (const i of this.activeTeams()) { const T = this.teams[i]; T.lives = this.timed ? Infinity : CONFIG.FINAL_GOALS; T.score = 0; } }
   /* timed match: seconds left on the clock (the golden goal has its own clock) */
-  timeLeft() { return this.extra ? Math.max(0, this.matchTime + CONFIG.GOLDEN_TIME - this.clock) : Math.max(0, this.matchTime - this.clock); }
+  timeLeft() { return this.extra ? Math.max(0, this.extraStart + CONFIG.GOLDEN_TIME - this.clock) : Math.max(0, this.matchTime - this.clock); }
+  /* added time: the ball is in a goal's half and moving towards that goal — up / down only (vy), sideways movement does not count */
+  attacking() {
+    const b = this.balls.find(x => x.state === 'live');
+    if (!b) return false;                                     // in the net / about to respawn: nothing to wait for
+    const mid = this.rectCy();
+    return (b.vy < 0 && b.y < mid) || (b.vy > 0 && b.y > mid);
+  }
   activeTeams() { const a = []; for (const T of this.teams) if (!T.eliminated) a.push(T.i); return a; }
   liveBalls() { return this.balls.filter(b => b.state === 'live'); }
 
@@ -738,12 +747,19 @@ class Game {
   }
   /* timed match: full time (the score decides; level → draw, or golden goal in a knockout match), end of the golden goal → penalties */
   checkClock() {
-    const [A, B] = this.teams;
-    if (!this.extra && this.clock >= this.matchTime) {
+    const [A, B] = this.teams, end = this.extra ? this.extraStart + CONFIG.GOLDEN_TIME : this.matchTime;
+    if (this.clock < end) return;
+    /* time is up, but the ball is on its way to a goal: added time until it turns back (or goes in), at most ADDED_MAX seconds */
+    if (this.attacking() && this.clock < end + CONFIG.ADDED_MAX) {
+      if (!this.added) { this.added = this.clock; this.emit('addedTime', {}); }
+      return;
+    }
+    this.added = 0;
+    if (!this.extra) {
       if (A.score !== B.score) this.finish(A.score > B.score ? 0 : 1);
       else if (!this.knockout) { this.draw = true; this.finish(-1); }
-      else { this.extra = true; this.emit('goldenGoal', {}); }
-    } else if (this.extra && this.clock >= this.matchTime + CONFIG.GOLDEN_TIME) this.startPens();
+      else { this.extra = true; this.extraStart = this.clock; this.emit('goldenGoal', {}); }
+    } else this.startPens();
   }
   /* penalty shoot-out: drawn at once from the match's RNG (5 each, then sudden death), shown one kick every PEN_STEP seconds */
   startPens() {
