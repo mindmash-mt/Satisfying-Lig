@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /*
   Terminal denge testi — fizik/oyun mantığını (src/01_core.js + src/02_sim.js) çizimsiz çalıştırır.
-  Kullanım:  node tools/balance.js [can] [maç sayısı]
-  Örnek:     node tools/balance.js 1 200
-  Her maç bir grup maçıdır (CONFIG.GROUP_SIZE = 6 takım).
-  Ayar denemek için: CFG='{"BALL_SPEED":650,"WALL_ACCEL":0.08}' node tools/balance.js
+  Her maç bir 1'e 1 maçtır (CONFIG.MATCH_TIME saniye; ilk takım ev sahibi, üst kale).
+  Kullanım:  node tools/balance.js [maç sayısı] [--eleme]     (--eleme: berabere biterse altın gol + penaltı)
+  Örnek:     node tools/balance.js 400
+  Ayar denemek için: CFG='{"BALL_SPEED":650,"FINAL_GOAL_FRAC":0.5}' node tools/balance.js
 */
 const fs = require('fs'), path = require('path');
 const src = (f) => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8');
@@ -14,27 +14,31 @@ new Function('module', src('01_core.js') + '\n' + src('02_sim.js') +
 const { CONFIG, DEFAULT_TEAMS, Game, RNG, DT, THEME_IDS } = m.exports;
 if (process.env.CFG) Object.assign(CONFIG, JSON.parse(process.env.CFG));
 
-const [livesArg = '1', countArg = '100'] = process.argv.slice(2);
-const mode = 'arena', n = CONFIG.GROUP_SIZE, lives = +livesArg, N = +countArg;
+const N = +(process.argv.find(a => /^\d+$/.test(a)) || 200), knockout = process.argv.includes('--eleme');
 const teamsAll = DEFAULT_TEAMS.map((t, i) => ({ id: 't' + (i + 1), ...t }));
-const run = (opts) => { const g = new Game(opts); while (!g.over) g.step(DT); return g.getResult(); };
-
-const durs = [], slot = Array.from({ length: n }, () => Array(n).fill(0));
-let goals = 0, saves = 0, own = 0, ot = 0, esc = 0;
+/* the live player's loop: 60 fps frames, physics at the game's time scale → screen seconds */
+const run = (opts) => {
+  const g = new Game(opts); let acc = 0, n = 0;
+  while (!g.over) { acc += g.timeScale() / 60; while (acc >= DT && !g.over) { g.step(DT); acc -= DT; } n++; }
+  return { r: g.getResult(), screen: n / 60 };
+};
+let goals = 0, saves = 0, own = 0, draws = 0, home = 0, golden = 0, pens = 0, esc = 0;
+const scr = [], hist = {};
 for (let i = 0; i < N; i++) {
   const seed = 1000 + i * 7919, rng = new RNG(seed ^ 0x51ED27);
-  const teams = rng.shuffle(teamsAll).slice(0, n);
-  const theme = rng.pick(THEME_IDS);
-  const r = run({ mode, teams, seed, theme, lives, speedMult: 1, powerups: false });
-  durs.push(r.duration); goals += r.goals; saves += r.saves; own += r.ownGoals; esc += r.escapes; if (r.overtime) ot++;
-  for (const t of r.teams) slot[t.slot][t.place - 1]++;
+  const teams = rng.shuffle(teamsAll).slice(0, 2), theme = rng.pick(THEME_IDS);
+  const { r, screen } = run({ mode: 'match', teams, seed, theme, lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout });
+  goals += r.goals; saves += r.saves; own += r.ownGoals; esc += r.escapes; scr.push(screen);
+  if (r.draw) draws++; else if (r.winner === r.teams[0].id) home++;
+  if (r.golden) golden++; if (r.pens) pens++;
+  const k = r.teams.map(t => t.score).sort((a, b) => b - a).join('-'); hist[k] = (hist[k] || 0) + 1;
 }
-durs.sort((a, b) => a - b);
-const avg = durs.reduce((a, b) => a + b, 0) / N, pct = (x) => Math.round((x / N) * 100) + '%';
-console.log(`${N} grup maçı · ${n} takım · ${lives} can`);
-console.log(`Süre: ort ${avg.toFixed(1)} sn · medyan ${durs[N >> 1].toFixed(1)} · min ${durs[0].toFixed(1)} · maks ${durs[N - 1].toFixed(1)} (hedef ort. 25–40 sn ${avg >= 25 && avg <= 40 ? '✅' : '⚠️'})`);
-console.log(`Uzatma: ${pct(ot)} · Ort. gol: ${(goals / N).toFixed(1)} · Ort. kurtarış: ${(saves / N).toFixed(1)} · Kendi kalesine: ${goals ? Math.round((own / goals) * 100) : 0}% · Duvardan kaçan top: ${esc}`);
-console.log('Kale pozisyonuna göre sıra dağılımı (satırlar ~eşitse adil):');
-slot.forEach((row, i) => console.log(`  kale #${i + 1}: ` + row.map(pct).join(' ')));
-const o = { mode, teams: teamsAll.slice(0, n), seed: 48213, theme: 'classic', lives, speedMult: 1, powerups: false };
+scr.sort((a, b) => a - b);
+const pct = (x) => Math.round((x / N) * 1000) / 10 + '%';
+console.log(`${N} maç · 1'e 1 · ${CONFIG.MATCH_TIME} sn${knockout ? ' · eleme (altın gol + penaltı)' : ''}`);
+console.log(`Ort. gol: ${(goals / N).toFixed(2)} · Beraberlik: ${pct(draws)} · Ev sahibi (üst kale) galibiyeti: ${pct(home)} · Deplasman: ${pct(N - draws - home)}`);
+console.log(`Ekran süresi (maç): min ${scr[0].toFixed(1)} · medyan ${scr[N >> 1].toFixed(1)} · maks ${scr[N - 1].toFixed(1)} sn${knockout ? ` · altın gole giden ${pct(golden)} · penaltıya giden ${pct(pens)}` : ''}`);
+console.log(`Ort. kurtarış: ${(saves / N).toFixed(1)} · Kendi kalesine: ${goals ? Math.round((own / goals) * 100) : 0}% · Duvardan kaçan top: ${esc}`);
+console.log('En sık skorlar: ' + Object.entries(hist).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k} (${pct(v)})`).join(' · '));
+const o = { mode: 'match', teams: teamsAll.slice(0, 2), seed: 48213, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout: true };
 console.log('Determinizm (aynı seed iki kez):', JSON.stringify(run(o)) === JSON.stringify(run(o)) ? 'aynı ✅' : 'FARKLI ❌');

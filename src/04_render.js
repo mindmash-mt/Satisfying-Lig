@@ -593,9 +593,61 @@ const HUD = {
     this.duelA = (this.duelA || 0) + (want - (this.duelA || 0)) * 0.18;
     if (this.duelA > 0.02) { ctx.save(); ctx.globalAlpha = this.duelA; this.duelScore(ctx, g, SX); ctx.restore(); }
     this.announcement(ctx, 394);
+    if (g.timed) { this.clock(ctx, g, SX); if (g.pens) this.penalties(ctx, g, SX); }
+  },
+  /* 1v1 match clock under the pitch (never covered by a text): time played, a progress bar; last 10 s red; golden goal gold */
+  clock(ctx, g, SX) {
+    const y = CONFIG.CY + CONFIG.FINAL_DY + CONFIG.FINAL_H / 2 + CONFIG.NET_DEPTH_RECT + 128;   // below the goal tally (mini balls) of the bottom club
+    const T = g.matchTime, gold = g.extra || g.pens, left = g.timeLeft();
+    const shown = g.pens ? 'PENALTIES' : g.winnerSet || g.over ? 'FULL TIME' : gold ? `GOLDEN GOAL · ${Math.ceil(left)}` : (() => {
+      const t = Math.min(T, Math.floor(g.clock)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; })();
+    const hot = !gold && !g.winnerSet && left <= 10;
+    const pulse = hot ? 1 + 0.12 * Math.max(0, 1 - (Math.ceil(left) - left) * 4) : 1;
+    const col = gold ? '#FFD54F' : hot ? '#FF5252' : '#ffffff';
+    const W = 420, H = 92;
+    ctx.save();
+    roundRect(ctx, SX - W / 2, y - H / 2, W, H, 26);
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = gold ? 'rgba(255,213,79,0.8)' : hot ? 'rgba(255,82,82,0.8)' : 'rgba(255,255,255,0.18)'; ctx.stroke();
+    /* progress of the regular time (golden goal: its own 30 s) */
+    const frac = g.pens ? 1 : gold ? clamp01((g.clock - T) / CONFIG.GOLDEN_TIME) : clamp01(g.clock / T);
+    roundRect(ctx, SX - W / 2 + 18, y + H / 2 - 16, (W - 36), 6, 3); ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
+    if (frac > 0) { roundRect(ctx, SX - W / 2 + 18, y + H / 2 - 16, (W - 36) * frac, 6, 3); ctx.fillStyle = col; ctx.fill(); }
+    ctx.translate(SX, y - 6); ctx.scale(pulse, pulse);
+    let fs = 66; ctx.font = `${fs}px ${FONT_BIG}`;
+    while (ctx.measureText(shown).width > W - 40 && fs > 30) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
+    outlinedText(ctx, shown, 0, 0, `${fs}px ${FONT_BIG}`, col, null, 0);
+    ctx.restore();
+  },
+  /* penalty shoot-out over the (empty) pitch: one row per club, a circle per kick (goal ● green, miss ✕ red) */
+  penalties(ctx, g, SX) {
+    const P = g.pens, cy = CONFIG.CY + CONFIG.FINAL_DY, W = 760, H = 330;
+    const k = easeOutBack(P.t / 0.4, 2);
+    if (k <= 0.01) return;
+    ctx.save(); ctx.translate(SX, cy); ctx.scale(k, k);
+    roundRect(ctx, -W / 2, -H / 2, W, H, 30); ctx.fillStyle = 'rgba(6,10,18,0.9)'; ctx.fill();
+    ctx.lineWidth = 4; ctx.strokeStyle = '#FFD54F'; ctx.stroke();
+    outlinedText(ctx, 'PENALTIES', 0, -H / 2 + 46, `62px ${FONT_BIG}`, '#FFD54F', null, 0);
+    const shown = P.kicks.slice(0, P.shown);
+    g.teams.forEach((T, i) => {
+      const y = -20 + i * 110, mine = shown.filter(x => x.team === i), all = P.kicks.filter(x => x.team === i).length;
+      ctx.beginPath(); ctx.arc(-W / 2 + 50, y, 16, 0, TAU); ctx.fillStyle = T.c1; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = T.c2; ctx.stroke();
+      outlinedText(ctx, T.code, -W / 2 + 80, y + 3, `56px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
+      const n = Math.max(5, all);
+      const r = n > 7 ? 15 : 20, step = Math.min(56, 380 / n);
+      for (let j = 0; j < n; j++) {
+        const x = -W / 2 + 200 + j * step + r, q = mine[j];
+        ctx.beginPath(); ctx.arc(x, y, r, 0, TAU);
+        if (!q) { ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.stroke(); continue; }
+        ctx.fillStyle = q.goal ? '#22C55E' : '#FF4D4D'; ctx.fill();
+        outlinedText(ctx, q.goal ? '●' : '✕', x, y + 1, `600 ${Math.round(r * 1.1)}px ${FONT_UI}`, '#ffffff', null, 0);
+      }
+      outlinedText(ctx, String(T.pen), W / 2 - 50, y + 3, `76px ${FONT_BIG}`, g.winnerSet && g.winner === i ? '#FFD54F' : '#ffffff', null, 0);
+    });
+    ctx.restore();
   },
 
-  /* final duel score (first to CONFIG.FINAL_GOALS) above the pitch: top-goal team on the left */
+  /* duel score above the pitch: top-goal team (in a 1v1 match: the home club) on the left */
   duelScore(ctx, g, SX) {
     const [ia, ib] = g.rectTeams || [], A = g.teams[ia], B = g.teams[ib];
     if (!A || !B) return;
@@ -613,8 +665,8 @@ const HUD = {
     ctx.save(); ctx.translate(SX - 70, cy + 4); ctx.scale(sa, sa); outlinedText(ctx, String(A.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
     outlinedText(ctx, '–', SX, cy + 2, `80px ${FONT_BIG}`, 'rgba(255,255,255,0.7)', null, 0);
     ctx.save(); ctx.translate(SX + 70, cy + 4); ctx.scale(sb, sb); outlinedText(ctx, String(B.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
-    /* the longer final pitch reaches up to the scoreboard, so the rule line sits under the pitch */
-    outlinedText(ctx, `FIRST TO ${CONFIG.FINAL_GOALS} WINS`, SX, CONFIG.CY + CONFIG.FINAL_DY + CONFIG.FINAL_H / 2 + CONFIG.NET_DEPTH_RECT + 40, `600 26px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
+    /* the longer final pitch reaches up to the scoreboard, so the rule line sits under the pitch (a timed match has its clock there) */
+    if (!g.timed) outlinedText(ctx, `FIRST TO ${CONFIG.FINAL_GOALS} WINS`, SX, CONFIG.CY + CONFIG.FINAL_DY + CONFIG.FINAL_H / 2 + CONFIG.NET_DEPTH_RECT + 40, `600 26px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
     ctx.restore();
   },
 
@@ -695,8 +747,8 @@ const LeagueTable = {
   GREEN: '#2EE66B', RED: '#FF4D4D',
   /* column x offsets inside a row (the table stays clear of the right edge, where Reels / TikTok put their buttons) */
   COL: { rank: 44, arrow: 80, dot: 110, name: 134, nameW: 200, p: 362, gd: 414, match: 505, pts: 604, form: 660, pillW: 64, pillGap: 8 },
-  /* last-matches pill colours by place: 1st gold, 2nd silver, 3rd bronze, 4th neutral, 5th+ red (no points) */
-  PILL: [null, ['#FFD54F', '#2a2100'], ['#CFD8DC', '#1c2328'], ['#D9915A', '#2b1606'], ['rgba(255,255,255,0.22)', '#ffffff'], ['rgba(255,77,77,0.42)', '#ffffff']],
+  /* last results: W green, D grey, L red */
+  PILL: { W: ['#22C55E', '#04210f'], D: ['rgba(255,255,255,0.28)', '#ffffff'], L: ['rgba(255,77,77,0.55)', '#ffffff'] },
   pill(ctx, x, cy, w, h, place, k) {
     if (k <= 0.01) return;
     ctx.save(); ctx.translate(x + w / 2, cy); ctx.scale(k, k);
@@ -705,17 +757,17 @@ const LeagueTable = {
       ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.stroke();
       outlinedText(ctx, '–', 0, 1, `${Math.round(h * 0.7)}px ${FONT_BIG}`, 'rgba(255,255,255,0.35)', null, 0);
     } else {
-      const [bg, fg] = this.PILL[Math.min(place, 5)];
+      const [bg, fg] = this.PILL[place] || this.PILL.D;
       ctx.fillStyle = bg; ctx.fill();
-      outlinedText(ctx, ordinal(place), 0, 2, `${Math.round(h * 0.74)}px ${FONT_BIG}`, fg, null, 0);
+      outlinedText(ctx, place, 0, 2, `${Math.round(h * 0.74)}px ${FONT_BIG}`, fg, null, 0);
     }
     ctx.restore();
   },
-  /* the last FORM_COUNT places, newest on the right; after the match the old pills slide left and the new place pops in */
+  /* the last FORM_COUNT results, newest on the right; after the match the old pills slide left and the new result pops in */
   form(ctx, x, cy, h, r, tt, post) {
     const C = this.COL, N = CONFIG.FORM_COUNT, slotX = (i) => x + C.form + i * (C.pillW + C.pillGap);
     const oldF = r.oldForm || [], newF = r.newForm || oldF;
-    const changed = post && r.place && newF.length && newF !== oldF;
+    const changed = post && r.res && newF.length && newF !== oldF;
     const p = changed ? easeInOutCubic((tt - 1.9) / 0.4) : 0;
     for (let i = 0; i < N; i++) this.pill(ctx, slotX(i), cy, C.pillW, h, 0, 1);   // empty slots underneath
     if (!changed) { oldF.forEach((pl, j) => this.pill(ctx, slotX(N - oldF.length + j), cy, C.pillW, h, pl, 1)); return; }
@@ -729,7 +781,7 @@ const LeagueTable = {
     });
     this.pill(ctx, slotX(N - 1), cy, C.pillW, h, newF[newF.length - 1], easeOutBack((tt - 2.2) / 0.35, 2.6));
   },
-  /* rows: see App.buildIntro / App.onOver. st: { tt: seconds since this screen started, post: animate the match result, alpha } */
+  /* rows: see App.onOver / LiveScreen. st: { tt: seconds since this screen started, post: animate the match result, alpha } */
   draw(ctx, rows, title, sub, st) {
     const SX = 510, tt = st.tt, post = st.post;
     const n = rows.length, X0 = 70, W = 880, top = 345;
@@ -748,7 +800,6 @@ const LeagueTable = {
     if (post) outlinedText(ctx, 'MATCH', X0 + C.match, hy, head, hc, null, 0);
     outlinedText(ctx, 'PTS', X0 + C.pts, hy, head, hc, null, 0);
     if (CONFIG.FORM_COUNT > 0) outlinedText(ctx, `LAST ${CONFIG.FORM_COUNT}`, X0 + C.form + formW / 2, hy, head, hc, null, 0);
-    const maxPlace = Math.max(1, ...rows.map(r => r.place || 0));
     const countP = post ? easeOutCubic((tt - 1.9) / 0.8) : 1;
     const moveP = post ? easeInOutCubic((tt - 3.1) / 1.0) : 0;
     const order = rows.slice().sort((a, b) => (a.today - b.today) || (b.newRank - a.newRank));   // movers are drawn on top
@@ -782,14 +833,12 @@ const LeagueTable = {
       outlinedText(ctx, String(r.played - (post && r.dPlayed && countP < 0.5 ? r.dPlayed : 0)), x + C.p, cy + 1, small, dim, null, 0);
       const gd = Math.round(lerp(r.oldGd, r.newGd, countP));
       outlinedText(ctx, (gd > 0 ? '+' : '') + gd, x + C.gd, cy + 1, small, dim, null, 0);
-      /* this match: place + "+pts" (green) / "+0" (red) */
-      if (post && r.place) {
-        const start = 1.0 + (maxPlace - r.place) * 0.1;
-        const k = easeOutBack((tt - start) / 0.35, 2.6);
+      /* this match: result (W / D / L) + "+pts" (green) / "+0" (red) */
+      if (post && r.res) {
+        const k = easeOutBack((tt - (r.res === 'L' ? 1.1 : 1.0)) / 0.35, 2.6);
         if (k > 0.01) {
           ctx.save(); ctx.translate(x + C.match, cy); ctx.scale(k, k);
-          const win = r.place === 1;
-          outlinedText(ctx, ordinal(r.place), -36, 1, `${Math.round(rh * 0.5)}px ${FONT_BIG}`, win ? '#FFD54F' : '#ffffff', 'rgba(0,0,0,0.6)', 5, 'center');
+          this.pill(ctx, -36 - 24, 0, 48, Math.round(Math.min(46, rh * 0.56)), r.res, 1);
           if (r.delta !== null) {
             const col = r.delta > 0 ? this.GREEN : this.RED;
             outlinedText(ctx, `+${r.delta}`, 38, 1, `${Math.round(rh * 0.62)}px ${FONT_BIG}`, col, 'rgba(0,0,0,0.75)', 6, 'center');
@@ -807,7 +856,7 @@ const LeagueTable = {
 };
 
 /* =====================================================================
-   INTRO SCREEN  (before the match: today's group matches — played ones with results, then fixtures — and it fades into the match)
+   INTRO SCREEN  (before the match: the week's 1v1 matches — played ones with scores, then fixtures — and it fades into the match)
    ===================================================================== */
 const IntroScreen = {
   draw(ctx, intro, t) {
@@ -819,50 +868,50 @@ const IntroScreen = {
     this.matches(ctx, intro, t);
     ctx.restore();
   },
-  /* played matches with their results, the match that is about to start, and later fixtures */
+  /* the week's (or the playoff round's) 1v1 matches, one row each: played ones with the score, the one about to start, the rest.
+     A match: { label, status: 'done' | 'now' | 'later', hi, a, b (clubs, home first), sa, sb (goals), pa, pb (penalties), win: 'a' | 'b' | '', gg } */
   matches(ctx, intro, tt) {
-    const SX = 510, X0 = 70, W = 880, list = intro.matches, n = list.length;
+    const SX = 510, X0 = 70, W = 880, list = intro.matches.filter(m => m.a && m.b), n = list.length;
     ctx.save();
     ctx.globalAlpha *= clamp01(tt / 0.25);
     const ts = easeOutBack(tt / 0.4, 2);
     ctx.save(); ctx.translate(SX, 215); ctx.scale(ts, ts);
-    outlinedText(ctx, intro.heading || (list.length > 1 ? "TODAY'S MATCHES" : "TODAY'S MATCH"), 0, 0, `104px ${FONT_BIG}`, '#ffffff', null, 0);
+    outlinedText(ctx, intro.heading || 'MATCHES', 0, 0, `104px ${FONT_BIG}`, '#ffffff', null, 0);
     ctx.restore();
     outlinedText(ctx, intro.sub, SX, 282, `600 30px ${FONT_UI}`, 'rgba(255,255,255,0.65)', null, 0);
-    const top = 345, avail = 1300, gap = 26;
-    const maxRows = Math.max(...list.map(m => Math.ceil(m.teams.length / 2)), 1);
-    const ch = Math.min(70 + maxRows * 72 + 16, (avail - gap * (n - 1)) / n);
-    const y0 = top + Math.max(0, (avail - (n * ch + (n - 1) * gap)) / 2);
+    const top = 345, avail = 1300, gap = 14;
+    const rh = Math.min(170, (avail - gap * Math.max(0, n - 1)) / Math.max(1, n));
+    const y0 = top + Math.max(0, (avail - (n * rh + (n - 1) * gap)) / 2);
+    const later = intro.later || 'COMING UP';
     list.forEach((m, i) => {
-      const k = easeOutBack((tt - 0.08 - 0.14 * i) / 0.4, 2);
+      const k = easeOutBack((tt - 0.08 - 0.07 * i) / 0.4, 2);
       if (k <= 0.01) return;
-      const y = y0 + i * (ch + gap), now = m.status === 'now', done = m.status === 'done';
-      ctx.save(); ctx.translate(X0 + W / 2, y + ch / 2); ctx.scale(k, k); ctx.translate(-(X0 + W / 2), -(y + ch / 2));
-      roundRect(ctx, X0, y, W, ch, 28);
+      const y = y0 + i * (rh + gap), now = m.status === 'now', done = m.status === 'done', cy = y + rh * 0.6;
+      ctx.save(); ctx.translate(X0 + W / 2, y + rh / 2); ctx.scale(k, k); ctx.translate(-(X0 + W / 2), -(y + rh / 2));
+      roundRect(ctx, X0, y, W, rh, 24);
       ctx.fillStyle = now ? 'rgba(0,200,83,0.15)' : 'rgba(255,255,255,0.07)'; ctx.fill();
       if (now || m.hi) { ctx.lineWidth = 4; ctx.strokeStyle = m.hi ? '#FFD54F' : '#00E676'; ctx.stroke(); }
-      outlinedText(ctx, m.label, X0 + 30, y + 38, `46px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
-      const badge = done ? 'FULL TIME' : now ? 'PLAYING NOW' : (intro.later || 'LATER TODAY');
-      outlinedText(ctx, badge, X0 + W - 30, y + 38, `600 24px ${FONT_UI}`, now ? '#00E676' : 'rgba(255,255,255,0.55)', null, 0, 'right');
-      const rows = Math.ceil(m.teams.length / 2), rowH = Math.min(72, (ch - 70 - 12) / rows);
-      m.teams.forEach((t, j) => {
-        const cx = X0 + 24 + (j % 2) * 432, cy = y + 70 + Math.floor(j / 2) * rowH + rowH / 2;
-        roundRect(ctx, cx - 8, cy - rowH / 2 + 3, 416, rowH - 6, 16);
-        ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fill();
-        let nx = cx + 16;
-        const score = t.txt !== undefined;      // a 1v1 playoff match: goals instead of places and points
-        if (done) {
-          outlinedText(ctx, t.place === 1 ? '🏆' : score ? '–' : ordinal(t.place), cx + 38, cy + 2, t.place === 1 ? `30px ${FONT_UI}` : `34px ${FONT_BIG}`, t.place === 1 ? '#fff' : 'rgba(255,255,255,0.8)', null, 0);
-          nx = cx + 82;
-        }
-        ctx.beginPath(); ctx.arc(nx + 12, cy, 13, 0, TAU); ctx.fillStyle = t.c1; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = t.c2; ctx.stroke();
-        const maxW = (done ? 330 : 396) - (nx + 34 - cx);
-        let fs = Math.min(40, Math.round(rowH * 0.6)); ctx.font = `${fs}px ${FONT_BIG}`;
-        while (ctx.measureText(upTR(t.name)).width > maxW && fs > 20) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
-        outlinedText(ctx, upTR(t.name), nx + 34, cy + 2, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
-        if (done && score) outlinedText(ctx, t.txt, cx + 400 - 8, cy + 2, `44px ${FONT_BIG}`, t.place === 1 ? '#FFD54F' : '#ffffff', 'rgba(0,0,0,0.6)', 5, 'right');
-        else if (done) outlinedText(ctx, `+${t.pts}`, cx + 400 - 8, cy + 2, `40px ${FONT_BIG}`, t.pts > 0 ? LeagueTable.GREEN : LeagueTable.RED, 'rgba(0,0,0,0.6)', 5, 'right');
-      });
+      const small = `600 ${Math.round(Math.min(22, rh * 0.18))}px ${FONT_UI}`;
+      outlinedText(ctx, m.label, X0 + 26, y + rh * 0.2, small, 'rgba(255,255,255,0.55)', null, 0, 'left');
+      const badge = done ? (m.pa != null ? 'PENALTIES' : m.gg ? 'GOLDEN GOAL' : 'FULL TIME') : now ? 'PLAYING NOW' : later;
+      outlinedText(ctx, badge, X0 + W - 26, y + rh * 0.2, small, now ? '#00E676' : 'rgba(255,255,255,0.55)', null, 0, 'right');
+      /* home ● NAME   score   NAME ● away */
+      const fsMax = Math.min(46, Math.round(rh * 0.42)), boxW = 150, nameW = (W - boxW) / 2 - 70;
+      const side = (t, right, dim) => {
+        const dx = right ? X0 + W - 34 : X0 + 34;
+        ctx.beginPath(); ctx.arc(dx, cy, Math.min(15, rh * 0.12), 0, TAU); ctx.fillStyle = t.c1; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = t.c2; ctx.stroke();
+        let fs = fsMax; ctx.font = `${fs}px ${FONT_BIG}`;
+        while (ctx.measureText(upTR(t.name)).width > nameW && fs > 18) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
+        outlinedText(ctx, upTR(t.name), right ? dx - 26 : dx + 26, cy + 2, `${fs}px ${FONT_BIG}`, dim ? 'rgba(255,255,255,0.55)' : '#ffffff', null, 0, right ? 'right' : 'left');
+      };
+      side(m.a, false, done && m.win === 'b'); side(m.b, true, done && m.win === 'a');
+      if (done) {
+        const sf = `${Math.min(60, Math.round(rh * 0.5))}px ${FONT_BIG}`;
+        outlinedText(ctx, String(m.sa), X0 + W / 2 - 34, cy + 3, sf, m.win === 'a' ? '#FFD54F' : '#ffffff', 'rgba(0,0,0,0.6)', 5);
+        outlinedText(ctx, '–', X0 + W / 2, cy + 1, sf, 'rgba(255,255,255,0.6)', null, 0);
+        outlinedText(ctx, String(m.sb), X0 + W / 2 + 34, cy + 3, sf, m.win === 'b' ? '#FFD54F' : '#ffffff', 'rgba(0,0,0,0.6)', 5);
+        if (m.pa != null) outlinedText(ctx, `(${m.pa}–${m.pb} P)`, X0 + W / 2, cy + rh * 0.32, `600 ${Math.round(Math.min(20, rh * 0.15))}px ${FONT_UI}`, 'rgba(255,255,255,0.7)', null, 0);
+      } else outlinedText(ctx, 'VS', X0 + W / 2, cy + 2, `${Math.min(44, Math.round(rh * 0.36))}px ${FONT_BIG}`, now ? '#00E676' : 'rgba(255,255,255,0.45)', null, 0);
       ctx.restore();
     });
     ctx.restore();
@@ -927,7 +976,8 @@ const EndScreen = {
       return;
     }
     const se = e.seasonEnd;
-    LeagueTable.draw(ctx, e.rows, 'LEAGUE TABLE', se ? `🏆 ${upTR(se.champion.name)} · SEASON ${se.season} CHAMPIONS` : 'AFTER ' + e.title, { tt: et, post: true, alpha: clamp01(et / 0.3) });
+    const sc = e.score ? `FULL TIME · ${upTR(e.score.a.name)} ${e.score.sa}–${e.score.sb} ${upTR(e.score.b.name)}` : 'AFTER ' + e.title;
+    LeagueTable.draw(ctx, e.rows, 'LEAGUE TABLE', se ? `🏆 ${upTR(se.champion.name)} · SEASON ${se.season} CHAMPIONS` : sc, { tt: et, post: true, alpha: clamp01(et / 0.3) });
     for (const p of FX.endParts) {
       if (et > 2.3) break;
       ctx.save(); ctx.globalAlpha = clamp01((2.3 - et) / 0.3); ctx.translate(p.x, p.y); ctx.rotate(p.rot);

@@ -17,6 +17,12 @@ OUT="${1:-index.html}"
   else
     echo 'const BUILD_BASE = null;'
   fi
+  # LIVE_START_FILE=<file>: the live league's start chosen at its first deploy + the old league's archive (tools/live-start.js)
+  if [ -n "${LIVE_START_FILE:-}" ] && [ -f "$LIVE_START_FILE" ]; then
+    printf 'const BUILD_START = %s;\n' "$(sed 's#</#<\\/#g' "$LIVE_START_FILE")"
+  else
+    echo 'const BUILD_START = null;'
+  fi
   for f in src/01_core.js src/02_sim.js src/03_fx_audio.js src/04_render.js src/05_app.js src/06_offline.js src/07_live.js; do cat "$f"; echo; done
   printf '</script>\n</body>\n</html>\n'
 } > "$OUT"
