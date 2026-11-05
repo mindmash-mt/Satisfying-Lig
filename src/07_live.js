@@ -8,7 +8,7 @@
      • the match that is on is fast-forwarded to "now" and then plays in real time,
      • between matches: the league table and a countdown to the next kick-off.
    Timetable (CONFIG.LIVE.bands, Istanbul time): a 1v1 match every 3 minutes, day and night (480 a day). A slot:
-   ~5 s this week's matches, the 90 s match with a 3 s half-time break, ~9 s the animated league table, then the table
+   ~5 s this week's matches, the 90 s match with a 6 s half-time break, ~9 s the animated league table, then the table
    and a countdown. A match starts at its slot, or GAP seconds after the previous match ended if that one ran over (a
    league match is ~108 s on screen, a playoff match with a golden goal and penalties at most ~2.3 min, so it does not
    happen; it can never jam anyway: the overrun is absorbed by the next slots). A match's length on screen is computed

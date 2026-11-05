@@ -146,6 +146,27 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
       ok(bad === 0 && withAdded > 10 && withAdded < n && maxAdd <= CONFIG.ADDED_MAX + 0.01,
         `Uzatma: ${n} maçın ${withAdded}'inde süre bittiğinde top kaleye gidiyordu → maç top geri dönene / gol olana kadar sürdü (en uzun +${maxAdd.toFixed(1)} sn); top kaleye giderken hiç bitmedi`);
     }
+    /* the same added time at half time: the first half never ends while the ball is on its way to a goal (at most ADDED_MAX s) */
+    {
+      let n = 0, withAdded = 0, bad = 0, maxAdd = 0;
+      for (let s = 1; s <= 150; s++) {
+        const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 6000 + s, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout: false });
+        let added = false;
+        g.onEvent = (t, d) => {
+          if (t === 'addedTime' && d.half === 1) added = true;
+          if (t === 'halfTime') {
+            const over = g.clock - CONFIG.MATCH_TIME / 2;
+            if (g.attacking() && over < CONFIG.ADDED_MAX) bad++;  // halfTime() runs after this event, the ball is still in play here
+            if (!added && over > 0.05) bad++;
+            if (added) maxAdd = Math.max(maxAdd, over);
+          }
+        };
+        while (!g.over && g.half === 1) g.step(DT);
+        n++; if (added) withAdded++;
+      }
+      ok(bad === 0 && withAdded > 10 && withAdded < n && maxAdd <= CONFIG.ADDED_MAX + 0.01,
+        `İlk yarı uzatması: ${n} maçın ${withAdded}'inde 45. sn'de top kaleye gidiyordu → ilk yarı top geri dönene / gol olana kadar sürdü (en uzun +${maxAdd.toFixed(1)} sn)`);
+    }
     /* half time: at MATCH_TIME / 2 (+ added time) a HALF_BREAK-second break with the clock stopped; the clubs change ends and the
        second half kicks off from the centre at exactly MATCH_TIME / 2 */
     {
