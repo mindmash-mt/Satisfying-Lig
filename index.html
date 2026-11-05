@@ -264,7 +264,7 @@
 </div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 <script>
-const BUILD_SIM_HASH = 'ca41b9707885';
+const BUILD_SIM_HASH = 'dd61f3d0135e';
 const BUILD_BASE = null;
 const BUILD_START = null;
 /* =====================================================================
@@ -312,7 +312,7 @@ const CONFIG = {
      scored — at most ADDED_MAX seconds. The same at half time.
      Half time at MATCH_TIME / 2: a HALF_BREAK-second break (the clock stops), the clubs change ends and walk into their new
      halves; the second half kicks off from the centre at MATCH_TIME / 2 (first-half added time does not shorten it). */
-  MATCH_TIME: 90, GOLDEN_TIME: 20, PEN_P: 0.75, PEN_STEP: 0.9, ADDED_MAX: 10, HALF_BREAK: 3,
+  MATCH_TIME: 90, GOLDEN_TIME: 20, PEN_P: 0.75, PEN_STEP: 0.9, ADDED_MAX: 10, HALF_BREAK: 6,
   GROUP_SIZE: 2,
   /* league points: win, draw, loss. A season is a single round robin: every club meets every other club once (17 weeks with
      18 clubs, 9 matches a week); a longer season repeats it with home and away swapped. */
@@ -2032,9 +2032,19 @@ const Renderer = {
     ctx.fillStyle = vis.f1; ctx.fill();
     ctx.clip();
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot);
+    /* mowing stripes: long enough to cover the whole pitch (the rect pitch is taller than the screen's middle 1400 px) and,
+       for the rotating polygon, its full diagonal */
     ctx.fillStyle = vis.f2;
-    for (let s = -12; s <= 12; s += 2) ctx.fillRect(s * 45, -700, 45, 1400);
+    for (let s = -24; s <= 24; s += 2) ctx.fillRect(s * 45, -1200, 45, 2400);
     ctx.restore();
+    /* grass grain, floodlight (lighter centre, darker edges) and a soft shadow along the walls — much lighter on a light (snow) floor */
+    const sh = lumHex(vis.f1) > 0.6 ? 0.3 : 1;
+    ctx.save(); ctx.globalAlpha *= sh; ctx.fillStyle = grassGrain(ctx); ctx.fillRect(0, 0, 1080, 1920); ctx.restore();
+    const lg = ctx.createRadialGradient(cx, cy, 120, cx, cy, 1050);
+    lg.addColorStop(0, 'rgba(255,255,255,0.08)'); lg.addColorStop(0.55, 'rgba(0,0,0,0)'); lg.addColorStop(1, `rgba(0,0,0,${0.30 * sh})`);
+    ctx.fillStyle = lg; ctx.fillRect(0, 0, 1080, 1920);
+    ctx.beginPath(); V.forEach((v, i) => (i ? ctx.lineTo(v.x, v.y) : ctx.moveTo(v.x, v.y))); ctx.closePath();
+    ctx.strokeStyle = `rgba(0,0,0,${0.22 * sh})`; ctx.lineWidth = 44; ctx.stroke();
     this.fieldLines(g, vis, geo, rot);
     if (g.themeId === 'rain') {
       for (const s of FX.splashes) {
@@ -2098,7 +2108,9 @@ const Renderer = {
       ctx.strokeRect(cx - sw / 2, s > 0 ? ey : ey - sh, sw, sh);
       const py = ey + s * bh * 0.72;
       ctx.beginPath(); ctx.arc(cx, py, 6, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx, ey + s * bh, 60, s > 0 ? 0.2 * Math.PI : 1.2 * Math.PI, s > 0 ? 0.8 * Math.PI : 1.8 * Math.PI); ctx.stroke();
+      /* penalty arc ("D"): centred on the penalty spot, only the part outside the box, meeting the box line */
+      const dR = bh * 0.28 + 44, dA = Math.acos(clamp01(bh * 0.28 / dR)), dm = s > 0 ? Math.PI / 2 : -Math.PI / 2;
+      ctx.beginPath(); ctx.arc(cx, py, dR, dm - dA, dm + dA); ctx.stroke();
       for (const sx of [x0, x0 + W]) { ctx.beginPath(); ctx.arc(sx, ey, 22, 0, TAU); ctx.stroke(); }
     }
   },
@@ -2325,11 +2337,17 @@ const Renderer = {
       if (!p.alive || T.eliminated) a = 1 - clamp01((g.t - T.elimT) / 0.6);
       if (a <= 0.01) continue;
       ctx.save(); ctx.globalAlpha *= a;
-      ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(p.x + 4, p.y + 7, R, R * 0.8, 0, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, TAU); ctx.fillStyle = T.c1; ctx.fill();
-      ctx.lineWidth = 4; ctx.strokeStyle = T.c2; ctx.stroke();
-      ctx.fillStyle = T.c2; ctx.font = `800 15px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(T.code, p.x, p.y + 1);
+      /* token: soft shadow, dark rim, shaded club colour, ring in the second colour, the code in a colour that reads on it */
+      const sg = ctx.createRadialGradient(p.x + 3, p.y + 8, R * 0.3, p.x + 3, p.y + 8, R * 1.35);
+      sg.addColorStop(0, 'rgba(0,0,0,0.45)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(p.x + 3, p.y + 8, R * 1.35, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x, p.y, R + 2.5, 0, TAU); ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
+      const fg = ctx.createRadialGradient(p.x - R * 0.35, p.y - R * 0.45, R * 0.1, p.x, p.y, R);
+      fg.addColorStop(0, mixHex(T.c1, '#ffffff', 0.35)); fg.addColorStop(1, T.c1);
+      ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, TAU); ctx.fillStyle = fg; ctx.fill();
+      ctx.lineWidth = 5; ctx.strokeStyle = T.c2; ctx.beginPath(); ctx.arc(p.x, p.y, R - 2.5, 0, TAU); ctx.stroke();
+      const tc = onColor(T.c1);
+      outlinedText(ctx, T.code, p.x, p.y + 1, `900 16px ${FONT_UI}`, tc.fill, tc.stroke, tc.lw);
       if (p.captain) {                                   // captain: gold armband badge with a "C"
         const bx = p.x + R * 0.72, by = p.y - R * 0.72;
         ctx.beginPath(); ctx.arc(bx, by, 11, 0, TAU); ctx.fillStyle = '#FFD54F'; ctx.fill();
@@ -2452,6 +2470,22 @@ const Renderer = {
 };
 
 /* ---------- drawing helpers ---------- */
+/* colour helpers for the team tokens / score chips: mix a hex colour with another, perceived brightness 0..1 */
+function mixHex(h, w, t) { const [r, g, b] = hexToRgb(h), [r2, g2, b2] = hexToRgb(w); return `rgb(${Math.round(r + (r2 - r) * t)},${Math.round(g + (g2 - g) * t)},${Math.round(b + (b2 - b) * t)})`; }
+function lumHex(h) { const [r, g, b] = hexToRgb(h); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; }
+/* text colour that reads on a club colour: dark on light colours, white (with a dark outline) on the others */
+const onColor = (c) => lumHex(c) > 0.62 ? { fill: '#111418', stroke: null, lw: 0 } : { fill: '#ffffff', stroke: 'rgba(0,0,0,0.65)', lw: 4 };
+/* fine grass grain, drawn once (visual only: its own little PRNG, never the match RNG) */
+let GRASS_GRAIN = null;
+function grassGrain(ctx) {
+  if (!GRASS_GRAIN) {
+    const c = document.createElement('canvas'); c.width = c.height = 160; const x = c.getContext('2d'); let sd = 7;
+    const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 1400; i++) { x.fillStyle = rnd() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.07)'; x.fillRect(rnd() * 160, rnd() * 160, 1 + rnd() * 2, 3 + rnd() * 5); }
+    GRASS_GRAIN = c;
+  }
+  return ctx.createPattern(GRASS_GRAIN, 'repeat');
+}
 function ordinal(n) { const s = n % 100 >= 11 && n % 100 <= 13 ? 'TH' : ({ 1: 'ST', 2: 'ND', 3: 'RD' }[n % 10] || 'TH'); return n + s; }
 function rgbaFromAny(c, a) { return c.startsWith('#') ? rgba(c, a) : c; }
 function pentagon(ctx, x, y, r) {
@@ -2538,20 +2572,26 @@ const HUD = {
     ctx.font = tf; const tw = ctx.measureText(title).width;
     ctx.font = `26px ${FONT_UI}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText(THEME_DEFS[g.themeId].icon, X0 + 24 + tw + 8, y);
-    /* right: ● LIV 2 – 4 JUV ● (home on the left); a score pops when it changes */
-    const [A, B] = g.teams, SX = X1 - 182;
+    /* right: [LIV] 2 : 4 [JUV] — each code in a chip of its club colours (home on the left), the score in a framed box;
+       a score pops when it changes */
+    const [A, B] = g.teams, SX = X1 - 190;
     const pop = (T) => { const p = g.t - (T.hitT >= 0 ? T.hitT : -9); return p < 0.5 ? 1 + 0.35 * Math.sin(p / 0.5 * Math.PI) : 1; };
-    const dot = (T, x) => { ctx.beginPath(); ctx.arc(x, y, 12, 0, TAU); ctx.fillStyle = T.c1; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = T.c2; ctx.stroke(); };
-    dot(A, SX - 148); dot(B, SX + 148);
-    outlinedText(ctx, A.code, SX - 130, y + 3, `44px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
-    outlinedText(ctx, B.code, SX + 130, y + 3, `44px ${FONT_BIG}`, '#ffffff', null, 0, 'right');
-    for (const [T, x, O] of [[A, SX - 34, B], [B, SX + 34, A]]) {
+    const chip = (T, x0, w) => {
+      roundRect(ctx, x0, y - 27, w, 54, 14);
+      const cg = ctx.createLinearGradient(0, y - 27, 0, y + 27); cg.addColorStop(0, mixHex(T.c1, '#ffffff', 0.18)); cg.addColorStop(1, T.c1);
+      ctx.fillStyle = cg; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = T.c2; ctx.stroke();
+      outlinedText(ctx, T.code, x0 + w / 2, y + 3, `40px ${FONT_BIG}`, onColor(T.c1).fill, null, 0);
+    };
+    chip(A, SX - 176, 112); chip(B, SX + 64, 112);
+    roundRect(ctx, SX - 58, y - 31, 116, 62, 14); ctx.fillStyle = 'rgba(255,255,255,0.10)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.stroke();
+    for (const [T, x, O] of [[A, SX - 28, B], [B, SX + 28, A]]) {
       const k = pop(O);
       ctx.save(); ctx.translate(x, y + 3); ctx.scale(k, k);
       outlinedText(ctx, String(T.score), 0, 0, `56px ${FONT_BIG}`, '#ffffff', null, 0);
       ctx.restore();
     }
-    outlinedText(ctx, '–', SX, y + 1, `44px ${FONT_BIG}`, 'rgba(255,255,255,0.6)', null, 0);
+    outlinedText(ctx, ':', SX, y, `40px ${FONT_BIG}`, 'rgba(255,255,255,0.55)', null, 0);
     /* centre: the clock */
     const T = g.matchTime, gold = g.extra || g.pens, left = g.timeLeft();
     /* added time (the ball is on its way to a goal when the time is up): "1:30+" / "GOLDEN GOAL +" */
@@ -2567,6 +2607,10 @@ const HUD = {
     const frac = g.pens ? 1 : gold ? clamp01((g.clock - g.extraStart) / CONFIG.GOLDEN_TIME) : clamp01(g.clock / T), bw = 150;
     roundRect(ctx, cx - bw / 2, y + 26, bw, 5, 2.5); ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fill();
     if (frac > 0) { roundRect(ctx, cx - bw / 2, y + 26, bw * frac, 5, 2.5); ctx.fillStyle = col; ctx.fill(); }
+    if (!gold) {                                          // half-time mark on the bar + 1H / 2H
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(cx - 1.5, y + 22, 3, 13);
+      outlinedText(ctx, g.half === 1 ? '1H' : '2H', cx + bw / 2 + 22, y + 28, `600 18px ${FONT_UI}`, 'rgba(255,255,255,0.7)', null, 0);
+    }
     ctx.restore();
   },
   /* penalty shoot-out over the (empty) pitch: one row per club, a circle per kick (goal ● green, miss ✕ red) */
@@ -2750,6 +2794,14 @@ const LeagueTable = {
     if (post) outlinedText(ctx, 'MATCH', X0 + C.match, hy, head, hc, null, 0);
     outlinedText(ctx, 'PTS', X0 + C.pts, hy, head, hc, null, 0);
     if (CONFIG.FORM_COUNT > 0) outlinedText(ctx, `LAST ${CONFIG.FORM_COUNT}`, X0 + C.form + formW / 2, hy, head, hc, null, 0);
+    /* relegation line above the last RELEGATE_COUNT rows */
+    const RC = CONFIG.RELEGATE_COUNT, zones = RC > 0 && n >= RC + 5;
+    if (zones) {
+      const ly = top + (n - RC) * rh;
+      ctx.save(); ctx.setLineDash([14, 10]); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,77,77,0.85)';
+      ctx.beginPath(); ctx.moveTo(X0, ly); ctx.lineTo(X0 + W, ly); ctx.stroke(); ctx.restore();
+      outlinedText(ctx, 'RELEGATION', X0 + W, ly - 1, `700 15px ${FONT_UI}`, '#FF6B6B', 'rgba(0,0,0,0.8)', 4, 'right');
+    }
     const countP = post ? easeOutCubic((tt - 1.9) / 0.8) : 1;
     const moveP = post ? easeInOutCubic((tt - 3.1) / 1.0) : 0;
     const order = rows.slice().sort((a, b) => (a.today - b.today) || (b.newRank - a.newRank));   // movers are drawn on top
@@ -2760,13 +2812,17 @@ const LeagueTable = {
       const x = X0 + (1 - enter) * 420, y = top + pos * rh, cy = y + rh / 2 + 1;
       ctx.save(); ctx.globalAlpha *= enter;
       roundRect(ctx, x, y + 3, W, rh - 6, Math.min(20, rh * 0.28));
-      ctx.fillStyle = r.today ? rgba(r.c1, 0.30) : 'rgba(255,255,255,0.07)'; ctx.fill();
+      ctx.fillStyle = r.today ? rgba(r.c1, 0.30) : Math.round(pos) % 2 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.09)'; ctx.fill();
       if (r.today) { ctx.lineWidth = 3; ctx.strokeStyle = rgba(r.c1, 0.9); ctx.stroke(); }
       if (r.champ) { ctx.lineWidth = 5; ctx.strokeStyle = '#FFD54F'; ctx.stroke(); }          // season champion
       else if (r.out) { ctx.lineWidth = 4; ctx.strokeStyle = this.RED; ctx.stroke(); }          // relegated
       ctx.fillStyle = r.c1; roundRect(ctx, x, y + 3, 12, rh - 6, 6); ctx.fill();
       const rank = Math.round(pos) + 1;
-      outlinedText(ctx, String(rank), x + C.rank, cy + 2, `${Math.round(rh * 0.56)}px ${FONT_BIG}`, '#ffffff', null, 0);
+      if (zones && (rank === 1 || rank > n - RC)) {          // leader: gold badge, relegation places: red badge
+        const lead = rank === 1, bs = rh * 0.62;
+        roundRect(ctx, x + C.rank - bs / 2, cy - bs / 2, bs, bs, 8); ctx.fillStyle = lead ? '#FFD54F' : 'rgba(255,77,77,0.9)'; ctx.fill();
+        outlinedText(ctx, String(rank), x + C.rank, cy + 2, `${Math.round(rh * 0.5)}px ${FONT_BIG}`, lead ? '#2a1f00' : '#ffffff', null, 0);
+      } else outlinedText(ctx, String(rank), x + C.rank, cy + 2, `${Math.round(rh * 0.56)}px ${FONT_BIG}`, '#ffffff', null, 0);
       /* ▲ / ▼ once the rows have settled */
       if (post && tt > 4.1 && r.newRank !== r.oldRank) {
         const k = easeOutBack((tt - 4.1) / 0.3, 2.5);
@@ -4056,7 +4112,7 @@ const Offline = {
      • the match that is on is fast-forwarded to "now" and then plays in real time,
      • between matches: the league table and a countdown to the next kick-off.
    Timetable (CONFIG.LIVE.bands, Istanbul time): a 1v1 match every 3 minutes, day and night (480 a day). A slot:
-   ~5 s this week's matches, the 90 s match with a 3 s half-time break, ~9 s the animated league table, then the table
+   ~5 s this week's matches, the 90 s match with a 6 s half-time break, ~9 s the animated league table, then the table
    and a countdown. A match starts at its slot, or GAP seconds after the previous match ended if that one ran over (a
    league match is ~108 s on screen, a playoff match with a golden goal and penalties at most ~2.3 min, so it does not
    happen; it can never jam anyway: the overrun is absorbed by the next slots). A match's length on screen is computed

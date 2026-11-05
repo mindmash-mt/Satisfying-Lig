@@ -43,7 +43,7 @@ const CONFIG = {
      scored — at most ADDED_MAX seconds. The same at half time.
      Half time at MATCH_TIME / 2: a HALF_BREAK-second break (the clock stops), the clubs change ends and walk into their new
      halves; the second half kicks off from the centre at MATCH_TIME / 2 (first-half added time does not shorten it). */
-  MATCH_TIME: 90, GOLDEN_TIME: 20, PEN_P: 0.75, PEN_STEP: 0.9, ADDED_MAX: 10, HALF_BREAK: 3,
+  MATCH_TIME: 90, GOLDEN_TIME: 20, PEN_P: 0.75, PEN_STEP: 0.9, ADDED_MAX: 10, HALF_BREAK: 6,
   GROUP_SIZE: 2,
   /* league points: win, draw, loss. A season is a single round robin: every club meets every other club once (17 weeks with
      18 clubs, 9 matches a week); a longer season repeats it with home and away swapped. */
