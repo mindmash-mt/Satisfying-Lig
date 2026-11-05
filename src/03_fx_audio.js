@@ -40,7 +40,7 @@ const FX = {
   },
   shake(dur, mag) { this.shakeT = Math.max(this.shakeT, dur); this.shakeDur = dur; this.shakeMag = Math.max(mag, this.shakeT > 0 ? this.shakeMag : 0); },
   team(i) { return this.game && i >= 0 ? this.game.teams[i] : null; },
-  /* Announcements (GOAL!, SAVE!, OVERTIME, power-ups, eliminations) share ONE lane above the pitch.
+  /* Announcements (the goal and the new score, HALF TIME, GOLDEN GOAL!, PENALTIES!) share ONE lane above the pitch.
      A newcomer waits until the current one has been visible for ANN_MIN seconds, so texts never overlap
      and nothing is written over the pitch. */
   ANN_MIN: 0.55,
@@ -83,9 +83,8 @@ const FX = {
   onEvent(type, d) {
     const g = this.game; if (!g) return;
     switch (type) {
-      case 'wall': case 'post': case 'goalWallHit':
+      case 'wall': case 'post':
         this.sparks(d.x, d.y, d.nx, d.ny, vrng.int(4, 6), '#ffffff'); AudioSys.bounce(d.speed); break;
-      case 'ballball': this.sparks(d.x, d.y, 0, 0, 3, '#ffffff'); AudioSys.ballball(); break;
       case 'player': { const T = this.team(d.team); this.ring(d.x, d.y, T.c1, 34); AudioSys.tup(1); break; }
       case 'keeperHit': AudioSys.tup(0.7); break;
       case 'captainShot': { const T = this.team(d.team); this.ring(d.x, d.y, '#FFD54F', 70); this.burst(d.x, d.y, T.c1, 12); this.shake(0.12, 6); AudioSys.shot(); break; }
@@ -101,14 +100,12 @@ const FX = {
         this.shake(0.25, 18);
         const cols = S && !d.own ? [S.c1, S.c2, '#ffffff'] : ['#ffffff', T.c1, '#FFD54F'];
         this.confetti(d.x, d.y, d.nx, d.ny, 40, cols);
-        AudioSys.goal(); if (d.own && !g.timed) AudioSys.wahwah();
-        if (g.timed) {
-          /* 1v1 match: "+ ARSENAL GOAL" and under it the new score. Every goal is the other club's goal (a keeper's deflection
-             into its own net is common in a 1v1, so it is not called an own goal on screen) */
-          const B = this.team(d.benefit), [A0, A1] = g.teams;
-          const goal = { text: `${upTR(B.name)} GOAL`, c1: B.c1, c2: B.c2, plus: true };
-          this.announce({ kind: 'elim', text: `${A0.code} ${d.score[0]} – ${d.score[1]} ${A1.code}${d.golden ? ' · GOLDEN GOAL' : ''}`, color: B.c1, goal, dur: 1.9 });
-        }
+        AudioSys.goal();
+        /* "+ ARSENAL GOAL" and under it the new score. Every goal is the other club's goal (a keeper's deflection
+           into its own net is common here, so it is not called an own goal on screen) */
+        const B = this.team(d.benefit), [A0, A1] = g.teams;
+        const goal = { text: `${upTR(B.name)} GOAL`, c1: B.c1, c2: B.c2, plus: true };
+        this.announce({ kind: 'score', text: `${A0.code} ${d.score[0]} – ${d.score[1]} ${A1.code}${d.golden ? ' · GOLDEN GOAL' : ''}`, color: B.c1, goal, dur: 1.9 });
         break;
       }
       case 'kickoff': AudioSys.whistle(0.5, 0.22); if (d.half === 2) this.announce({ kind: 'big', text: 'SECOND HALF', color: '#00C853', dur: 1.2 }); break;
@@ -117,27 +114,7 @@ const FX = {
       case 'goldenGoal': this.announce({ kind: 'big', text: 'GOLDEN GOAL!', color: '#FFB300', dur: 1.8 }); AudioSys.whistle(0.6, 0.24); break;
       case 'penalties': this.announce({ kind: 'big', text: 'PENALTIES!', color: '#FFB300', dur: 1.6 }); AudioSys.whistle(1.0, 0.24); break;
       case 'penKick': if (d.goal) AudioSys.goal(); else AudioSys.save(); break;
-      case 'eliminate': {
-        const T = this.team(d.team);
-        /* the only on-screen text during play (above the pitch): the goal that did it ("+ ARSENAL GOAL", green plus),
-           and under it who went out, in which place and how many points */
-        const pts = App.pointsForPlace(d.place), S = !d.own && d.scorer >= 0 ? this.team(d.scorer) : null;
-        const goal = S ? { text: `${upTR(S.name)} GOAL`, c1: S.c1, c2: S.c2, plus: true } : { text: d.own ? 'OWN GOAL' : 'GOAL', c1: T.c1, c2: T.c2 };
-        this.announce({ kind: 'elim', text: `❌ ${upTR(T.name)} · ${ordinal(d.place)}${pts === null ? '' : ` · +${pts} PTS`}`, color: T.c1, goal, dur: 2.2 });
-        this.shake(0.3, 10); AudioSys.eliminate(); break;
-      }
-      case 'powerup': {
-        const T = this.team(d.team);
-        this.burst(d.x, d.y, '#FFD54F', 18); this.ring(d.x, d.y, '#FFD54F', 80);
-        AudioSys.powerup(); break;
-      }
-      case 'puSpawn': this.ring(d.x, d.y, '#FFD54F', 50); AudioSys.pop(0.6); break;
-      case 'puExpire': this.burst(d.x, d.y, 'rgba(255,255,255,0.7)', 6); break;
       case 'spawnBall': if (!d.initial) { this.pops.push({ x: d.x, y: d.y, t: this.wt }); AudioSys.pop(1); } break;
-      case 'overtime':
-        AudioSys.whistle(0.45, 0.25); break;
-      case 'finalDuel': AudioSys.whoosh(); break;
-      case 'morphStart': AudioSys.whoosh(); break;
       case 'win': AudioSys.finalWhistle(); break;
     }
   },
@@ -265,7 +242,6 @@ const AudioSys = {
     const f = 360 + Math.min(1600, speed || 600) * 0.35 + vrng.range(-45, 45);
     this.tone('triangle', f, 0.03, 0.16); this.tone('sine', f * 2.01, 0.02, 0.05);
   },
-  ballball() { if (!this.ready() || !this.limit('bb', 3, 0.025)) return; this.tone('triangle', 1150 + vrng.range(-90, 90), 0.03, 0.15); },
   tup(k) {
     if (!this.ready() || !this.limit('tup', 3, 0.04)) return;
     this.tone('sine', 230, 0.09, 0.3 * k, { f2: 140 }); this.noise(0.05, 0.06 * k, { type: 'lowpass', f: 900 });
@@ -302,22 +278,6 @@ const AudioSys = {
     this.noise(dur * 0.8, gain * 0.4, { type: 'lowpass', f: 300, attack: 0.1, delay });
   },
   goal() { if (!this.ready() || !this.limit('goal', 2, 0.15)) return; this.whistle(0.28, 0.22); this.crowd(1.2, 0.5, 0.05); },
-  wahwah() {
-    if (!this.ready()) return;
-    [[392, 370], [370, 349], [349, 330], [330, 262]].forEach(([a, b], i) =>
-      this.tone('sawtooth', a, i === 3 ? 0.6 : 0.26, 0.16, { f2: b, delay: 0.25 + i * 0.27, lp: 900, attack: 0.03 }));
-  },
-  eliminate() {
-    if (!this.ready()) return;
-    this.tone('sine', 85, 0.8, 0.8, { f2: 28 }); this.noise(0.6, 0.35, { type: 'lowpass', f: 220 });
-    this.tone('square', 2400, 0.025, 0.13, { delay: 0.14 }); this.tone('square', 1600, 0.035, 0.12, { delay: 0.17 });
-    this.noise(0.04, 0.25, { type: 'highpass', f: 4000, delay: 0.14 });
-  },
-  powerup() {
-    if (!this.ready()) return;
-    [880, 1108.7, 1318.5].forEach((f, i) => { this.tone('triangle', f, 0.14, 0.2, { delay: i * 0.07 }); this.tone('sine', f * 2, 0.1, 0.06, { delay: i * 0.07 }); });
-  },
-  whoosh() { if (!this.ready()) return; this.noise(0.7, 0.22, { type: 'bandpass', f: 300, f2: 2400, Q: 1.5, attack: 0.3 }); },
   finalWhistle() {
     if (!this.ready()) return;
     this.whistle(1.15, 0.24); this.crowd(2.8, 0.6, 0.1);

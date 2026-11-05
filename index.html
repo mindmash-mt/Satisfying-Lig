@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  FOOTBALL ARENA LEAGUE
+  SATISFYING LIG
   Varsayılan: CANLI LİG — maçlar CONFIG.LIVE saatlerinde kendi kendine oynar, siteye giren herkes aynı maçı izler (src/07_live.js).
   index.html?studio → aşağıdaki stüdyo (kontrol paneli, önizleme, video kaydı). Stüdyo kullanımı:
   1) Maç başlatma: Sağdaki panelden mod/ayarları seçin, "▶ Başlat" (veya Boşluk tuşu). Her maç rastgele bir seed ile kurulur (görünmez; oynanan maçların seed'i maç geçmişinde saklanır).
@@ -13,7 +13,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Football Arena League</title>
+<title>Satisfying Lig</title>
+<meta name="description" content="Kendi kendine oynayan canlı futbol ligi: her 3 dakikada bir 90 saniyelik maç, herkes aynı maçı aynı anda izler. Lig tablosu, fikstür, yükselme elemesi ve geçmiş sezonlar.">
+<meta name="theme-color" content="#0b0e14">
+<link rel="canonical" href="https://mindmash-mt.github.io/Satisfying-Lig/">
+<!-- paylaşım kartı (WhatsApp, X, Telegram, Facebook…): mutlak adres gerekir, build.sh sitenin adresini (SITE_URL) yazar -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Satisfying Lig">
+<meta property="og:locale" content="tr_TR">
+<meta property="og:title" content="Satisfying Lig · canlı futbol ligi">
+<meta property="og:description" content="Her 3 dakikada bir maç, günde 480 maç. Herkes aynı maçı aynı anda izler.">
+<meta property="og:url" content="https://mindmash-mt.github.io/Satisfying-Lig/">
+<meta property="og:image" content="https://mindmash-mt.github.io/Satisfying-Lig/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Satisfying Lig: dikey futbol sahasında oynanan canlı bir maç">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Satisfying Lig · canlı futbol ligi">
+<meta name="twitter:description" content="Her 3 dakikada bir maç, günde 480 maç. Herkes aynı maçı aynı anda izler.">
+<meta name="twitter:image" content="https://mindmash-mt.github.io/Satisfying-Lig/og.jpg">
+<!-- simge sayfaya gömülü (yerelde açılan index.html'de de görünür); manifest ve PNG simgeler public/ altında, yalnızca sitede -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E %3Crect width='64' height='64' rx='14' fill='%230b0e14'/%3E %3Crect x='14' y='6' width='36' height='52' rx='3' fill='%231f8a4c'/%3E %3Crect x='14' y='6' width='36' height='52' rx='3' fill='none' stroke='%23fff' stroke-width='2'/%3E %3Cline x1='14' y1='32' x2='50' y2='32' stroke='%23fff' stroke-width='2'/%3E %3Crect x='23' y='6' width='18' height='8' fill='none' stroke='%23fff' stroke-width='2'/%3E %3Crect x='23' y='50' width='18' height='8' fill='none' stroke='%23fff' stroke-width='2'/%3E %3Ccircle cx='32' cy='32' r='9' fill='%23fff' stroke='%230b0e14' stroke-width='1.5'/%3E %3Cpath d='M32 27.2l4.6 3.3-1.8 5.4h-5.6l-1.8-5.4z' fill='%230b0e14'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Satisfying Lig">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -103,7 +127,12 @@
   body.live #stage { height: 100%; }
   #liveBar { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; background: rgba(10,14,22,.92); border: 1px solid var(--border); border-radius: 99px; padding: 5px 6px 5px 6px; font-size: 12.5px; color: var(--muted); white-space: nowrap; z-index: 5; }
   #liveBar button { border-radius: 99px; padding: 6px 12px; }
-  #liveBar span { padding-right: 10px; }
+  #liveBar span { padding-right: 10px; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  #liveBar a { border-radius: 99px; padding: 6px 12px; background: var(--accent); color: #062417; font-weight: 700; text-decoration: none; }
+  body.replay #liveTabs, body.replay #liveInfo { display: none; }
+  #replayTag { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: rgba(10,14,22,.88); border: 1px solid var(--border); border-radius: 99px; padding: 8px 14px; font-size: 13px; font-weight: 700; color: var(--text); z-index: 6; }
+  .fx-head .fx-rp { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 99px; background: #12324a; color: #8fd3ff; text-decoration: none; }
+  .fx-head .fx-rp:hover { background: #18466a; }
   #liveTabs { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; background: rgba(10,14,22,.82); border: 1px solid var(--border); border-radius: 99px; padding: 4px; z-index: 6; white-space: nowrap; }
   #liveTabs button { border: none; background: transparent; border-radius: 99px; padding: 7px 14px; color: var(--muted); }
   #liveTabs button.on { background: var(--accent); color: #062417; }
@@ -153,8 +182,11 @@
     .fx-match ol { grid-template-columns: 1fr; }
     .fx-grid { grid-template-columns: 1fr; }
     #liveTabs button { padding: 7px 11px; }
+    #liveBar { max-width: calc(100vw - 16px); gap: 6px; }
+    #liveBar button, #liveBar a { padding: 6px 9px; }
   }
   @media (max-width: 430px) {
+    #liveBar .lbl { display: none; }
     #liveTabs { gap: 2px; padding: 3px; }
     #liveTabs button { padding: 7px 8px; font-size: 12.5px; }
   }
@@ -170,7 +202,7 @@
 <div id="app">
   <div id="stage"><canvas id="c" width="1080" height="1920"></canvas></div>
   <aside id="panel">
-    <header><h1>⚽ Football Arena League</h1><div id="recBadge" class="rec hidden">● REC <span id="recTime">0:00</span></div></header>
+    <header><h1 lang="en">⚽ Satisfying <span lang="tr">Lig</span></h1><div id="recBadge" class="rec hidden">● REC <span id="recTime">0:00</span></div></header>
     <div id="storageWarn" class="warn hidden">⚠️ Tarayıcı depolaması (localStorage) kullanılamıyor. Uygulama bellekte çalışmaya devam ediyor ama sayfa kapanınca veriler kaybolur — <b>Tabloyu dışa aktar</b> ile yedekleyin.</div>
     <div id="seasonNote" class="note hidden"></div>
 
@@ -192,7 +224,7 @@
 
     <section>
       <h2>Ayarlar</h2>
-      <div class="hint" style="margin-top:0">Her maç, sezon fikstüründeki sıradaki <b>1'e 1 maçtır</b> (90 sn, ilk yazılan takım ev sahibi, üst kale).</div>
+      <div class="hint" style="margin-top:0">Her maç, sezon fikstüründeki sıradaki <b>maçtır</b> (iki takım, 90 sn, ilk yazılan takım ev sahibi, üst kale).</div>
       <label>Tema
         <select id="theme"><option value="auto">Otomatik (rastgele)</option><option value="classic">⚽ Classic</option><option value="snow">❄️ Snow</option><option value="rain">🌧️ Rain</option><option value="night">🌙 Night</option></select>
       </label>
@@ -238,7 +270,7 @@
       <details>
         <summary>❓ Yardım</summary>
         <ul>
-          <li><b>Başlat</b> (veya Boşluk): fikstürdeki sıradaki 1'e 1 maçı (90 sn) yeni bir rastgele seed ile oynatır. Galibiyet 3, beraberlik 1, mağlubiyet 0 puan.</li>
+          <li><b>Başlat</b> (veya Boşluk): fikstürdeki sıradaki maçı (90 sn) yeni bir rastgele seed ile oynatır. Galibiyet 3, beraberlik 1, mağlubiyet 0 puan.</li>
           <li><b>Fikstür:</b> tek devreli lig: her takım her takımla bir kez karşılaşır (18 takım → 17 hafta × 9 maç). Fikstür sezon başında bir kez oluşturulur ve sezon bitene kadar değişmez; ev sahipliği dengelidir. Takım sayısı çift olmalıdır; takımlar ve sezon uzunluğu yalnızca sezon başında değiştirilebilir.</li>
           <li><b>Kaydet ve Başlat</b>: maçı sıfırdan 1x gerçek zamanlı oynatır; bitiş ekranından sonra video otomatik iner. Kayıt sırasında sekmeyi arka plana atmayın (tarayıcı çizimi yavaşlatır).</li>
           <li>Kayıtlı (test olmayan) her maçtan sonra maç numarası artar ve maç geçmişine o maçın (görünmeyen) seed'i kaydedilir. Haftada her takım bir kez oynar; haftanın son maçından sonra hafta kendiliğinden ilerler (<b>Yeni hafta</b> ile elle de geçilebilir; haftada oynanmamış maç varsa uyarı çıkar, çünkü atlanan maçlar bir daha oynanmaz).</li>
@@ -271,39 +303,31 @@ const BUILD_START = null;
    CONFIG
    ===================================================================== */
 const CONFIG = {
-  W: 1080, H: 1920, CX: 510, CY: 975,
-  R0: 450,
-  /* arena is a fixed (non-rotating) polygon stretched vertically so its corners sit ARENA_HALF_H above/below centre */
-  ARENA_HALF_H: 465,
+  W: 1080, H: 1920, CX: 510, CY: 975,   // CX: centre of the screens' safe area (the pitch is centred on FINAL_CX)
   STEP_HZ: 240,
-  /* Tuned with the balance test. Single-ball mode: MAX_BALLS 1 (set >1 to bring back the ball schedule). */
+  /* Tuned with the balance test. One ball at a time. */
   /* ball starts at BALL_SPEED and gets WALL_ACCEL faster on every wall/post bounce, up to BALL_MAX_MULT × */
-  BALL_R: 16, BALL_SPEED: 600, WALL_ACCEL: 0.10, BALL_MAX_MULT: 2.4, MAX_BALLS: 1, BALL_ADD_EVERY: 3, GOAL_RESPAWN: 1.1,
-  POST_R: 10, GOAL_FRAC: 0.50, ELIM_GOAL_GROW: 0.25, FINAL_GOAL_FRAC: 0.54, NET_DEPTH: 50, NET_DEPTH_RECT: 34,
+  BALL_R: 16, BALL_SPEED: 600, WALL_ACCEL: 0.10, BALL_MAX_MULT: 2.4, GOAL_RESPAWN: 1.1,
+  POST_R: 10, FINAL_GOAL_FRAC: 0.54, NET_DEPTH_RECT: 34,
   KEEPER_INSET: 28, KEEPER_LEN_FRAC: 0.30, KEEPER_THICK: 14, KEEPER_SPEED: 320, KEEPER_GAIN: 3, KEEPER_READ: 0.3,
   PLAYER_R: 24, PLAYER_SPEED: 260,
-  ROT_SPEED_DEG: 0, ROT_GROWTH: 1.12,
-  GOAL_GROW: false,   // false: goals never widen (no growth after eliminations or in overtime)
-  OT_AT: 45, OT_RAMP: 10, OT_MULT: 1.6,
-  ELIM_SLOW_GAME: 0.18, ELIM_FREEZE: 1.0, WIN_SLOW_GAME: 0.24, TS_SLOW: 0.3,
+  WIN_SLOW_GAME: 0.24, TS_SLOW: 0.3,
   FINAL_SLOWMO_GAME: 0.375, FINAL_SLOWMO_TS: 0.25, FINAL_SLOWMO_DIST: 120,
-  /* the 1v1 pitch fills the frame from just under the top bar (title · score · clock) to the bottom edge; the goal tally
+  /* the pitch fills the frame from just under the top bar (title · score · clock) to the bottom edge; the goal tally
      (mini balls behind each net) still fits above / below it */
-  FINAL_W: 1020, FINAL_H: 1660, FINAL_GOALS: 2,   // final duel: first to FINAL_GOALS goals wins (narrower, longer pitch)
-  FINAL_DY: 37,   // the pitch's centre sits this much below the arena centre (top goal line y 182, bottom 1842)
-  FINAL_CX: 540,  // a 1v1 pitch is centred in the frame (x 30–1050, as wide as the top bar); the old arena keeps CX
-  TOPBAR_Y: 60,   // centre of the one-line top bar of a 1v1 match
-  /* final duel: 2 players per team, one is the captain. A captain touch that sends the ball toward the rival goal
-     (within CAPTAIN_AIM_DEG of the goal centre) makes it CAPTAIN_SHOT_MULT × faster until it hits anything else. */
+  FINAL_W: 1020, FINAL_H: 1660,
+  FINAL_DY: 37,   // the pitch's centre sits this much below CY (top goal line y 182, bottom 1842)
+  FINAL_CX: 540,  // the pitch is centred in the frame (x 30–1050, as wide as the top bar)
+  TOPBAR_Y: 60,   // centre of the one-line top bar
+  /* a captain touch that sends the ball toward the rival goal (within CAPTAIN_AIM_DEG of the goal centre) makes it
+     CAPTAIN_SHOT_MULT × faster until it hits anything else. */
   CAPTAIN_SHOT_MULT: 2, CAPTAIN_AIM_DEG: 25,
-  /* a 1v1 match: 4 outfield players per club (besides the keeper), each wandering at random in its own third of the pitch:
+  /* a match: 4 outfield players per club (besides the keeper), each wandering at random in its own third of the pitch:
      2 defenders (own third), the captain in midfield (middle third), 1 forward (the rival's third). A player's touch sends the
-     ball forward: a random direction whose up / down part points at the rival goal, at most KICK_MAX_DEG off straight ahead.
-     (The old arena final keeps 2 free players.) */
+     ball forward: a random direction whose up / down part points at the rival goal, at most KICK_MAX_DEG off straight ahead. */
   TEAM_PLAYERS: 4, KICK_MAX_DEG: 60,
-  PU_R: 26, PU_LIFE: 8, PU_MIN: 6, PU_MAX: 10, PU_MAX_COUNT: 2, PU_WALL_MARGIN: 80,
-  DEFAULT_LIVES: 1, DEFAULT_SPEED_MULT: 1.0,
-  /* every match is a 1v1 league match: two clubs on the duel pitch (keeper + captain + team-mates each, see TEAM_PLAYERS) for MATCH_TIME seconds.
+  DEFAULT_SPEED_MULT: 1.0,
+  /* every match is a league match between two clubs on the duel pitch (keeper + captain + team-mates each, see TEAM_PLAYERS) for MATCH_TIME seconds.
      The clock runs on screen time (slow-motion moments count too), so a match is MATCH_TIME seconds long on screen.
      A draw is a draw in the league; a promotion playoff match that is level goes to a golden goal (at most GOLDEN_TIME seconds)
      and then to a penalty shoot-out (PEN_P: chance a penalty goes in, PEN_STEP: seconds per penalty on screen).
@@ -385,17 +409,6 @@ const RESERVE_TEAMS = [
    "Beşiktaş" → "BEŞİKTAŞ" but "Manchester United" → "MANCHESTER UNITED" */
 const upTR = (s) => { s = String(s); return /[çğışöüÇĞİŞÖÜ]/.test(s) ? s.toLocaleUpperCase('tr-TR') : s.toUpperCase(); };
 const CODE_STRIP = /[^A-Z0-9ÇĞİÖŞÜ]/g;
-
-/* Power-up definitions (logic lives in Game.applyPowerup) */
-const POWERUP_DEFS = [
-  { id: 'giant', icon: '🧤', name: 'Giant Keeper', kind: 'pos', dur: 6, w: 22 },
-  { id: 'wall',  icon: '🧱', name: 'Goal Wall',    kind: 'pos', dur: 4, w: 15 },
-  { id: 'small', icon: '🔍', name: 'Small Goal',   kind: 'pos', dur: 6, w: 18 },
-  { id: 'big',   icon: '🎯', name: 'Big Goal',     kind: 'neg', dur: 6, w: 18 },
-  { id: 'speed', icon: '⚡', name: 'Speed Up',     kind: 'gen', dur: 4, w: 15 },
-  { id: 'split', icon: '➕', name: 'Split Ball',   kind: 'gen', dur: 0, w: 9 },
-  { id: 'life',  icon: '❤️', name: 'Extra Life',   kind: 'pos', dur: 0, w: 3 },
-];
 
 /* Theme gameplay definitions (visual palettes are in THEMES section) */
 const THEME_DEFS = {
@@ -586,104 +599,78 @@ function fixtureStats(ids, weekList) {
 }
 
 /* =====================================================================
-   ARENA  (geometry builders — pure functions of state, no RNG)
+   PITCH  (geometry builder — a pure function of state, no RNG)
    ===================================================================== */
-function buildGeo(kind, verts, sideTeams, cx, cy, goalInfo, netDepth, goalFrac, baseLen) {
+/* the rectangular pitch: 4 sides (top goal side, right wall, bottom goal side, left wall); a goal side is split into two walls
+   and two posts around its goal mouth (FINAL_GOAL_FRAC of the side) */
+function buildGeo(verts, sideTeams, cx, cy, netDepth, goalFrac) {
   const N = verts.length;
   const sides = [], walls = [], posts = [], goals = [];
-  let inR = Infinity;
   for (let j = 0; j < N; j++) {
     const a = verts[j], b = verts[(j + 1) % N];
     const dx = b.x - a.x, dy = b.y - a.y;
     const L = DM.hypot(dx, dy);
-    if (L < 0.5) continue;                       // collapsed side (during morph)
+    if (L < 0.5) continue;
     const tx = dx / L, ty = dy / L;
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
     let nx = ty, ny = -tx;
     if (nx * (mx - cx) + ny * (my - cy) < 0) { nx = -nx; ny = -ny; }
-    const d = nx * (mx - cx) + ny * (my - cy);
-    if (d < inR) inR = d;
     const team = sideTeams[j];
-    const side = { ax: a.x, ay: a.y, bx: b.x, by: b.y, mx, my, tx, ty, nx, ny, L, team };
-    sides.push(side);
+    sides.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, mx, my, tx, ty, nx, ny, L, team });
     if (team == null || team < 0) { walls.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, nx, ny }); continue; }
-    const gi = goalInfo(team);
-    const baseHw = Math.min((baseLen || L) * goalFrac * 0.5, L * 0.46);
-    const hw = Math.min(baseHw * gi.mult, L * 0.46);
+    const baseHw = Math.min(L * goalFrac * 0.5, L * 0.46);
+    const hw = Math.min(baseHw, L * 0.46);
     const p1x = mx - tx * hw, p1y = my - ty * hw, p2x = mx + tx * hw, p2y = my + ty * hw;
     walls.push({ ax: a.x, ay: a.y, bx: p1x, by: p1y, nx, ny }, { ax: p2x, ay: p2y, bx: b.x, by: b.y, nx, ny });
     posts.push({ x: p1x, y: p1y, team }, { x: p2x, y: p2y, team });
-    if (gi.closed) walls.push({ ax: p1x, ay: p1y, bx: p2x, by: p2y, nx, ny, goalWall: true });
-    goals.push({ team, mx, my, tx, ty, nx, ny, hw, baseHw, L, p1x, p1y, p2x, p2y,
-      closed: gi.closed, locked: gi.locked, wallPU: gi.wallPU, depth: netDepth });
+    goals.push({ team, mx, my, tx, ty, nx, ny, hw, baseHw, L, p1x, p1y, p2x, p2y, depth: netDepth });
   }
-  if (!isFinite(inR)) inR = 100;
-  return { kind, cx, cy, verts, sides, walls, posts, goals, inR, netDepth };
+  return { cx, cy, verts, sides, walls, posts, goals, netDepth };
 }
 
 /* =====================================================================
-   PHYSICS + ENTITIES (Ball, Player, Keeper) + POWERUPS — Game simulation
+   PHYSICS + ENTITIES (Ball, Player, Keeper) — Game simulation
+   A timed match between two clubs: o.matchTime seconds of screen time, the score decides; a draw stays a draw unless
+   o.knockout (then a golden goal for at most CONFIG.GOLDEN_TIME seconds, then penalties).
    All gameplay randomness uses this.rng (seeded). Fixed step DT.
    ===================================================================== */
-/* 1v1 match: the roles of a club's outfield players, in the order of Game.duelSpots (the first is the captain) */
+/* the roles of a club's outfield players, in the order of Game.duelSpots (the first is the captain) */
 const GAME_ROLES = ['mid', 'def', 'def', 'fwd'];
 class Game {
+  /** @param {{teams: {id: string, name: string, code: string, c1: string, c2: string}[], seed: number, theme: string,
+   *           speedMult: number, matchTime: number, knockout?: boolean}} o  teams[0]: the home club (top goal) */
   constructor(o) {
     this.o = o;
-    this.mode = o.matchTime > 0 ? 'match' : 'arena';   // 'match': a timed 1v1 league / playoff match (the only kind played now)
+    this.mode = 'match';
     this.rng = new RNG(o.seed >>> 0);
     this.onEvent = null;
-    this.cx = CONFIG.CX; this.cy = CONFIG.CY;
+    this.cx = CONFIG.FINAL_CX; this.cy = CONFIG.CY;
     this.themeId = THEME_DEFS[o.theme] ? o.theme : 'classic';
     this.theme = THEME_DEFS[this.themeId];
     this.t = 0;
-    this.ballId = 1; this.puId = 1;
-    this.balls = []; this.players = []; this.powerups = [];
-    this.stats = { goals: 0, saves: 0, ownGoals: 0, powerups: 0, escapes: 0 };
-    this.otMult = 1; this.overtime = false; this.everOvertime = false;
-    this.otStart = 0;            // overtime clock restarts at every elimination
-    this.fxSpeedUntil = -1;
-    this.elimSlow = 0; this.morph = null; this.finalDuel = false;
+    this.ballId = 1;
+    this.balls = []; this.players = [];
+    this.stats = { goals: 0, saves: 0, ownGoals: 0, escapes: 0 };
+    this.morph = null;           // the half-time break: { kind: 'half', t, dur, moves } (players walk to their new halves)
     this.winnerSet = false; this.winner = -1; this.ending = 0; this.over = false; this.duration = 0;
-    /* timed 1v1 match (o.matchTime seconds of screen time): the score decides, a draw stays a draw unless o.knockout
-       (then a golden goal for at most CONFIG.GOLDEN_TIME seconds, then penalties). clock = screen seconds played. */
-    this.timed = o.matchTime > 0 && o.teams.length === 2; this.matchTime = this.timed ? o.matchTime : 0;
+    /* clock = screen seconds played */
+    this.timed = true; this.matchTime = o.matchTime;
     this.knockout = !!o.knockout; this.clock = 0; this.extra = false; this.pens = null; this.draw = false;
     this.extraStart = 0;         // clock when the golden goal began
     this.added = 0;              // clock when the running added time began (0: none)
     this.half = 1;               // 1 / 2; at half time the clubs change ends (rectTeams swaps)
-    if (this.timed) this.cx = CONFIG.FINAL_CX;
     this.slowmo = null; this.slowmoCd = 0;
     this.spawnBlock = 0;
-    this.nextPU = o.powerups ? this.rng.range(CONFIG.PU_MIN, CONFIG.PU_MAX) : Infinity;
-    this.omega = 0; this.rot = 0;
 
-    let defs = o.teams.slice();
-    if (!this.timed) defs = this.rng.shuffle(defs);   // timed match: teams[0] is the home club (top goal), teams[1] the away club
-    this.N0 = defs.length;
-    this.teams = defs.map((d, i) => ({
+    this.teams = o.teams.slice(0, 2).map((d, i) => ({
       i, id: d.id, name: d.name, code: d.code, c1: d.c1, c2: d.c2,
-      lives: o.lives, eliminated: false, place: 0, gf: 0, gfT: [], ga: 0, saves: 0, score: 0, pen: 0,
+      place: 0, gf: 0, gfT: [], ga: 0, saves: 0, score: 0, pen: 0,
       skill: this.rng.range(0.25, 0.55),
-      fx: { giant: -1, wall: -1, small: -1, big: -1 },
-      elimT: -1, hitT: -1,
+      hitT: -1,
       k: { s: 0, vs: 0, halfLen: 20, flashT: -9, saveCd: 0, active: true },
     }));
-
-    if (defs.length <= 2) {
-      this.shape = 'rect'; this.W = CONFIG.FINAL_W; this.H = CONFIG.FINAL_H; this.rectTeams = [0, 1];
-      this.netDepth = CONFIG.NET_DEPTH_RECT; this.finalDuel = true; this.startDuelScore();
-    } else {
-      this.shape = 'poly';
-      const N = defs.length;
-      this.va = [];
-      const a0 = Math.PI / 2 - Math.PI / N;     // one side sits at the bottom
-      for (let i = 0; i < N; i++) this.va.push(a0 + i * TAU / N);
-      this.sides = defs.map((_, i) => i);
-      this.R = this.radiusFor(N);
-      this.omega = this.rng.sign() * CONFIG.ROT_SPEED_DEG * DEG;
-      this.netDepth = CONFIG.NET_DEPTH;
-    }
+    this.W = CONFIG.FINAL_W; this.H = CONFIG.FINAL_H; this.rectTeams = [0, 1];
+    this.netDepth = CONFIG.NET_DEPTH_RECT;
 
     this.geo = this.computeGeo();
     this.initPlayers();
@@ -692,10 +679,7 @@ class Game {
   }
 
   emit(type, data) { if (this.onEvent) this.onEvent(type, data || {}); }
-  radiusFor(N) { return CONFIG.R0 * (0.82 + 0.18 * N / this.N0); }
-  /* final duel: scores start at 0–0 and the first team to CONFIG.FINAL_GOALS goals wins (lives = goals still allowed) */
-  startDuelScore() { for (const i of this.activeTeams()) { const T = this.teams[i]; T.lives = this.timed ? Infinity : CONFIG.FINAL_GOALS; T.score = 0; } }
-  /* timed match: seconds left on the clock (the golden goal has its own clock) */
+  /* seconds left on the clock (the golden goal has its own clock) */
   timeLeft() { return this.extra ? Math.max(0, this.extraStart + CONFIG.GOLDEN_TIME - this.clock) : Math.max(0, this.matchTime - this.clock); }
   /* added time: the ball is in a goal's half and moving towards that goal — up / down only (vy), sideways movement does not count */
   attacking() {
@@ -704,62 +688,18 @@ class Game {
     const mid = this.rectCy();
     return (b.vy < 0 && b.y < mid) || (b.vy > 0 && b.y > mid);
   }
-  activeTeams() { const a = []; for (const T of this.teams) if (!T.eliminated) a.push(T.i); return a; }
-  liveBalls() { return this.balls.filter(b => b.state === 'live'); }
 
   /* ---------- geometry ---------- */
-  goalInfo(team) {
-    const T = this.teams[team], t = this.t;
-    /* a locked goal keeps the width it had when its team went out */
-    if (T.eliminated) return { mult: T.lockMult || 1, closed: true, locked: true, wallPU: false };
-    let mult = CONFIG.GOAL_GROW ? this.otMult : 1;
-    /* arena keeps its size, so (with GOAL_GROW) the remaining open goals grow a little after every elimination */
-    if (CONFIG.GOAL_GROW && this.shape === 'poly') mult *= 1 + CONFIG.ELIM_GOAL_GROW * (this.N0 - this.activeTeams().length);
-    if (t < T.fx.small) mult *= 0.6;
-    if (t < T.fx.big) mult *= 1.4;
-    const wallPU = t < T.fx.wall && !T.eliminated;
-    return { mult, closed: T.eliminated || wallPU, locked: T.eliminated, wallPU };
-  }
-  /* regular polygon stretched vertically (centred on cy) to fill the 9:16 frame; goals share the mean side length */
-  polyGeo(va, R, rot, sides) {
-    const raw = va.map(a => ({ x: R * DM.cos(a + rot), y: R * DM.sin(a + rot) }));
-    let y0 = Infinity, y1 = -Infinity;
-    for (const v of raw) { if (v.y < y0) y0 = v.y; if (v.y > y1) y1 = v.y; }
-    const sy = Math.max(1, 2 * CONFIG.ARENA_HALF_H / Math.max(1, y1 - y0)), ym = (y0 + y1) / 2;
-    const verts = raw.map(v => ({ x: this.cx + v.x, y: this.cy + (v.y - ym) * sy }));
-    let per = 0, n = 0;
-    for (let i = 0; i < verts.length; i++) { const a = verts[i], b = verts[(i + 1) % verts.length], L = DM.hypot(b.x - a.x, b.y - a.y); if (L >= 0.5) { per += L; n++; } }
-    return buildGeo('poly', verts, sides, this.cx, this.cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH, CONFIG.GOAL_FRAC, n ? per / n : 0);
-  }
-  /* centre line of the rectangular final-duel pitch: shifted down a little so it clears the scoreboard */
+  /* centre line of the pitch: shifted down a little so it clears the top bar */
   rectCy() { return this.cy + CONFIG.FINAL_DY; }
-  rectGeo(W, H, teams) {
+  computeGeo() {
+    const W = this.W, H = this.H, teams = this.rectTeams;
     const cy = this.rectCy(), x0 = this.cx - W / 2, x1 = this.cx + W / 2, y0 = cy - H / 2, y1 = cy + H / 2;
     const verts = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
-    const g = buildGeo('rect', verts, [teams[0], -1, teams[1], -1], this.cx, cy, (tm) => this.goalInfo(tm), CONFIG.NET_DEPTH_RECT, CONFIG.FINAL_GOAL_FRAC);
+    const g = buildGeo(verts, [teams[0], -1, teams[1], -1], this.cx, cy, CONFIG.NET_DEPTH_RECT, CONFIG.FINAL_GOAL_FRAC);
     g.W = W; g.H = H;
     return g;
   }
-  computeGeo() {
-    if (this.shape === 'rect') return this.rectGeo(this.W, this.H, this.rectTeams);
-    let va = this.va, R = this.R;
-    if (this.morph && this.morph.kind === 'poly') {
-      const e = easeInOutCubic(this.morph.t / this.morph.dur);
-      va = this.morph.fromVa.map((a, i) => a + (this.morph.toVa[i] - a) * e);
-      R = lerp(this.morph.fromR, this.morph.toR, e);
-    }
-    return this.polyGeo(va, R, this.rot, this.sides);
-  }
-  insidePoint(geo, x, y, margin) {   // nearest safe point inside the inscribed circle
-    const gx = geo.cx, gy = geo.cy, dx = x - gx, dy = y - gy, d = DM.hypot(dx, dy);
-    const lim = Math.max(0, geo.inR - margin);
-    let maxOut = -Infinity;
-    for (const s of geo.sides) { const o = (x - s.mx) * s.nx + (y - s.my) * s.ny; if (o > maxOut) maxOut = o; }
-    if (maxOut <= -margin) return { x, y };
-    if (d <= lim || d < 1e-6) return { x, y };
-    return { x: gx + dx * lim / d, y: gy + dy * lim / d };
-  }
-  wallVel(x, y) { return [-this.omega * (y - this.cy), this.omega * (x - this.cx)]; }
 
   /* ---------- setup ---------- */
   makePlayer(team, x, y, captain) {
@@ -767,31 +707,15 @@ class Game {
     return { team, x, y, h, turn: 0, turnTarget: 0, turnT: 0, vx: DM.cos(h) * CONFIG.PLAYER_SPEED, vy: DM.sin(h) * CONFIG.PLAYER_SPEED,
       alive: true, captain: !!captain };
   }
-  /* final duel: where a team's second (non-captain) player stands — in its own half, on the other flank from x */
-  duelMateSpot(team, top, W, H, x) {
-    const side = team === top ? -1 : 1, flank = x > this.cx ? -1 : 1;
-    return { x: this.cx + flank * W * 0.24, y: this.rectCy() + side * H * 0.24 };
-  }
-  /* kick-off spots of a club on the duel pitch (top: the club at the top goal): captain, team-mate and — in a 1v1 match,
-     CONFIG.TEAM_PLAYERS outfield players — the third in the middle of its own half in front of its box, a fourth or more spread */
+  /* kick-off spots of a club (top: the club at the top goal): captain (midfield), left / right defender, forward (see GAME_ROLES);
+     CONFIG.TEAM_PLAYERS of them */
   duelSpots(t, top) {
-    const side = t === top ? -1 : 1, flank = t === top ? 1 : -1, out = [];
-    if (this.timed) {                                       // 1v1 match: captain (midfield), left / right defender, forward (see ROLES)
-      const cx = this.cx, cy = this.rectCy(), W = this.W, H = this.H;
-      return [{ x: cx + flank * W * 0.2, y: cy + side * H * 0.08 }, { x: cx - W * 0.25, y: cy + side * H / 3 },
-        { x: cx + W * 0.25, y: cy + side * H / 3 }, { x: cx - flank * W * 0.1, y: cy - side * H * 0.3 }].slice(0, Math.max(1, CONFIG.TEAM_PLAYERS));
-    }
-    const cx = this.cx + flank * this.W * 0.2, cy = this.rectCy() + side * this.H * 0.18;
-    out.push({ x: cx, y: cy });
-    out.push(this.duelMateSpot(t, top, this.W, this.H, cx));
-    const n = this.timed ? Math.max(2, CONFIG.TEAM_PLAYERS) : 2;
-    for (let k = 2; k < n; k++) {
-      const off = k === 2 ? 0 : (k % 2 ? -1 : 1) * 0.36 * Math.ceil((k - 2) / 2) / Math.max(1, Math.ceil((n - 3) / 2));
-      out.push({ x: this.cx + off * this.W, y: this.rectCy() + side * this.H * (k === 2 ? 0.34 : 0.1) });
-    }
-    return out;
+    const side = t === top ? -1 : 1, flank = t === top ? 1 : -1;
+    const cx = this.cx, cy = this.rectCy(), W = this.W, H = this.H;
+    return [{ x: cx + flank * W * 0.2, y: cy + side * H * 0.08 }, { x: cx - W * 0.25, y: cy + side * H / 3 },
+      { x: cx + W * 0.25, y: cy + side * H / 3 }, { x: cx - flank * W * 0.1, y: cy - side * H * 0.3 }].slice(0, Math.max(1, CONFIG.TEAM_PLAYERS));
   }
-  /* a player's area (y range) in a 1v1 match: its third of the pitch, seen from its own goal (it flips at half time) */
+  /* a player's area (y range): its third of the pitch, seen from its own goal (it flips at half time) */
   zoneOf(p) {
     const top = this.rectTeams[0], side = p.team === top ? -1 : 1, cy = this.rectCy(), H = this.H;
     const a = p.role === 'def' ? side * H / 2 : p.role === 'fwd' ? -side * H / 6 : -H / 6;
@@ -799,28 +723,15 @@ class Game {
     return [cy + Math.min(a, b), cy + Math.max(a, b)];
   }
   initPlayers() {
-    const mk = (team, x, y, cap) => this.makePlayer(team, x, y, cap);
-    if (this.finalDuel) {
-      /* direct final / 1v1 match (only 2 teams): captain + team-mates */
-      const [top, bottom] = this.rectTeams;
-      for (const t of [top, bottom]) this.duelSpots(t, top).forEach((p, k) => {
-        const pl = mk(t, p.x, p.y, k === 0);
-        if (this.timed) pl.role = GAME_ROLES[k] || 'mid';
-        this.players.push(pl);
-      });
-    } else {
-      for (const g of this.geo.goals) {
-        this.players.push(mk(g.team, this.cx + (g.mx - this.cx) * 0.5, this.cy + (g.my - this.cy) * 0.5));
-      }
-    }
+    const [top, bottom] = this.rectTeams;
+    for (const t of [top, bottom]) this.duelSpots(t, top).forEach((p, k) => {
+      const pl = this.makePlayer(t, p.x, p.y, k === 0);
+      pl.role = GAME_ROLES[k] || 'mid';
+      this.players.push(pl);
+    });
   }
-  targetSpeed() {
-    let s = CONFIG.BALL_SPEED * this.o.speedMult * this.theme.speed;
-    if (this.t < this.fxSpeedUntil) s *= 1.4;
-    if (this.finalDuel) s *= 1.15;
-    return s;
-  }
-  /* every wall/post bounce makes that ball a little faster (capped); a new ball starts at base speed */
+  targetSpeed() { return CONFIG.BALL_SPEED * this.o.speedMult * this.theme.speed * 1.15; }
+  /* every wall/post bounce makes the ball a little faster (capped); a new ball starts at base speed */
   wallBoost(b) {
     this.endShot(b);
     if (this.t - b.wallT < 0.05) return;            // a corner double-bounce counts once
@@ -830,7 +741,7 @@ class Game {
   }
   /* captain shot: ball goes CAPTAIN_SHOT_MULT × faster; anything else it hits brings it back to its previous speed */
   headingToRivalGoal(b, team) {
-    const g = this.geo.goals.find(gg => gg.team !== team && !gg.closed);
+    const g = this.geo.goals.find(gg => gg.team !== team);
     if (!g) return false;
     const dx = g.mx - b.x, dy = g.my - b.y, d = DM.hypot(dx, dy), v = DM.hypot(b.vx, b.vy);
     if (d < 1e-6 || v < 1e-6) return false;
@@ -841,10 +752,6 @@ class Game {
     if (!b.shot) return;
     b.shot = false; b.shotTeam = -1;
     b.sp = this.ballSpeedTarget(b);
-  }
-  maxBallsNow() {
-    if (this.finalDuel) return 1;
-    return Math.min(CONFIG.MAX_BALLS, 1 + Math.floor(this.t / CONFIG.BALL_ADD_EVERY));
   }
   spawnBall(initial) {
     const ox = this.geo.cx, oy = this.geo.cy;      // kick-off from the centre spot
@@ -869,14 +776,13 @@ class Game {
   timeScale() {
     if (this.over || this.pens) return 1;
     if (this.winnerSet) return CONFIG.TS_SLOW;
-    if (this.elimSlow > 0) return CONFIG.TS_SLOW;
     if (this.slowmo && this.t < this.slowmo.until) return CONFIG.FINAL_SLOWMO_TS;
     return 1;
   }
   step(dt) {
     if (this.over) return;
     /* the match clock runs on screen time: a slow-motion step takes longer on screen */
-    if (this.timed && !this.winnerSet && !this.morph) {          // the clock stops during the half-time break
+    if (!this.winnerSet && !this.morph) {                        // the clock stops during the half-time break
       if (this.t === 0) this.emit('kickoff', {});
       this.clock += dt / this.timeScale();
       const left = Math.ceil(this.timeLeft());                   // last 10 seconds: one tick a second (sound / clock pulse only)
@@ -891,20 +797,13 @@ class Game {
       if (this.morph.t >= this.morph.dur) this.finishMorph();
       return;
     }
-    if (this.shape === 'poly') this.rot += this.omega * dt;
-    this.updateTimers(dt);
     this.geo = this.computeGeo();
     this.updateKeepers(dt);
     this.updatePlayers(dt);
     this.updateBalls(dt);
-    this.updatePickups();
     if (!this.winnerSet) this.spawnSchedule();
     this.checkFinalSlowmo();
-    if (this.elimSlow > 0) {
-      this.elimSlow -= dt;
-      if (this.elimSlow <= 0 && !this.winnerSet) this.afterElimination();
-    }
-    if (this.timed && !this.winnerSet) this.checkClock();
+    if (!this.winnerSet) this.checkClock();
     if (!this.winnerSet && this.t > CONFIG.HARD_TIME_LIMIT) this.forceFinish();
     if (this.winnerSet) {
       this.ending -= dt;
@@ -912,28 +811,11 @@ class Game {
     }
   }
 
-  updateTimers(dt) {
-    const t = this.t;
-    const ot = t - this.otStart;
-    if (CONFIG.GOAL_GROW && !this.overtime && ot >= CONFIG.OT_AT && !this.winnerSet) { this.overtime = true; this.everOvertime = true; this.emit('overtime'); }
-    if (this.overtime) {
-      this.otMult = 1 + (CONFIG.OT_MULT - 1) * clamp01((ot - CONFIG.OT_AT) / CONFIG.OT_RAMP)
-        + 1.2 * clamp01((ot - CONFIG.OT_AT - CONFIG.OT_RAMP) / 5);
-    }
-    for (let i = this.powerups.length - 1; i >= 0; i--) {
-      const p = this.powerups[i]; p.age += dt;
-      if (p.age >= CONFIG.PU_LIFE) { this.powerups.splice(i, 1); this.emit('puExpire', { x: p.x, y: p.y }); }
-    }
-    if (!this.winnerSet && t >= this.nextPU) {
-      this.nextPU = t + this.rng.range(CONFIG.PU_MIN, CONFIG.PU_MAX);
-      if (this.powerups.length < CONFIG.PU_MAX_COUNT) this.spawnPowerup();
-    }
-  }
-
+  /* one ball at a time: a new one kicks off GOAL_RESPAWN seconds after a goal */
   spawnSchedule() {
     if (this.t < this.spawnBlock) return;
-    let live = 0; for (const b of this.balls) if (b.state === 'live') live++;
-    if (live < this.maxBallsNow()) this.spawnBall(false);
+    for (const b of this.balls) if (b.state === 'live') return;
+    this.spawnBall(false);
   }
 
   /* ---------- keepers ---------- */
@@ -941,16 +823,12 @@ class Game {
     const KI = CONFIG.KEEPER_INSET;
     for (const g of this.geo.goals) {
       const T = this.teams[g.team], k = T.k;
-      if (T.eliminated) { k.active = false; continue; }
-      k.active = true;
       let half = g.baseHw * CONFIG.KEEPER_LEN_FRAC;
-      if (this.t < T.fx.giant) half *= 1.8;
       half = Math.min(half, g.hw * 0.92);
       k.halfLen = half;
       const maxS = Math.max(0, g.hw - half - 4);
       if (dt > 0) {
-        /* keepers always follow the ball: they line up with the nearest ball (preferring one heading
-           for their goal) and, scaled by skill, read where it will cross the goal line */
+        /* keepers always follow the ball: they line up with it and, scaled by skill, read where it will cross the goal line */
         let best = null, bd = Infinity, bestIn = false;
         for (const b of this.balls) {
           if (b.state !== 'live') continue;
@@ -981,10 +859,8 @@ class Game {
       else if (k.s < -maxS) { k.s = -maxS; if (k.vs < 0) k.vs = 0; }
       k.x = g.mx - g.nx * KI + g.tx * k.s; k.y = g.my - g.ny * KI + g.ty * k.s;
       k.tx = g.tx; k.ty = g.ty; k.nx = g.nx; k.ny = g.ny;
-      const [wx, wy] = this.wallVel(k.x, k.y);
-      k.vx = g.tx * k.vs + wx; k.vy = g.ty * k.vs + wy;
+      k.vx = g.tx * k.vs; k.vy = g.ty * k.vs;
     }
-    for (const T of this.teams) if (T.eliminated) T.k.active = false;
   }
 
   /* ---------- players ---------- */
@@ -1003,7 +879,6 @@ class Game {
     const R = CONFIG.PLAYER_R, sp = CONFIG.PLAYER_SPEED;
     for (const p of this.players) {
       if (!p.alive) continue;
-      if (this.teams[p.team].eliminated) { p.alive = false; continue; }
       p.turnT -= dt;
       if (p.turnT <= 0) { p.turnT = this.rng.range(0.3, 0.9); p.turnTarget = this.rng.range(-2.4, 2.4); }
       p.turn += (p.turnTarget - p.turn) * Math.min(1, dt * 3);
@@ -1012,8 +887,7 @@ class Game {
       p.x += p.vx * dt; p.y += p.vy * dt;
       for (const s of this.geo.sides) {
         closestOnSeg(p.x, p.y, s.ax, s.ay, s.bx, s.by);
-        const qx = _qx, qy = _qy, [wx, wy] = this.wallVel(qx, qy);
-        this.pushPlayer(p, qx, qy, R, wx, wy);
+        this.pushPlayer(p, _qx, _qy, R, 0, 0);
       }
       for (const T of this.teams) {
         const k = T.k; if (!k.active) continue;
@@ -1034,7 +908,7 @@ class Game {
         const vbn = b.vx * nx + b.vy * ny; if (vbn < 0) { b.vx -= 2 * vbn * nx; b.vy -= 2 * vbn * ny; b.h = DM.atan2(b.vy, b.vx); }
       }
     }
-    /* 1v1 match: a player stays in its third (after the walls and the other players pushed it) — at the edge it turns back */
+    /* a player stays in its third (after the walls and the other players pushed it) — at the edge it turns back */
     for (const p of P) {
       if (!p.alive || !p.role) continue;
       const [y0, y1] = this.zoneOf(p);
@@ -1043,8 +917,8 @@ class Game {
     }
   }
 
-  /* ---------- balls ---------- */
-  collideStatic(b, qx, qy, rad, wvx, wvy, kind, dev, inx, iny) {
+  /* ---------- ball ---------- */
+  collideStatic(b, qx, qy, rad, kind, dev, inx, iny) {
     let dx = b.x - qx, dy = b.y - qy;
     const d2 = dx * dx + dy * dy;
     /* inx/iny: inward normal of a wall — a ball squeezed past the wall line is always pushed back inside */
@@ -1057,7 +931,7 @@ class Game {
       nx = dx / d; ny = dy / d;
     }
     b.x = qx + nx * (rad + 0.05); b.y = qy + ny * (rad + 0.05);
-    let rvx = b.vx - wvx, rvy = b.vy - wvy;
+    let rvx = b.vx, rvy = b.vy;
     const vn = rvx * nx + rvy * ny;
     if (vn >= 0) return false;
     rvx -= 2 * vn * nx; rvy -= 2 * vn * ny;
@@ -1066,7 +940,7 @@ class Game {
       const ox = rvx * c - rvy * s, oy = rvx * s + rvy * c;
       if (ox * nx + oy * ny > 0.15 * DM.hypot(ox, oy)) { rvx = ox; rvy = oy; }
     }
-    b.vx = rvx + wvx; b.vy = rvy + wvy;
+    b.vx = rvx; b.vy = rvy;
     if (kind) this.emit(kind, { x: b.x - nx * CONFIG.BALL_R, y: b.y - ny * CONFIG.BALL_R, speed: -vn, nx, ny, id: b.id });
     return true;
   }
@@ -1077,27 +951,9 @@ class Game {
     if (d2 >= rad * rad) return;
     let d = Math.sqrt(d2);
     if (d < 1e-6) { dx = 1; dy = 0; d = 1; }
-    const nx = dx / d, ny = dy / d;
-    if (p.role) return this.kick(b, p, nx, ny, rad);
-    b.x = p.x + nx * rad; b.y = p.y + ny * rad;
-    let vn = b.vx * nx + b.vy * ny;
-    if (vn < 0) { b.vx -= 2 * vn * nx; b.vy -= 2 * vn * ny; }
-    b.vx += 0.6 * p.vx; b.vy += 0.6 * p.vy;
-    vn = b.vx * nx + b.vy * ny;
-    const m = DM.hypot(b.vx, b.vy) || 1;
-    if (vn < 0.25 * m) { const add = 0.25 * m - vn; b.vx += nx * add; b.vy += ny * add; }
-    const fresh = this.t - b.hitP > 0.12;
-    b.lastTouch = p.team; b.hitP = this.t;
-    if (fresh) this.emit('player', { x: b.x - nx * CONFIG.BALL_R, y: b.y - ny * CONFIG.BALL_R, team: p.team });
-    if (this.finalDuel && !this.winnerSet && p.captain && this.headingToRivalGoal(b, p.team)) {
-      if (!b.shot || b.shotTeam !== p.team) {
-        b.shot = true; b.shotTeam = p.team;
-        b.sp = this.ballSpeedTarget(b);
-        this.emit('captainShot', { x: b.x, y: b.y, team: p.team, id: b.id });
-      }
-    } else this.endShot(b);
+    this.kick(b, p, dx / d, dy / d, rad);
   }
-  /* 1v1 match: a player's touch sends the ball forward — a random direction within ±KICK_MAX_DEG of straight at the rival goal's
+  /* a player's touch sends the ball forward — a random direction within ±KICK_MAX_DEG of straight at the rival goal's
      end (only the up / down part is fixed), at the ball's speed. While the ball is still touching the player right after a kick it
      is only pushed clear (no new direction). */
   kick(b, p, nx, ny, rad) {
@@ -1168,35 +1024,16 @@ class Game {
       for (const p of this.players) if (p.alive) this.ballPlayer(b, p);
       for (const T of this.teams) if (T.k.active) this.ballKeeper(b, T);
     }
-    for (let i = 0; i < live.length; i++) {
-      const a = live[i];
-      for (let j = i + 1; j < live.length; j++) {
-        const c = live[j];
-        const dx = c.x - a.x, dy = c.y - a.y, d2 = dx * dx + dy * dy;
-        if (d2 >= 4 * BR * BR) continue;
-        const d = Math.sqrt(d2) || 1, nx = d2 > 0 ? dx / d : 1, ny = d2 > 0 ? dy / d : 0, ov = (2 * BR - d) / 2;
-        a.x -= nx * ov; a.y -= ny * ov; c.x += nx * ov; c.y += ny * ov;
-        const rel = (a.vx - c.vx) * nx + (a.vy - c.vy) * ny;
-        if (rel > 0) {
-          a.vx -= rel * nx; a.vy -= rel * ny; c.vx += rel * nx; c.vy += rel * ny;
-          this.endShot(a); this.endShot(c);
-          this.emit('ballball', { x: (a.x + c.x) / 2, y: (a.y + c.y) / 2 });
-        }
-      }
-    }
     const geo = this.geo;
     for (const b of live) {
       for (let it = 0; it < 2; it++) {
         for (const p of geo.posts) {
-          const [wx, wy] = this.wallVel(p.x, p.y);
-          if (this.collideStatic(b, p.x, p.y, BR + CONFIG.POST_R, wx, wy, 'post', true)) this.wallBoost(b);
+          if (this.collideStatic(b, p.x, p.y, BR + CONFIG.POST_R, 'post', true)) this.wallBoost(b);
         }
         for (const w of geo.walls) {
           const ts = closestOnSeg(b.x, b.y, w.ax, w.ay, w.bx, w.by);
-          const qx = _qx, qy = _qy, [wx, wy] = this.wallVel(qx, qy);
           const interior = ts > 0 && ts < 1;
-          if (this.collideStatic(b, qx, qy, BR, wx, wy, w.goalWall ? 'goalWallHit' : 'wall', true,
-            interior ? -w.nx : undefined, interior ? -w.ny : undefined)) this.wallBoost(b);
+          if (this.collideStatic(b, _qx, _qy, BR, 'wall', true, interior ? -w.nx : undefined, interior ? -w.ny : undefined)) this.wallBoost(b);
         }
       }
       const m = DM.hypot(b.vx, b.vy);
@@ -1210,7 +1047,6 @@ class Game {
       for (const s of geo.sides) { const o = (b.x - s.mx) * s.nx + (b.y - s.my) * s.ny; if (o > maxOut) maxOut = o; }
       if (maxOut > 1) {                       // safety net: escaped ball goes back to center
         this.stats.escapes++;
-        if (this.debugEscape) this.debugEscape(b, maxOut);
         this.endShot(b);
         b.x = b.px = geo.cx; b.y = b.py = geo.cy;
         const a = this.rng.range(0, TAU); b.vx = DM.cos(a) * b.sp; b.vy = DM.sin(a) * b.sp;
@@ -1219,10 +1055,9 @@ class Game {
     if (this.balls.some(b => b.state === 'dead')) this.balls = this.balls.filter(b => b.state !== 'dead');
   }
 
-  /* ---------- goals / elimination ---------- */
+  /* ---------- goals ---------- */
   checkGoal(b) {
     for (const g of this.geo.goals) {
-      if (g.closed) continue;
       const rx = b.x - g.mx, ry = b.y - g.my;
       const out = rx * g.nx + ry * g.ny;
       if (out < 0) continue;
@@ -1237,158 +1072,35 @@ class Game {
   }
   /* a goal scored by team i: bump its tally and remember when (the ball icon behind its goal pops in then) */
   creditGoal(i) { const T = this.teams[i]; T.gf++; T.gfT.push(this.t); }
+  /* every goal (an own goal too) goes to the other club, like in football, so the score, AG and YG always agree */
   scoreGoal(b, g, along, out) {
     b.state = 'net'; b.netTeam = g.team; b.netT = 0;
     b.nl = { a: along, o: out, va: b.vx * g.tx + b.vy * g.ty, vo: Math.max(120, b.vx * g.nx + b.vy * g.ny) };
     if (this.winnerSet) return;
     const T = this.teams[g.team];
     const scorer = b.lastTouch, own = scorer === g.team;
-    /* only a goal that some opponent scored counts as "conceded" (YG): an own goal, or a ball nobody had touched, still knocks the team out
-       but is no team's goal, so every YG is some team's AG and the league's totals match */
-    if (!own && scorer >= 0) T.ga++;
+    T.ga++;
     T.hitT = this.t; this.stats.goals++;
     this.spawnBlock = Math.max(this.spawnBlock, this.t + CONFIG.GOAL_RESPAWN);
-    const ev = { team: g.team, scorer, own, x: b.x, y: b.y, along, nx: g.nx, ny: g.ny, ballId: b.id };
     if (own) this.stats.ownGoals++;
-    if (this.timed) {
-      /* 1v1 match: every goal (an own goal too) goes to the other club, like in football, so the score, AG and YG always agree */
-      const other = g.team === 0 ? 1 : 0;
-      if (own || scorer < 0) T.ga++;
-      this.creditGoal(other); this.teams[other].score++;
-      ev.benefit = other; ev.score = [this.teams[0].score, this.teams[1].score]; ev.golden = this.extra;
-      this.emit('goal', ev);
-      if (this.extra) this.finish(other);                    // golden goal
-      return;
-    }
-    if (scorer >= 0 && !own) this.creditGoal(scorer);
-    if (this.finalDuel) { const other = this.activeTeams().find(i => i !== g.team); if (other !== undefined) this.teams[other].score++; }
-    T.lives--;
-    this.emit('goal', ev);
-    if (T.lives <= 0) this.eliminate(g.team, { scorer, own });
+    const other = g.team === 0 ? 1 : 0;
+    this.creditGoal(other); this.teams[other].score++;
+    this.emit('goal', { team: g.team, scorer, own, x: b.x, y: b.y, along, nx: g.nx, ny: g.ny, ballId: b.id,
+      benefit: other, score: [this.teams[0].score, this.teams[1].score], golden: this.extra });
+    if (this.extra) this.finish(other);                    // golden goal
   }
-  eliminate(i, by) {
-    const T = this.teams[i];
-    if (T.eliminated) return;
-    const act = this.activeTeams().length;
-    const gi = this.goalInfo(i); T.lockMult = gi.mult * (this.t < T.fx.small ? 1 / 0.6 : 1) * (this.t < T.fx.big ? 1 / 1.4 : 1);
-    T.eliminated = true; T.place = act; T.elimT = this.t; T.lives = 0;
-    /* reset the overtime clock: next overtime starts OT_AT seconds after this elimination */
-    this.otStart = this.t; this.overtime = false; this.otMult = 1;
-    T.k.active = false;
-    /* by: the goal that knocked the team out (scorer = last touch, -1 if nobody touched it; own = own goal) */
-    this.emit('eliminate', { team: i, place: act, scorer: by ? by.scorer : -1, own: !!(by && by.own) });
-    const left = this.activeTeams();
-    if (left.length <= 1) { this.finish(left.length ? left[0] : i); return; }
-    this.elimSlow = Math.max(this.elimSlow, CONFIG.ELIM_SLOW_GAME);
-  }
-  /* The arena keeps its original N-gon (eliminated goals stay locked) until only 2 teams remain;
-     then it morphs into the final-duel pitch. Rotation speeds up after every elimination. */
-  afterElimination() {
-    if (this.shape === 'poly' && this.activeTeams().length === 2) this.startMorph();
-    else if (this.shape === 'poly') this.omega *= CONFIG.ROT_GROWTH;
-  }
-  startMorph() {
-    const rem = [];
-    for (let j = 0; j < this.sides.length; j++) if (!this.teams[this.sides[j]].eliminated) rem.push(j);
-    const M = rem.length;
-    const moves = [];
-    let targetGeo;
-    if (M === 2) {
-      const ga = this.geo.goals.find(g => g.team === this.sides[rem[0]]);
-      const gb = this.geo.goals.find(g => g.team === this.sides[rem[1]]);
-      const ta = this.sides[rem[0]], tb = this.sides[rem[1]];
-      const top = (ga && gb && ga.my > gb.my) ? tb : ta, bottom = top === ta ? tb : ta;
-      this.finalDuel = true; this.startDuelScore();
-      const live = this.liveBalls();
-      let keep = null, bd = Infinity;
-      for (const b of live) { const d = (b.x - this.cx) ** 2 + (b.y - this.cy) ** 2; if (d < bd) { bd = d; keep = b; } }
-      for (const b of live) if (b !== keep) { b.state = 'vanish'; }
-      this.morph = { kind: 'rect', t: 0, dur: CONFIG.ELIM_FREEZE, top, bottom, moves };
-      targetGeo = this.rectGeo(CONFIG.FINAL_W, CONFIG.FINAL_H, [top, bottom]);
-      this.emit('finalDuel', { top, bottom });
-    } else {
-      const N = this.va.length, va = this.va;
-      const s0 = rem[0];
-      const ext = []; for (let k = 1; k < M; k++) ext.push(rem[k]); ext.push(s0 + N);
-      const A = (i) => va[i % N] + TAU * Math.floor(i / N);
-      const groups = Array.from({ length: M + 1 }, () => []);
-      let k = 1;
-      for (let i = s0 + 1; i <= s0 + N; i++) { while (ext[k - 1] < i) k++; groups[k].push(i); }
-      let phi = 0;
-      for (let kk = 1; kk <= M; kk++) {
-        const rep = groups[kk].reduce((s, i) => s + A(i), 0) / groups[kk].length;
-        phi += rep - kk * TAU / M;
-      }
-      phi /= M;
-      const toVa = new Array(N);
-      for (let kk = 1; kk <= M; kk++) {
-        const na = phi + kk * TAU / M;
-        for (const i of groups[kk]) toVa[i % N] = va[i % N] + (na - A(i));
-      }
-      const newVa = []; for (let kk = 0; kk < M; kk++) newVa.push(phi + kk * TAU / M);
-      const newSides = rem.map(j => this.sides[j]);
-      this.morph = { kind: 'poly', t: 0, dur: CONFIG.ELIM_FREEZE, fromVa: va.slice(), toVa, fromR: this.R,
-        toR: this.radiusFor(M), newVa, newSides, moves };
-      targetGeo = this.polyGeo(newVa, this.morph.toR, this.rot, newSides);
-    }
-    const addMove = (e, margin) => { const p = this.insidePoint(targetGeo, e.x, e.y, margin); moves.push({ e, x0: e.x, y0: e.y, x1: p.x, y1: p.y }); };
-    for (const b of this.balls) if (b.state === 'live') addMove(b, CONFIG.BALL_R + 8);
-    for (const p of this.players) if (p.alive && !this.teams[p.team].eliminated) addMove(p, CONFIG.PLAYER_R + 8);
-    if (M === 2) {
-      /* final duel: each team's arena player becomes its captain and a team-mate slides out of it into its own half */
-      const { top } = this.morph;
-      for (const t of [this.morph.top, this.morph.bottom]) {
-        let cap = this.players.find(p => p.alive && p.team === t);
-        if (!cap) {
-          const side = t === top ? -1 : 1;
-          cap = this.makePlayer(t, this.cx, this.rectCy() + side * CONFIG.FINAL_H * 0.18, true);
-          this.players.push(cap); addMove(cap, CONFIG.PLAYER_R + 8);
-        }
-        cap.captain = true;
-        const mv = moves.find(m => m.e === cap), m = this.duelMateSpot(t, top, CONFIG.FINAL_W, CONFIG.FINAL_H, mv ? mv.x1 : cap.x);
-        const mate = this.makePlayer(t, cap.x, cap.y, false);
-        this.players.push(mate);
-        moves.push({ e: mate, x0: cap.x, y0: cap.y, x1: m.x, y1: m.y });
-      }
-    }
-    this.powerups = this.powerups.filter(p => {
-      const q = this.insidePoint(targetGeo, p.x, p.y, CONFIG.PU_WALL_MARGIN);
-      return Math.abs(q.x - p.x) < 0.5 && Math.abs(q.y - p.y) < 0.5;
-    });
-    this.morph.targetGeo = targetGeo;
-    this.emit('morphStart', { kind: this.morph.kind });
-  }
+  /* the half-time break is over: second half kicks off from the centre spot */
   finishMorph() {
     const m = this.morph;
     for (const mv of m.moves) { mv.e.x = mv.x1; mv.e.y = mv.y1; if (mv.e.px !== undefined) { mv.e.px = mv.x1; mv.e.py = mv.y1; } }
     this.morph = null;
-    if (m.kind === 'half') {                                  // second half: kick-off from the centre spot
-      this.balls = [];
-      this.geo = this.computeGeo();
-      this.updateKeepers(0);
-      this.spawnBall(false);
-      this.emit('kickoff', { half: 2 });
-      return;
-    }
-    if (m.kind === 'poly') {
-      this.va = m.newVa; this.sides = m.newSides; this.R = m.toR;
-      this.omega *= CONFIG.ROT_GROWTH;
-    } else {
-      this.shape = 'rect'; this.W = CONFIG.FINAL_W; this.H = CONFIG.FINAL_H;
-      this.rectTeams = [m.top, m.bottom]; this.omega = 0; this.netDepth = CONFIG.NET_DEPTH_RECT;
-    }
-    this.balls = this.balls.filter(b => b.state === 'live');
+    this.balls = [];
     this.geo = this.computeGeo();
-    for (const p of this.players) if (p.alive) { const q = this.insidePoint(this.geo, p.x, p.y, CONFIG.PLAYER_R + 6); p.x = q.x; p.y = q.y; }
-    for (const b of this.balls) { const q = this.insidePoint(this.geo, b.x, b.y, CONFIG.BALL_R + 6); b.x = b.px = q.x; b.y = b.py = q.y; }
-    if (m.kind === 'rect') {
-      for (const b of this.balls) b.sp = this.targetSpeed() * b.boost;
-      if (!this.balls.length) this.spawnBall(false);
-    }
     this.updateKeepers(0);
-    this.emit('morphEnd', { kind: m.kind });
+    this.spawnBall(false);
+    this.emit('kickoff', { half: 2 });
   }
-  /* timed match: full time (the score decides; level → draw, or golden goal in a knockout match), end of the golden goal → penalties */
+  /* full time (the score decides; level → draw, or golden goal in a knockout match), end of the golden goal → penalties */
   checkClock() {
     /* half time (with added time, like full time) */
     if (this.half === 1 && !this.extra) {
@@ -1464,26 +1176,22 @@ class Game {
   finish(w) {
     if (this.winnerSet) return;
     this.winnerSet = true; this.winner = w;
-    if (w >= 0) { this.teams[w].place = 1; if (this.timed) this.teams[1 - w].place = 2; }
-    else if (this.timed) for (const T of this.teams) T.place = 1;
-    this.duration = this.t; this.ending = CONFIG.WIN_SLOW_GAME; this.elimSlow = 0;
+    if (w >= 0) { this.teams[w].place = 1; this.teams[1 - w].place = 2; }
+    else for (const T of this.teams) T.place = 1;
+    this.duration = this.t; this.ending = CONFIG.WIN_SLOW_GAME;
     this.slowmo = null;
     this.emit('win', { team: w });
   }
-  forceFinish() {   // pathological safety: rank remaining teams by lives (never hit with sane settings)
-    const act = this.activeTeams().map(i => this.teams[i]);
-    act.sort((a, b) => b.lives - a.lives || a.ga - b.ga || a.i - b.i);
-    for (let r = act.length - 1; r >= 1; r--) { act[r].eliminated = true; act[r].place = r + 1; act[r].elimT = this.t; }
-    this.finish(act[0].i);
+  forceFinish() {   // pathological safety net (never hit: the clock always reaches full time long before HARD_TIME_LIMIT)
+    const [A, B] = this.teams;
+    if (A.score === B.score) { this.draw = true; this.finish(-1); } else this.finish(A.score > B.score ? 0 : 1);
   }
+  /* slow motion when the ball nears a goal: in a golden goal, and in the last 10 seconds while the match is level or one goal apart */
   checkFinalSlowmo() {
-    if (!this.finalDuel || this.winnerSet || this.morph || this.t < this.slowmoCd) return;
-    /* timed match: in a golden goal, and in the last 10 seconds while the match is level or one goal apart */
-    const hot = this.timed ? this.extra || (this.timeLeft() <= 10 && Math.abs(this.teams[0].score - this.teams[1].score) <= 1) : true;
+    if (this.winnerSet || this.morph || this.t < this.slowmoCd) return;
+    const hot = this.extra || (this.timeLeft() <= 10 && Math.abs(this.teams[0].score - this.teams[1].score) <= 1);
     if (!hot) return;
     for (const g of this.geo.goals) {
-      const T = this.teams[g.team];
-      if ((!this.timed && T.lives !== 1) || g.closed) continue;
       for (const b of this.balls) {
         if (b.state !== 'live') continue;
         const dx = b.x - g.mx, dy = b.y - g.my;
@@ -1497,90 +1205,11 @@ class Game {
     }
   }
 
-  /* ---------- POWERUPS (logic) ---------- */
-  spawnPowerup() {
-    const geo = this.geo, M = CONFIG.PU_WALL_MARGIN;
-    /* no Extra Life in single-life matches; no Split Ball when only one ball is allowed */
-    const defs = POWERUP_DEFS.filter(d => !(d.id === 'life' && this.o.lives <= 1) && !(d.id === 'split' && CONFIG.MAX_BALLS <= 1));
-    let pos = null;
-    for (let tries = 0; tries < 12 && !pos; tries++) {
-      let x, y;
-      if (this.shape === 'rect') {
-        x = this.cx + this.rng.range(-1, 1) * (this.W / 2 - M);
-        y = geo.cy + this.rng.range(-1, 1) * (this.H / 2 - M);
-      } else {
-        const r = Math.sqrt(this.rng.next()) * Math.max(0, geo.inR - M), a = this.rng.range(0, TAU);
-        x = this.cx + DM.cos(a) * r; y = this.cy + DM.sin(a) * r;
-      }
-      let ok = true;
-      for (const p of this.powerups) if ((p.x - x) ** 2 + (p.y - y) ** 2 < 90 * 90) ok = false;
-      if (ok) pos = { x, y };
-    }
-    if (!pos) return;
-    const def = this.rng.weighted(defs);
-    const pu = { id: this.puId++, x: pos.x, y: pos.y, def, age: 0 };
-    this.powerups.push(pu);
-    this.emit('puSpawn', { x: pu.x, y: pu.y, def });
-  }
-  updatePickups() {
-    const rr = (CONFIG.BALL_R + CONFIG.PU_R) ** 2;
-    for (let i = this.powerups.length - 1; i >= 0; i--) {
-      const pu = this.powerups[i];
-      for (const b of this.balls) {
-        if (b.state !== 'live') continue;
-        if ((b.x - pu.x) ** 2 + (b.y - pu.y) ** 2 < rr) {
-          this.powerups.splice(i, 1);
-          this.applyPowerup(pu, b);
-          break;
-        }
-      }
-    }
-  }
-  applyPowerup(pu, b) {
-    const def = pu.def, act = this.activeTeams();
-    const lt = b.lastTouch, ltActive = lt >= 0 && !this.teams[lt].eliminated;
-    let target = -1;
-    if (def.kind === 'pos') target = ltActive ? lt : this.rng.pick(act);
-    else if (def.kind === 'neg') { const c = act.filter(i => i !== lt); target = this.rng.pick(c.length ? c : act); }
-    const T = target >= 0 ? this.teams[target] : null;
-    const code = T ? T.code : '';
-    let text = '';
-    switch (def.id) {
-      case 'giant': T.fx.giant = this.t + def.dur; text = `🧤 ${code} GIANT KEEPER!`; break;
-      case 'wall': T.fx.wall = this.t + def.dur; text = `🧱 ${code} LOCKED THEIR GOAL!`; break;
-      case 'small': T.fx.small = this.t + def.dur; text = `🔍 ${code} SMALL GOAL!`; break;
-      case 'big': T.fx.big = this.t + def.dur; text = `🎯 ${code} BIG GOAL!`; break;
-      case 'speed': this.fxSpeedUntil = this.t + def.dur; text = '⚡ SPEED UP!'; break;
-      case 'split': {
-        let live = 0; for (const x of this.balls) if (x.state === 'live') live++;
-        const cap = CONFIG.MAX_BALLS <= 1 ? 1 : (this.finalDuel ? 1 : CONFIG.MAX_BALLS) + 1;
-        text = '➕ SPLIT BALL!';
-        if (live < cap) {
-          const a = DM.atan2(b.vy, b.vx), sp = b.sp;
-          const px = -DM.sin(a), py = DM.cos(a);
-          const nb = { id: this.ballId++, x: b.x + px * 17, y: b.y + py * 17, px: b.x, py: b.y,
-            vx: DM.cos(a + 0.4) * sp, vy: DM.sin(a + 0.4) * sp, sp, boost: b.boost, wallT: -9, lastTouch: b.lastTouch, state: 'live',
-            born: this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0, shot: false, shotTeam: -1 };
-          b.x -= px * 17; b.y -= py * 17;
-          b.vx = DM.cos(a - 0.4) * sp; b.vy = DM.sin(a - 0.4) * sp;
-          this.balls.push(nb);
-        }
-        break;
-      }
-      case 'life':
-        if (T.lives < 4) { T.lives++; text = `❤️ ${code} EXTRA LIFE!`; }
-        else text = `❤️ ${code} FULL HEALTH!`;
-        break;
-    }
-    this.stats.powerups++;
-    this.emit('powerup', { def, team: target, x: pu.x, y: pu.y, text });
-  }
-
   /* ---------- result ---------- */
   getResult() {
     return {
       mode: this.mode, seed: this.o.seed >>> 0, theme: this.themeId,
-      duration: +this.duration.toFixed(2), overtime: this.everOvertime, draw: this.draw, golden: this.extra, pens: !!this.pens,
+      duration: +this.duration.toFixed(2), overtime: false, draw: this.draw, golden: this.extra, pens: !!this.pens,
       goals: this.stats.goals, saves: this.stats.saves, ownGoals: this.stats.ownGoals, escapes: this.stats.escapes,
       winner: this.winner >= 0 ? this.teams[this.winner].id : null,
       teams: this.teams.map(T => ({ id: T.id, code: T.code, name: T.name, slot: T.i, place: T.place,
@@ -1631,7 +1260,7 @@ const FX = {
   },
   shake(dur, mag) { this.shakeT = Math.max(this.shakeT, dur); this.shakeDur = dur; this.shakeMag = Math.max(mag, this.shakeT > 0 ? this.shakeMag : 0); },
   team(i) { return this.game && i >= 0 ? this.game.teams[i] : null; },
-  /* Announcements (GOAL!, SAVE!, OVERTIME, power-ups, eliminations) share ONE lane above the pitch.
+  /* Announcements (the goal and the new score, HALF TIME, GOLDEN GOAL!, PENALTIES!) share ONE lane above the pitch.
      A newcomer waits until the current one has been visible for ANN_MIN seconds, so texts never overlap
      and nothing is written over the pitch. */
   ANN_MIN: 0.55,
@@ -1674,9 +1303,8 @@ const FX = {
   onEvent(type, d) {
     const g = this.game; if (!g) return;
     switch (type) {
-      case 'wall': case 'post': case 'goalWallHit':
+      case 'wall': case 'post':
         this.sparks(d.x, d.y, d.nx, d.ny, vrng.int(4, 6), '#ffffff'); AudioSys.bounce(d.speed); break;
-      case 'ballball': this.sparks(d.x, d.y, 0, 0, 3, '#ffffff'); AudioSys.ballball(); break;
       case 'player': { const T = this.team(d.team); this.ring(d.x, d.y, T.c1, 34); AudioSys.tup(1); break; }
       case 'keeperHit': AudioSys.tup(0.7); break;
       case 'captainShot': { const T = this.team(d.team); this.ring(d.x, d.y, '#FFD54F', 70); this.burst(d.x, d.y, T.c1, 12); this.shake(0.12, 6); AudioSys.shot(); break; }
@@ -1692,14 +1320,12 @@ const FX = {
         this.shake(0.25, 18);
         const cols = S && !d.own ? [S.c1, S.c2, '#ffffff'] : ['#ffffff', T.c1, '#FFD54F'];
         this.confetti(d.x, d.y, d.nx, d.ny, 40, cols);
-        AudioSys.goal(); if (d.own && !g.timed) AudioSys.wahwah();
-        if (g.timed) {
-          /* 1v1 match: "+ ARSENAL GOAL" and under it the new score. Every goal is the other club's goal (a keeper's deflection
-             into its own net is common in a 1v1, so it is not called an own goal on screen) */
-          const B = this.team(d.benefit), [A0, A1] = g.teams;
-          const goal = { text: `${upTR(B.name)} GOAL`, c1: B.c1, c2: B.c2, plus: true };
-          this.announce({ kind: 'elim', text: `${A0.code} ${d.score[0]} – ${d.score[1]} ${A1.code}${d.golden ? ' · GOLDEN GOAL' : ''}`, color: B.c1, goal, dur: 1.9 });
-        }
+        AudioSys.goal();
+        /* "+ ARSENAL GOAL" and under it the new score. Every goal is the other club's goal (a keeper's deflection
+           into its own net is common here, so it is not called an own goal on screen) */
+        const B = this.team(d.benefit), [A0, A1] = g.teams;
+        const goal = { text: `${upTR(B.name)} GOAL`, c1: B.c1, c2: B.c2, plus: true };
+        this.announce({ kind: 'score', text: `${A0.code} ${d.score[0]} – ${d.score[1]} ${A1.code}${d.golden ? ' · GOLDEN GOAL' : ''}`, color: B.c1, goal, dur: 1.9 });
         break;
       }
       case 'kickoff': AudioSys.whistle(0.5, 0.22); if (d.half === 2) this.announce({ kind: 'big', text: 'SECOND HALF', color: '#00C853', dur: 1.2 }); break;
@@ -1708,27 +1334,7 @@ const FX = {
       case 'goldenGoal': this.announce({ kind: 'big', text: 'GOLDEN GOAL!', color: '#FFB300', dur: 1.8 }); AudioSys.whistle(0.6, 0.24); break;
       case 'penalties': this.announce({ kind: 'big', text: 'PENALTIES!', color: '#FFB300', dur: 1.6 }); AudioSys.whistle(1.0, 0.24); break;
       case 'penKick': if (d.goal) AudioSys.goal(); else AudioSys.save(); break;
-      case 'eliminate': {
-        const T = this.team(d.team);
-        /* the only on-screen text during play (above the pitch): the goal that did it ("+ ARSENAL GOAL", green plus),
-           and under it who went out, in which place and how many points */
-        const pts = App.pointsForPlace(d.place), S = !d.own && d.scorer >= 0 ? this.team(d.scorer) : null;
-        const goal = S ? { text: `${upTR(S.name)} GOAL`, c1: S.c1, c2: S.c2, plus: true } : { text: d.own ? 'OWN GOAL' : 'GOAL', c1: T.c1, c2: T.c2 };
-        this.announce({ kind: 'elim', text: `❌ ${upTR(T.name)} · ${ordinal(d.place)}${pts === null ? '' : ` · +${pts} PTS`}`, color: T.c1, goal, dur: 2.2 });
-        this.shake(0.3, 10); AudioSys.eliminate(); break;
-      }
-      case 'powerup': {
-        const T = this.team(d.team);
-        this.burst(d.x, d.y, '#FFD54F', 18); this.ring(d.x, d.y, '#FFD54F', 80);
-        AudioSys.powerup(); break;
-      }
-      case 'puSpawn': this.ring(d.x, d.y, '#FFD54F', 50); AudioSys.pop(0.6); break;
-      case 'puExpire': this.burst(d.x, d.y, 'rgba(255,255,255,0.7)', 6); break;
       case 'spawnBall': if (!d.initial) { this.pops.push({ x: d.x, y: d.y, t: this.wt }); AudioSys.pop(1); } break;
-      case 'overtime':
-        AudioSys.whistle(0.45, 0.25); break;
-      case 'finalDuel': AudioSys.whoosh(); break;
-      case 'morphStart': AudioSys.whoosh(); break;
       case 'win': AudioSys.finalWhistle(); break;
     }
   },
@@ -1856,7 +1462,6 @@ const AudioSys = {
     const f = 360 + Math.min(1600, speed || 600) * 0.35 + vrng.range(-45, 45);
     this.tone('triangle', f, 0.03, 0.16); this.tone('sine', f * 2.01, 0.02, 0.05);
   },
-  ballball() { if (!this.ready() || !this.limit('bb', 3, 0.025)) return; this.tone('triangle', 1150 + vrng.range(-90, 90), 0.03, 0.15); },
   tup(k) {
     if (!this.ready() || !this.limit('tup', 3, 0.04)) return;
     this.tone('sine', 230, 0.09, 0.3 * k, { f2: 140 }); this.noise(0.05, 0.06 * k, { type: 'lowpass', f: 900 });
@@ -1893,22 +1498,6 @@ const AudioSys = {
     this.noise(dur * 0.8, gain * 0.4, { type: 'lowpass', f: 300, attack: 0.1, delay });
   },
   goal() { if (!this.ready() || !this.limit('goal', 2, 0.15)) return; this.whistle(0.28, 0.22); this.crowd(1.2, 0.5, 0.05); },
-  wahwah() {
-    if (!this.ready()) return;
-    [[392, 370], [370, 349], [349, 330], [330, 262]].forEach(([a, b], i) =>
-      this.tone('sawtooth', a, i === 3 ? 0.6 : 0.26, 0.16, { f2: b, delay: 0.25 + i * 0.27, lp: 900, attack: 0.03 }));
-  },
-  eliminate() {
-    if (!this.ready()) return;
-    this.tone('sine', 85, 0.8, 0.8, { f2: 28 }); this.noise(0.6, 0.35, { type: 'lowpass', f: 220 });
-    this.tone('square', 2400, 0.025, 0.13, { delay: 0.14 }); this.tone('square', 1600, 0.035, 0.12, { delay: 0.17 });
-    this.noise(0.04, 0.25, { type: 'highpass', f: 4000, delay: 0.14 });
-  },
-  powerup() {
-    if (!this.ready()) return;
-    [880, 1108.7, 1318.5].forEach((f, i) => { this.tone('triangle', f, 0.14, 0.2, { delay: i * 0.07 }); this.tone('sine', f * 2, 0.1, 0.06, { delay: i * 0.07 }); });
-  },
-  whoosh() { if (!this.ready()) return; this.noise(0.7, 0.22, { type: 'bandpass', f: 300, f2: 2400, Q: 1.5, attack: 0.3 }); },
   finalWhistle() {
     if (!this.ready()) return;
     this.whistle(1.15, 0.24); this.crowd(2.8, 0.6, 0.1);
@@ -1917,7 +1506,7 @@ const AudioSys = {
 };
 
 /* =====================================================================
-   RENDER — arena / entities (camera + shake apply here)
+   RENDER — pitch / entities (camera + shake apply here)
    ===================================================================== */
 const Renderer = {
   canvas: null, ctx: null, trails: new Map(), spins: new Map(),
@@ -1932,8 +1521,8 @@ const Renderer = {
     this.background(vis);
     if (!g) return;
     this.updateTrails(g, app);
-    this.arena(g, vis);
-    HUD.draw(ctx, g, app, vis);
+    this.pitch(g, vis);
+    HUD.draw(ctx, g, app);
     if (app.introOn()) IntroScreen.draw(ctx, app.intro, app.introT);
     if (app.end) EndScreen.draw(ctx, app.end, app.endT);
   },
@@ -1972,7 +1561,7 @@ const Renderer = {
     for (const id of [...this.trails.keys()]) if (!alive.has(id)) this.trails.delete(id);
   },
 
-  arena(g, vis) {
+  pitch(g, vis) {
     const ctx = this.ctx;
     ctx.save();
     if (FX.shakeT > 0) {
@@ -1986,20 +1575,8 @@ const Renderer = {
       const Fx = C.x + (FX.cam.x - C.x) * 0.55 * k, Fy = C.y + (FX.cam.y - C.y) * 0.55 * k;
       ctx.translate(C.x, C.y); ctx.scale(z, z); ctx.translate(-Fx, -Fy);
     }
-    let keeperAlpha = 1;
-    if (g.morph && g.morph.kind === 'rect') {
-      const e = easeInOutCubic(g.morph.t / g.morph.dur);
-      const pg = g.polyGeo(g.va, g.R, g.rot, g.sides);
-      this.shape(g, vis, pg, 1 - e, 1 - 0.12 * e, g.rot);
-      this.shape(g, vis, g.morph.targetGeo, e, 0.88 + 0.12 * e, 0);
-      keeperAlpha = 1 - e;
-      this.keepers(g, pg, keeperAlpha);
-    } else {
-      const geo = g.morph ? g.computeGeo() : g.geo;
-      this.shape(g, vis, geo, 1, 1, geo.kind === 'poly' ? g.rot : 0);
-      this.keepers(g, geo, 1);
-    }
-    this.powerups(g);
+    this.shape(g, vis, g.geo);
+    this.keepers(g, g.geo);
     this.players(g);
     this.balls(g, vis);
     this.particles();
@@ -2014,26 +1591,19 @@ const Renderer = {
     }
   },
 
-  shape(g, vis, geo, alpha, scale, rot) {
-    if (alpha <= 0.003) return;
+  shape(g, vis, geo) {
     const ctx = this.ctx, cx = g.cx, cy = CONFIG.CY;
     ctx.save();
-    ctx.globalAlpha = alpha;
-    if (scale !== 1) { ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy); }
     const V = geo.verts;
     /* nets (behind floor edge) */
-    for (const gl of geo.goals) {
-      if (gl.locked) { ctx.save(); ctx.globalAlpha *= 0.55; this.net(g, vis, gl, geo.netDepth); ctx.restore(); }
-      else this.net(g, vis, gl, geo.netDepth);
-    }
+    for (const gl of geo.goals) this.net(g, vis, gl, geo.netDepth);
     /* floor */
     ctx.save();
     ctx.beginPath(); V.forEach((v, i) => (i ? ctx.lineTo(v.x, v.y) : ctx.moveTo(v.x, v.y))); ctx.closePath();
     ctx.fillStyle = vis.f1; ctx.fill();
     ctx.clip();
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot);
-    /* mowing stripes: long enough to cover the whole pitch (the rect pitch is taller than the screen's middle 1400 px) and,
-       for the rotating polygon, its full diagonal */
+    ctx.save(); ctx.translate(cx, cy);
+    /* mowing stripes: long enough to cover the whole pitch (it is taller than the screen's middle 1400 px) */
     ctx.fillStyle = vis.f2;
     for (let s = -24; s <= 24; s += 2) ctx.fillRect(s * 45, -1200, 45, 2400);
     ctx.restore();
@@ -2045,7 +1615,7 @@ const Renderer = {
     ctx.fillStyle = lg; ctx.fillRect(0, 0, 1080, 1920);
     ctx.beginPath(); V.forEach((v, i) => (i ? ctx.lineTo(v.x, v.y) : ctx.moveTo(v.x, v.y))); ctx.closePath();
     ctx.strokeStyle = `rgba(0,0,0,${0.22 * sh})`; ctx.lineWidth = 44; ctx.stroke();
-    this.fieldLines(g, vis, geo, rot);
+    this.fieldLines(g, vis, geo);
     if (g.themeId === 'rain') {
       for (const s of FX.splashes) {
         const a = (FX.ut - s.t) / 0.7;
@@ -2059,27 +1629,23 @@ const Renderer = {
     /* walls */
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.beginPath();
-    for (const w of geo.walls) if (!w.goalWall) { ctx.moveTo(w.ax, w.ay); ctx.lineTo(w.bx, w.by); }
+    for (const w of geo.walls) { ctx.moveTo(w.ax, w.ay); ctx.lineTo(w.bx, w.by); }
     ctx.strokeStyle = vis.wallGlow; ctx.lineWidth = 30; ctx.stroke();
     ctx.strokeStyle = vis.wall; ctx.lineWidth = 12; ctx.stroke();
-    /* goal closures, posts, effect icons */
+    /* posts, the club's name behind its net and its goal tally */
     for (const gl of geo.goals) {
       const T = g.teams[gl.team];
-      if (gl.locked) this.lockWall(g, gl, T);
-      else if (gl.wallPU) this.brickWall(gl, T);
       for (const [px, py] of [[gl.p1x, gl.p1y], [gl.p2x, gl.p2y]]) {
         ctx.beginPath(); ctx.arc(px, py, CONFIG.POST_R, 0, TAU);
         ctx.fillStyle = '#ffffff'; ctx.fill();
         ctx.lineWidth = 4; ctx.strokeStyle = T.c1; ctx.stroke();
       }
-      if (!T.eliminated) this.goalIcons(g, gl, T);
-      this.nameTag(gl, T, geo.netDepth, g.o.lives > 1 && !T.eliminated && !g.finalDuel ? T.lives : 0); this.goalTally(g, gl, T, geo.netDepth);
-      if (gl.locked) this.resultTag(g, gl, T);
+      this.nameTag(gl, T, geo.netDepth); this.goalTally(g, gl, T, geo.netDepth);
     }
     ctx.restore();
   },
 
-  fieldLines(g, vis, geo, rot) {
+  fieldLines(g, vis, geo) {
     const ctx = this.ctx;
     ctx.save();
     ctx.strokeStyle = vis.line; ctx.lineWidth = 4; ctx.fillStyle = vis.line;   // always white
@@ -2089,14 +1655,6 @@ const Renderer = {
   },
   fieldLinesPath(geo) {
     const ctx = this.ctx, cx = geo.cx, cy = geo.cy;
-    if (geo.kind === 'poly') {
-      ctx.beginPath(); ctx.arc(cx, cy, 92, 0, TAU); ctx.stroke();
-      ctx.beginPath(); ctx.arc(cx, cy, 7, 0, TAU); ctx.fill();
-      ctx.save(); ctx.globalAlpha *= 0.35; ctx.beginPath();
-      geo.verts.forEach((v, i) => { const x = cx + (v.x - cx) * 0.55, y = cy + (v.y - cy) * 0.55; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-      ctx.closePath(); ctx.stroke(); ctx.restore();
-      return;
-    }
     const W = geo.W, H = geo.H, x0 = cx - W / 2, y0 = cy - H / 2;
     ctx.beginPath(); ctx.moveTo(x0, cy); ctx.lineTo(x0 + W, cy); ctx.stroke();
     ctx.beginPath(); ctx.arc(cx, cy, 86, 0, TAU); ctx.stroke();
@@ -2145,33 +1703,16 @@ const Renderer = {
     }
     ctx.stroke();
     ctx.restore();
-    const glow = T.eliminated ? 0.25 : 1;
     ctx.beginPath(); const a1 = P(-hw, 0), a2 = P(-hw, D + disp(-hw, D)), a3 = P(hw, D + disp(hw, D)), a4 = P(hw, 0);
     ctx.moveTo(a1[0], a1[1]); ctx.lineTo(a2[0], a2[1]); ctx.lineTo(a3[0], a3[1]); ctx.lineTo(a4[0], a4[1]);
-    ctx.lineWidth = 9; ctx.strokeStyle = rgba(T.c1, 0.25 * glow); ctx.stroke();
-    ctx.lineWidth = 4; ctx.strokeStyle = rgba(T.c1, 0.95 * glow); ctx.stroke();
+    ctx.lineWidth = 9; ctx.strokeStyle = rgba(T.c1, 0.25); ctx.stroke();
+    ctx.lineWidth = 4; ctx.strokeStyle = rgba(T.c1, 0.95); ctx.stroke();
     ctx.restore();
   },
 
-  lockWall(g, gl, T) {
-    const ctx = this.ctx;
-    const p = easeOutCubic((g.t - T.elimT) / 0.25);
-    const { mx, my, tx, ty, hw } = gl;
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.shadowColor = T.c1; ctx.shadowBlur = 22;
-    ctx.strokeStyle = T.c1; ctx.lineWidth = 16;
-    ctx.beginPath();
-    ctx.moveTo(gl.p1x, gl.p1y); ctx.lineTo(gl.p1x + tx * hw * p, gl.p1y + ty * hw * p);
-    ctx.moveTo(gl.p2x, gl.p2y); ctx.lineTo(gl.p2x - tx * hw * p, gl.p2y - ty * hw * p);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 4; ctx.stroke();
-    ctx.restore();
-  },
-  /* team name written across the net behind each goal (also after elimination), parallel to the goal line.
+  /* team name written across the net behind each goal, parallel to the goal line.
      Plain white letters with a dark outline, so the name reads on any pitch/theme. */
-  nameTag(gl, T, D, hearts) {
+  nameTag(gl, T, D) {
     const ctx = this.ctx;
     const ang = Math.atan2(gl.ty, gl.tx);
     const chars = [...upTR(T.name)];
@@ -2179,9 +1720,7 @@ const Renderer = {
     const maxW = Math.min(gl.L * 0.92, 470);
     const widthAt = (f) => { ctx.font = `${f}px ${FONT_BIG}`; return chars.reduce((w, ch) => w + ctx.measureText(ch).width, 0) + (chars.length - 1) * f * 0.06; };
     while (widthAt(fs) > maxW && fs > 16) fs -= 2;
-    const hs = hearts ? fs * 0.55 : 0, heartsW = hearts ? 10 + hearts * (hs + 3) : 0;
-    while (hearts && widthAt(fs) + heartsW > maxW && fs > 16) fs -= 2;
-    const total = widthAt(fs) + heartsW, gap = fs * 0.06;
+    const total = widthAt(fs), gap = fs * 0.06;
     ctx.save();
     ctx.translate(gl.mx + gl.nx * (D / 2 + 2), gl.my + gl.ny * (D / 2 + 2));
     ctx.rotate(ang);
@@ -2197,7 +1736,6 @@ const Renderer = {
       }
       x += w + gap;
     }
-    if (hearts) for (let h = 0; h < hearts; h++) drawHeart(ctx, x + 10 + h * (hs + 3) + hs / 2, 2, hs, '#ff3d57', 'rgba(0,0,0,0.6)');
     ctx.restore();
   },
   /* one mini football per goal this team has scored in the match, lined up behind its name; each pops in when the goal is scored */
@@ -2235,70 +1773,15 @@ const Renderer = {
     }
     ctx.restore();
   },
-  /* small result tag just in front of an eliminated team's closed goal: "4TH · +4 PTS" */
-  resultTag(g, gl, T) {
-    const ctx = this.ctx;
-    const p = easeOutBack((g.t - T.elimT - 0.15) / 0.35, 2);
-    if (p <= 0.01) return;
-    const pts = App.pointsForPlace(T.place);
-    const text = `${ordinal(T.place)}${pts === null ? '' : ` · +${pts} PTS`}`;
-    const ang = Math.atan2(gl.ty, gl.tx);
-    ctx.save();
-    ctx.translate(gl.mx - gl.nx * 34, gl.my - gl.ny * 34);
-    ctx.rotate(ang);
-    if (Math.cos(ang) < 0) ctx.rotate(Math.PI);
-    ctx.scale(p, p);
-    let fs = 32; ctx.font = `${fs}px ${FONT_BIG}`;
-    const maxW = Math.max(90, gl.L * 0.7);
-    while (ctx.measureText(text).width > maxW - 24 && fs > 16) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
-    const w = ctx.measureText(text).width + 28, h = fs + 12;
-    roundRect(ctx, -w / 2, -h / 2, w, h, h / 2);
-    ctx.fillStyle = 'rgba(8,10,18,0.78)'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = T.c1; ctx.stroke();
-    outlinedText(ctx, text, 0, 2, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
-    ctx.restore();
-  },
-  brickWall(gl, T) {
-    const ctx = this.ctx;
-    ctx.save(); ctx.lineCap = 'butt';
-    ctx.shadowColor = T.c1; ctx.shadowBlur = 18;
-    ctx.strokeStyle = T.c1; ctx.lineWidth = 18;
-    ctx.beginPath(); ctx.moveTo(gl.p1x, gl.p1y); ctx.lineTo(gl.p2x, gl.p2y); ctx.stroke();
-    ctx.shadowBlur = 0; ctx.setLineDash([22, 6]); ctx.strokeStyle = T.c2; ctx.lineWidth = 6; ctx.stroke(); ctx.setLineDash([]);
-    ctx.restore();
-  },
-  goalIcons(g, gl, T) {
-    const icons = [];
-    if (g.t < T.fx.giant) icons.push('🧤');
-    if (g.t < T.fx.wall) icons.push('🧱');
-    if (g.t < T.fx.small) icons.push('🔍');
-    if (g.t < T.fx.big) icons.push('🎯');
-    if (!icons.length) return;
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.font = `32px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.globalAlpha *= 0.75 + 0.25 * Math.sin(FX.ut * 6);
-    icons.forEach((ic, i) => {
-      const off = (i - (icons.length - 1) / 2) * 40;
-      const x = gl.mx - gl.nx * 74 + gl.tx * off, y = gl.my - gl.ny * 74 + gl.ty * off;
-      ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.beginPath(); ctx.arc(x, y, 21, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.fillText(ic, x, y + 2);
-    });
-    ctx.restore();
-  },
-
-  keepers(g, geo, alphaMul) {
+  keepers(g, geo) {
     const ctx = this.ctx;
     for (const gl of geo.goals) {
       const T = g.teams[gl.team], k = T.k;
-      let alpha = alphaMul;
-      if (T.eliminated) alpha *= 1 - clamp01((g.t - T.elimT) / 0.6);
-      if (alpha <= 0.01) continue;
       const half = Math.min(k.halfLen, gl.hw * 0.92), maxS = Math.max(0, gl.hw - half - 4);
       const s = clamp(k.s, -maxS, maxS);
       const x = gl.mx - gl.nx * CONFIG.KEEPER_INSET + gl.tx * s, y = gl.my - gl.ny * CONFIG.KEEPER_INSET + gl.ty * s;
       const ax = x - gl.tx * half, ay = y - gl.ty * half, bx = x + gl.tx * half, by = y + gl.ty * half;
-      ctx.save(); ctx.globalAlpha = alpha; ctx.lineCap = 'round';
+      ctx.save(); ctx.lineCap = 'round';
       const fl = g.t - k.flashT < 0.35 ? 1 - (g.t - k.flashT) / 0.35 : 0;
       if (fl > 0) { ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 30 * fl; }
       ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
@@ -2309,34 +1792,11 @@ const Renderer = {
       ctx.restore();
     }
   },
-  powerups(g) {
-    const ctx = this.ctx;
-    for (const p of g.powerups) {
-      const s = easeOutBack(p.age / 0.35) * (1 + 0.07 * Math.sin(p.age * 6));
-      let a = 1;
-      if (p.age > CONFIG.PU_LIFE - 2) a = 0.3 + 0.7 * (0.5 + 0.5 * Math.cos(p.age * 18));
-      ctx.save(); ctx.globalAlpha *= a;
-      ctx.translate(p.x, p.y); ctx.scale(s, s);
-      const gr = ctx.createRadialGradient(0, 0, 10, 0, 0, 58);
-      gr.addColorStop(0, 'rgba(255,215,64,0.55)'); gr.addColorStop(1, 'rgba(255,215,64,0)');
-      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, 58, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.arc(0, 0, CONFIG.PU_R, 0, TAU);
-      ctx.fillStyle = 'rgba(18,18,30,0.9)'; ctx.fill();
-      ctx.lineWidth = 4; ctx.strokeStyle = '#FFD740'; ctx.stroke();
-      ctx.rotate(Math.sin(p.age * 3) * 0.15);
-      ctx.font = `30px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
-      ctx.fillText(p.def.icon, 0, 2);
-      ctx.restore();
-    }
-  },
   players(g) {
     const ctx = this.ctx, R = CONFIG.PLAYER_R;
     for (const p of g.players) {
       const T = g.teams[p.team];
-      let a = 1;
-      if (!p.alive || T.eliminated) a = 1 - clamp01((g.t - T.elimT) / 0.6);
-      if (a <= 0.01) continue;
-      ctx.save(); ctx.globalAlpha *= a;
+      ctx.save();
       /* token: soft shadow, dark rim, shaded club colour, ring in the second colour, the code in a colour that reads on it */
       const sg = ctx.createRadialGradient(p.x + 3, p.y + 8, R * 0.3, p.x + 3, p.y + 8, R * 1.35);
       sg.addColorStop(0, 'rgba(0,0,0,0.45)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
@@ -2450,7 +1910,7 @@ const Renderer = {
     for (const gl of g.geo.goals) {
       const T = g.teams[gl.team];
       const gr = ctx.createRadialGradient(gl.mx, gl.my, 0, gl.mx, gl.my, gl.hw + 60);
-      gr.addColorStop(0, rgba(T.c1, T.eliminated ? 0.12 : 0.35)); gr.addColorStop(1, rgba(T.c1, 0));
+      gr.addColorStop(0, rgba(T.c1, 0.35)); gr.addColorStop(1, rgba(T.c1, 0));
       ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(gl.mx, gl.my, gl.hw + 60, 0, TAU); ctx.fill();
     }
     ctx.restore();
@@ -2504,56 +1964,18 @@ function outlinedText(ctx, text, x, y, font, fill, stroke, lw, align = 'center',
   if (stroke) { ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.strokeText(text, x, y); }
   ctx.fillStyle = fill; ctx.fillText(text, x, y);
 }
-function drawHeart(ctx, x, y, s, fill, stroke) {
-  ctx.save(); ctx.translate(x, y); ctx.scale(s / 16, s / 16);
-  ctx.beginPath();
-  ctx.moveTo(0, 6); ctx.bezierCurveTo(-14, -3, -9, -15, 0, -8); ctx.bezierCurveTo(9, -15, 14, -3, 0, 6);
-  ctx.closePath();
-  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-  if (stroke) { ctx.lineWidth = 2.2; ctx.strokeStyle = stroke; ctx.stroke(); }
-  ctx.restore();
-}
 
 /* =====================================================================
-   HUD  (title, final-duel scoreboard, big texts)
+   HUD  (top bar: title · clock · score, penalty table, announcements)
    ===================================================================== */
 const HUD = {
-  draw(ctx, g, app, vis) {
-    const SX = 510; // center of safe area (60..960)
-    /* 1v1 match: everything in one line on top (title · score · clock), the pitch fills the rest of the frame */
-    if (g.timed) {
-      this.topBar(ctx, g, app);
-      this.announcement(ctx, CONFIG.CY + CONFIG.FINAL_DY - CONFIG.FINAL_H * 0.27, g.cx);
-      if (g.pens) this.penalties(ctx, g, g.cx);
-      return;
-    }
-    /* title */
-    const title = app.title || '';
-    let tfs = 86; ctx.font = `${tfs}px ${FONT_BIG}`;
-    while (ctx.measureText(title).width > 800 && tfs > 50) { tfs -= 2; ctx.font = `${tfs}px ${FONT_BIG}`; }
-    const tw = ctx.measureText(title).width;
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 16;
-    outlinedText(ctx, title, SX - 34, 260, `${tfs}px ${FONT_BIG}`, '#ffffff', null, 0);
-    ctx.shadowBlur = 0;
-    ctx.font = `56px ${FONT_UI}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(THEME_DEFS[g.themeId].icon, SX - 34 + tw / 2 + 16, 256);
-    ctx.restore();
-    /* CTA — first 3 seconds */
-    const ct = app.matchRealT;
-    if (ct < 3) {
-      const a = ct > 2.6 ? (3 - ct) / 0.4 : 1;
-      ctx.save(); ctx.globalAlpha = a;
-      outlinedText(ctx, 'Who wins? Comment below 👇', SX, 316, `600 30px ${FONT_UI}`, '#ffffff', 'rgba(0,0,0,0.55)', 6);
-      ctx.restore();
-    }
-    /* final duel score shares the lane above the pitch with the elimination text and fades out while one shows */
-    const want = g.finalDuel && !g.morph && !FX.ann ? 1 : 0;
-    this.duelA = (this.duelA || 0) + (want - (this.duelA || 0)) * 0.18;
-    if (this.duelA > 0.02) { ctx.save(); ctx.globalAlpha = this.duelA; this.duelScore(ctx, g, SX); ctx.restore(); }
-    this.announcement(ctx, 394);
+  draw(ctx, g, app) {
+    /* everything in one line on top (title · score · clock), the pitch fills the rest of the frame */
+    this.topBar(ctx, g, app);
+    this.announcement(ctx, CONFIG.CY + CONFIG.FINAL_DY - CONFIG.FINAL_H * 0.27, g.cx);
+    if (g.pens) this.penalties(ctx, g, g.cx);
   },
-  /* 1v1 match: one line above the pitch — title + theme (left), the clock (centre; last 10 s red, golden goal gold), the score (right).
+  /* one line above the pitch — title + theme (left), the clock (centre; last 10 s red, golden goal gold), the score (right).
      A thin bar under the clock shows the time played. */
   topBar(ctx, g, app) {
     const y = CONFIG.TOPBAR_Y, X0 = 30, X1 = 1050, H = 84;
@@ -2641,29 +2063,6 @@ const HUD = {
     ctx.restore();
   },
 
-  /* duel score above the pitch: top-goal team (in a 1v1 match: the home club) on the left */
-  duelScore(ctx, g, SX) {
-    const [ia, ib] = g.rectTeams || [], A = g.teams[ia], B = g.teams[ib];
-    if (!A || !B) return;
-    ctx.save();
-    const cy = 380;
-    roundRect(ctx, SX - 360, cy - 52, 720, 104, 30);
-    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.stroke();
-    ctx.beginPath(); ctx.arc(SX - 315, cy, 22, 0, TAU); ctx.fillStyle = A.c1; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = A.c2; ctx.stroke();
-    ctx.beginPath(); ctx.arc(SX + 315, cy, 22, 0, TAU); ctx.fillStyle = B.c1; ctx.fill(); ctx.strokeStyle = B.c2; ctx.stroke();
-    outlinedText(ctx, A.code, SX - 280, cy + 4, `72px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
-    outlinedText(ctx, B.code, SX + 280, cy + 4, `72px ${FONT_BIG}`, '#ffffff', null, 0, 'right');
-    const pulseA = g.t - (B.hitT >= 0 ? B.hitT : -9), pulseB = g.t - (A.hitT >= 0 ? A.hitT : -9);
-    const sa = pulseA < 0.5 ? 1 + 0.35 * Math.sin(pulseA / 0.5 * Math.PI) : 1, sb = pulseB < 0.5 ? 1 + 0.35 * Math.sin(pulseB / 0.5 * Math.PI) : 1;
-    ctx.save(); ctx.translate(SX - 70, cy + 4); ctx.scale(sa, sa); outlinedText(ctx, String(A.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
-    outlinedText(ctx, '–', SX, cy + 2, `80px ${FONT_BIG}`, 'rgba(255,255,255,0.7)', null, 0);
-    ctx.save(); ctx.translate(SX + 70, cy + 4); ctx.scale(sb, sb); outlinedText(ctx, String(B.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
-    /* the longer final pitch reaches up to the scoreboard, so the rule line sits under the pitch (a timed match has its clock there) */
-    if (!g.timed) outlinedText(ctx, `FIRST TO ${CONFIG.FINAL_GOALS} WINS`, SX, CONFIG.CY + CONFIG.FINAL_DY + CONFIG.FINAL_H / 2 + CONFIG.NET_DEPTH_RECT + 40, `600 26px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
-    ctx.restore();
-  },
-
   /* green plus next to the scoring team's name, centred on (x, y), s = size */
   greenPlus(ctx, x, y, s) {
     const t = s * 0.3;
@@ -2699,8 +2098,8 @@ const HUD = {
       outlinedText(ctx, a.text, 0, 4, `${fs}px ${FONT_BIG}`, '#ffffff', a.color, 14);
       ctx.shadowBlur = 0;
       outlinedText(ctx, a.text, 0, 4, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
-    } else if (a.kind === 'elim' && a.goal) {
-      /* line 1: green plus + "ARSENAL GOAL" in the scoring team's colours; line 2: the eliminated-team pill */
+    } else if (a.kind === 'score' && a.goal) {
+      /* line 1: green plus + "ARSENAL GOAL" in the scoring team's colours; line 2: the new score in a pill */
       const G = a.goal;
       let gs = 64; ctx.font = `${gs}px ${FONT_BIG}`;
       while (ctx.measureText(G.text).width > 760 && gs > 36) { gs -= 2; ctx.font = `${gs}px ${FONT_BIG}`; }
@@ -2720,9 +2119,8 @@ const HUD = {
       ctx.lineWidth = 5; ctx.strokeStyle = a.color; ctx.stroke();
       outlinedText(ctx, a.text, 0, cy + 3, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
     } else {
-      const elim = a.kind === 'elim';
-      let fs = elim ? 76 : 56; ctx.font = `${fs}px ${FONT_BIG}`;
-      while (ctx.measureText(a.text).width > (elim ? 800 : 820) && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
+      let fs = 56; ctx.font = `${fs}px ${FONT_BIG}`;
+      while (ctx.measureText(a.text).width > 820 && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
       const w = ctx.measureText(a.text).width + 70, h = fs + 26;
       roundRect(ctx, -w / 2, -h / 2, w, h, h / 2);
       ctx.fillStyle = 'rgba(10,10,20,0.85)'; ctx.fill();
@@ -3016,7 +2414,55 @@ const cupName = (k) => {
   return k[0] === 'R' ? ['FIRST ROUND ' + n, '1. tur ' + n + '. maç'] : k[0] === 'Q' ? ['QUARTER-FINAL ' + n, 'Çeyrek final ' + n] : ['SEMI-FINAL ' + n, 'Yarı final ' + n];
 };
 
+/* ---- the league's data format (League.data; the studio's export file and the live league's saved states use the same).
+   Changing it: add a migration to League.normalize so older saves still open. ---- */
+/** @typedef {{ id: string, name: string, code: string, c1: string, c2: string }} Club  a club: 3-letter code, two colours (#rrggbb) */
+/** @typedef {{ played: number, pts: number, w: number, d: number, l: number, gf: number, ga: number }} TableRow */
+/** @typedef {{ id: string, code: string, score: number, saves: number }} SideResult */
+/**
+ * @typedef {Object} HistoryEntry  a played league match of the running season
+ * @property {number} matchNo
+ * @property {number} week
+ * @property {number} weekMatch
+ * @property {'match'} mode
+ * @property {number} seed      the match's seed: seed + clubs + theme replay it exactly (same rules)
+ * @property {string} theme
+ * @property {string} date      kick-off (ISO)
+ * @property {string[]} teams   [home, away] club ids
+ * @property {string|null} winner
+ * @property {number} duration
+ * @property {SideResult[]} result  [home, away]
+ */
+/** @typedef {{ winner: string, loser: string, sw: number, sl: number, seed: number, theme: string, duration: number, date: string, pw?: number, pl?: number, gg?: number }} CupResult  sw / sl: goals of the winner / loser; pw / pl: penalties; gg: golden goal */
+/** @typedef {{ season: number, draw: string[], res: Object<string, CupResult> }} CupState  the promotion playoff: the draw (pool club ids) and the results by match key (CUP_SHAPE) */
+/** @typedef {{ season: number, key: string, size: number, created: string, weeks: string[][][] }} SeasonPlan  weeks[w][m] = [home, away] */
+/**
+ * @typedef {Object} LeagueData
+ * @property {number} version
+ * @property {number} teamsVersion
+ * @property {Club[]} teams          the clubs in the league
+ * @property {Club[]} reserve        the pool (promotion playoff clubs)
+ * @property {Object<string, TableRow>} table   by club id
+ * @property {number} week
+ * @property {number} weekMatch
+ * @property {number} matchNo
+ * @property {number} season
+ * @property {number} seasonLength
+ * @property {number[]} points       [win, draw, loss]
+ * @property {SeasonPlan|null} seasonPlan
+ * @property {string[]|null} tieOrder
+ * @property {CupState|null} cup
+ * @property {HistoryEntry[]} history
+ * @property {{ id: string, name: string, season: number, pts: number }[]} champions
+ * @property {Object<string, any>} settings
+ * @property {number} [liveCount]       live league: matches played
+ * @property {number} [liveSeasonStart]
+ * @property {number} [liveLastEnd]     live league: when the last match ended (ms)
+ * @property {Object[]} [seasons]       live league: the finished seasons' archive (Geçmiş)
+ * @property {any} [weekPlan]          a field of older saves (deleted on load)
+ */
 const League = {
+  /** @type {LeagueData} */
   data: null, storageOK: true,
   fresh() {
     return {
@@ -3029,7 +2475,7 @@ const League = {
     };
   },
   defaultSettings() {
-    return { theme: 'auto', lives: CONFIG.DEFAULT_LIVES, speedMult: CONFIG.DEFAULT_SPEED_MULT, powerups: false,
+    return { theme: 'auto', speedMult: CONFIG.DEFAULT_SPEED_MULT,
       simSpeed: 1, volume: 0.8, muted: false, testMatch: false, sv: 2 };
   },
   normalize(d) {
@@ -3072,10 +2518,10 @@ const League = {
     out.champions = Array.isArray(d.champions) ? d.champions : [];
     out.settings = Object.assign(this.defaultSettings(), d.settings || {});
     delete out.settings.seed;                 // the seed is chosen per match and never stored ahead of it
-    /* removed options: match mode (derby / season final), manual team pick, team count per match (always CONFIG.GROUP_SIZE) */
-    for (const k of ['mode', 'selMode', 'manual', 'teamCount']) delete out.settings[k];
-    /* settings v2: single life by default — migrate older saved settings once */
-    if (!d.settings || d.settings.sv !== 2) { out.settings.lives = CONFIG.DEFAULT_LIVES; out.settings.sv = 2; }
+    /* removed options: match mode (derby / season final), manual team pick, team count per match (always 2), and the old
+       6-team arena's lives and power-ups */
+    for (const k of ['mode', 'selMode', 'manual', 'teamCount', 'lives', 'powerups']) delete out.settings[k];
+    out.settings.sv = 2;
     if (out.settings.theme !== 'auto' && !THEME_DEFS[out.settings.theme]) out.settings.theme = 'auto';   // removed themes (bumpers)
     return out;
   },
@@ -3358,6 +2804,7 @@ const Recorder = {
 /* =====================================================================
    UI PANEL  (Turkish control panel)
    ===================================================================== */
+/** a panel element by id (typed loosely: inputs, selects, buttons, canvas…) @type {(id: string) => any} */
 const $ = (id) => document.getElementById(id);
 const UI = {
   init() {
@@ -3404,11 +2851,11 @@ const UI = {
     });
     $('btnImport').addEventListener('click', () => $('importFile').click());
     $('importFile').addEventListener('change', (ev) => {
-      const f = ev.target.files[0]; if (!f) return;
+      const f = /** @type {HTMLInputElement} */ (ev.target).files[0]; if (!f) return;
       const rd = new FileReader();
       rd.onload = () => {
         try {
-          const d = JSON.parse(rd.result);
+          const d = JSON.parse(String(rd.result));
           if (!d || !Array.isArray(d.teams) || d.teams.length < 2) throw new Error('Geçersiz dosya: takım listesi yok.');
           if (!League.validTeamCount(d.teams.length))
             throw new Error(`Takım sayısı (${d.teams.length}) çift olmalı; her hafta her takım bir maç oynar.`);
@@ -3466,7 +2913,7 @@ const UI = {
       $('fixture').innerHTML = '';
     } else {
       info += `<div class="kv"><span>Sıradaki maç</span><b>${d.week > d.seasonLength ? '—' : `${d.weekMatch} / ${App.perWeek()}`}</b></div><div class="kv"><span>Oynanan maç (bu sezon)</span><b>${d.history.length}</b></div>`
-        + `<div class="hint">${d.teams.length} takım, her maç 1'e 1 (${CONFIG.MATCH_TIME} sn) → haftada ${App.perWeek()} maç; her takım her hafta tam 1 maç oynar. Haftanın son maçı kaydedilince hafta kendiliğinden ilerler.</div>`;
+        + `<div class="hint">${d.teams.length} takım, her maç iki takım arasında (${CONFIG.MATCH_TIME} sn) → haftada ${App.perWeek()} maç; her takım her hafta tam 1 maç oynar. Haftanın son maçı kaydedilince hafta kendiliğinden ilerler.</div>`;
       const wk = plan.weeks[d.week - 1];
       if (wk) info += `<div class="hint" style="margin-top:10px"><b>Hafta ${d.week} maçları</b> (ilk yazılan ev sahibi, üst kale)</div>` + wk.map((g, i) =>
         `<div class="kv"><span>${i + 1}. maç${i + 1 < d.weekMatch ? ' ✓' : i + 1 === d.weekMatch ? ' ▶' : ''}</span><b style="font-weight:600">${g.map(code).join(' – ')}</b></div>`).join('');
@@ -3545,17 +2992,18 @@ const TeamEditor = {
     $('teBody').innerHTML = this.rows.map((t, i) => `<tr data-i="${i}">
       <td><input class="te-name" value="${esc(t.name)}" maxlength="40"></td>
       <td><input class="te-code" value="${esc(t.code)}" maxlength="3"></td>
-      <td><input type="color" class="te-c1" value="${t.c1.toLowerCase()}"></td>
-      <td><input type="color" class="te-c2" value="${t.c2.toLowerCase()}"></td>
+      <td><input type="color" class="te-c1" value="${esc(t.c1.toLowerCase())}"></td>
+      <td><input type="color" class="te-c2" value="${esc(t.c2.toLowerCase())}"></td>
       <td><button class="te-del" data-i="${i}" title="Sil">🗑</button></td></tr>`).join('');
-    document.querySelectorAll('.te-del').forEach(b => b.onclick = () => { this.collect(); this.rows.splice(+b.dataset.i, 1); this.render(); });
+    /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('.te-del')).forEach(b => b.onclick = () => { this.collect(); this.rows.splice(+b.dataset.i, 1); this.render(); });
   },
   collect() {
-    document.querySelectorAll('#teBody tr').forEach(tr => {
+    const val = (tr, cls) => /** @type {HTMLInputElement} */ (tr.querySelector(cls)).value;
+    /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#teBody tr')).forEach(tr => {
       const r = this.rows[+tr.dataset.i];
-      r.name = tr.querySelector('.te-name').value.trim() || r.name;
-      r.code = upTR(tr.querySelector('.te-code').value).replace(CODE_STRIP, '').slice(0, 3);
-      r.c1 = validColor(tr.querySelector('.te-c1').value, r.c1); r.c2 = validColor(tr.querySelector('.te-c2').value, r.c2);
+      r.name = val(tr, '.te-name').trim() || r.name;
+      r.code = upTR(val(tr, '.te-code')).replace(CODE_STRIP, '').slice(0, 3);
+      r.c1 = validColor(val(tr, '.te-c1'), r.c1); r.c2 = validColor(val(tr, '.te-c2'), r.c2);
     });
   },
   save() {
@@ -3588,8 +3036,6 @@ const App = {
   game: null, setup: null, running: false, paused: false, end: null, endT: 0, matchRealT: 0, title: '', intro: null, introT: 0,
   introOn() { return !!(this.running && this.intro && this.introT < CONFIG.INTRO_DURATION); },
   simSpeed() { return League.data.settings.simSpeed || 1; },
-  /* league points a finishing place earns (null in a playoff match: it earns none, the screens then show the place only) */
-  pointsForPlace(place) { return this.setup && this.setup.cup ? null : League.data.points[place - 1] || 0; },
   /* matches per week: every club plays once a week (18 clubs → 9 matches) */
   perWeek() { return Math.max(1, Math.floor(League.data.teams.length / 2)); },
   /* the season fixture: a round robin (see planRoundRobin), built once when the season starts and stored with the league;
@@ -3621,7 +3067,7 @@ const App = {
   /* a 1v1 match's options for the Game: CONFIG.MATCH_TIME seconds; a playoff match cannot end level (golden goal, penalties) */
   matchOpts(teams, seed, theme, knockout) {
     const s = League.data.settings;
-    return { mode: 'match', teams: teams.map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false,
+    return { mode: 'match', teams: teams.map(t => ({ ...t })), seed, theme, speedMult: s.speedMult,
       matchTime: CONFIG.MATCH_TIME, knockout: !!knockout };
   },
   /* a playoff match: two pool clubs, the first one drawn is the home club (top goal) */
@@ -3768,7 +3214,7 @@ const App = {
     const before = JSON.parse(JSON.stringify(d.table));
     const after = JSON.parse(JSON.stringify(d.table));
     League.applyTo(after, res);
-    const histAfter = d.history.concat([{ result: res.teams.map(t => ({ id: t.id, score: t.score })) }]);
+    const histAfter = d.history.concat([/** @type {HistoryEntry} */ ({ result: res.teams.map(t => ({ id: t.id, score: t.score })) })]);
     const rkB = League.ranking(before), rkA = League.ranking(after, histAfter);
     const oldRank = new Map(rkB.map((x, i) => [x.t.id, i])), newRank = new Map(rkA.map((x, i) => [x.t.id, i]));
     const today = new Set(res.teams.map(t => t.id));
@@ -3960,7 +3406,8 @@ async function boot() {
   } catch (e) { /* fonts optional */ }
   App.prepare();
   document.addEventListener('keydown', (e) => {
-    if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    const el = /** @type {HTMLElement} */ (e.target);
+    if (el && /INPUT|TEXTAREA|SELECT/.test(el.tagName)) return;
     if (e.code === 'Space') { e.preventDefault(); if (!App.running || App.end) App.start(false); else App.togglePause(); }
   });
   requestAnimationFrame(frame);
@@ -4021,7 +3468,7 @@ const Offline = {
 
   async pickCodec(w, h, bitrate) {
     for (const codec of ['avc1.640033', 'avc1.4d0033', 'avc1.42e033']) {
-      const cfg = { codec, width: w, height: h, bitrate, framerate: this.FPS, avc: { format: 'annexb' }, latencyMode: 'quality' };
+      const cfg = /** @type {VideoEncoderConfig} */ ({ codec, width: w, height: h, bitrate, framerate: this.FPS, avc: { format: 'annexb' }, latencyMode: 'quality' });
       try { if ((await VideoEncoder.isConfigSupported(cfg)).supported) return cfg; } catch (e) { /* try next */ }
     }
     throw new Error('Bu tarayıcıda H.264 VideoEncoder yok.');
@@ -4122,6 +3569,7 @@ const Offline = {
    Changing the simulation never restarts the league: the Pages workflow freezes the league as it stands (BUILD_BASE) and the new
    rules play on from there (see hash() / applyRules() below and tools/live-base.js).
    The studio (old panel: preview, recording, videos) is at ?studio. Debug: ?now=<past ISO time>.
+   Match links: ?tekrar=… replays one finished match by itself (see replayLink), for sharing.
    ===================================================================== */
 const Live = {
   on: !/[?&]studio\b/.test(location.search),
@@ -4226,7 +3674,7 @@ const Live = {
   /* --- league state ------------------------------------------------------ */
   freshLeague() { const d = League.normalize(null); d.liveCount = 0; d.liveSeasonStart = 0; d.liveLastEnd = 0; d.seasons = []; return d; },
   /* The rules a live league plays by always come from CONFIG, never from what a saved state carries (League.normalize keeps a
-     saved league's points / lives / speed / season length). So a league frozen before a rule change plays the new rules from
+     saved league's points / speed / season length). So a league frozen before a rule change plays the new rules from
      its next match on; matches already played stay as they were. A season that has begun keeps its length until it ends.
      Idempotent: states taken after this ran come out unchanged. */
   applyRules(d = League.data) {
@@ -4359,6 +3807,7 @@ const Live = {
     return cm ? [cm.a, cm.b].filter(Boolean) : plan && d.week <= d.seasonLength ? ((plan.weeks[d.week - 1] || [])[d.weekMatch - 1] || []) : [];
   },
   titleText(now) {
+    if (this.replay) return `▶ ${this.replay.codes} · Tekrar · Satisfying Lig`;
     if (this.phase === 'loading' || this.phase === 'error') return this.titleBase;
     let on = false, next = 0, vs = '';
     if (this.cur) {
@@ -4414,6 +3863,80 @@ const Live = {
     }
   },
 
+  /* --- match links ------------------------------------------------------------------------------------------------------------
+     ?tekrar=1.<sim>.<seed>.<home>.<away>.<theme>.<w5m2 | cFIN>.<kick-off, unix s>
+     A finished match is fully described by its seed, its clubs (home first) and its theme, so the link replays it by itself: no
+     league to compute, it opens at once (a ?now= link would rebuild the whole league up to that moment). Only under the same
+     rules (<sim> = BUILD_SIM_HASH): with other rules the same seed plays a different match, so the link falls back to the live
+     site. A match that is not over yet is not replayed either (its result would show before the live one): the live site
+     opens, where it is on. Club ids are the same in every live league (DEFAULT_TEAMS + RESERVE_TEAMS). */
+  siteUrl() { return String(location.href || '').split(/[?#]/)[0]; },
+  /* m: { seed, ids: [home, away], theme, start (ms), cup } or { …, week, weekMatch } */
+  replayLink(m) {
+    const what = m.cup ? 'c' + m.cup : `w${m.week}m${m.weekMatch}`;
+    return `${this.siteUrl()}?tekrar=1.${this.sim()}.${m.seed >>> 0}.${m.ids[0]}.${m.ids[1]}.${m.theme}.${what}.${Math.round(m.start / 1000)}`;
+  },
+  openReplay(q) {
+    const p = /^1\.([\w-]+)\.(\d+)\.([\w-]+)\.([\w-]+)\.(\w+)\.(?:w(\d+)m(\d+)|c([\w-]+))\.(\d+)$/.exec(q);
+    const say = (msg) => { this.notice = msg; this.noticeUntil = Date.now() + 15e3; };
+    if (!p) return say('Maç bağlantısı geçersiz');
+    if (p[1] !== this.sim()) return say('Bu maç eski kurallarla oynandı, tekrarı gösterilemiyor');
+    const L = League.normalize(null), team = (id) => L.teams.find(t => t.id === id) || L.reserve.find(t => t.id === id);
+    const [A, B] = [team(p[3]), team(p[4])], cup = p[8] && CUP_SHAPE.some(c => c.k === p[8]) ? p[8] : null;
+    if (!A || !B || A === B || !THEME_DEFS[p[5]] || (p[8] && !cup)) return say('Maç bağlantısı geçersiz');
+    const seed = +p[2] >>> 0, start = +p[9] * 1000, opts = App.matchOpts([A, B], seed, p[5], !!cup);
+    /* not over yet (or a link from the future): the live site shows it */
+    const end = start + (this.timeGame(new Game(opts)) - CONFIG.END_DURATION - this.HOLD) * 1000;
+    if (!(end <= this.now())) return say('Bu maç henüz bitmedi: canlı yayındasınız');
+    const title = cup ? `PLAYOFF · ${cupName(cup)[0]}` : `WEEK ${+p[6]} · MATCH ${+p[7]}`;
+    const when = `${LivePages.day(start).split(' ').slice(0, 2).join(' ')} ${this.clock(start)}`;
+    this.replay = { opts, title, cup, week: +p[6] || 0, weekMatch: +p[7] || 0, codes: `${A.code}–${B.code}`,
+      label: `${cup ? cupName(cup)[1] : `${+p[6]}. hafta ${+p[7]}. maç`} · ${A.code}–${B.code} · ${when}` };
+  },
+  /* play the linked match from kick-off, in real time, without touching any league */
+  startReplay() {
+    const R = this.replay, s = { title: R.title, mode: 'match', cup: R.cup, week: R.week, weekMatch: R.weekMatch, seed: R.opts.seed, theme: R.opts.theme, test: true, opts: R.opts };
+    App.setup = s; App.title = s.title; App.end = null; App.intro = null;
+    App.game = new Game(Object.assign({}, R.opts, { teams: R.opts.teams.map(t => ({ ...t })) }));
+    App.game.onEvent = (t, d) => FX.onEvent(t, d);
+    FX.reset(App.game); Renderer.resetTrails();
+    App.running = true; App.paused = false; App.matchRealT = 0;
+    this.st = { acc: 0 }; this.replayAt = performance.now(); this.phase = 'replay';
+    $('liveShare').classList.remove('hidden');
+  },
+  replayFrame() {
+    const t = performance.now(), rdt = Math.min(0.1, (t - this.replayAt) / 1000), g = App.game;
+    this.replayAt = t;
+    if (!g.over) {
+      const ts = g.timeScale(), st = this.st;
+      st.acc += rdt * ts;
+      let n = 0;
+      while (st.acc >= DT && n < 200) { g.step(DT); st.acc -= DT; n++; if (g.over) break; }
+      if (n >= 200) st.acc = 0;
+      App.matchRealT += rdt;
+      FX.update(rdt * ts, rdt);
+    } else FX.update(rdt, rdt);
+    const info = this.info();
+    if (info !== this._info && $('liveInfo')) { this._info = info; $('liveInfo').textContent = info; }
+    Renderer.draw(g, App);
+  },
+  /* the share button: a link to the match on now (or the one being replayed); the phone's share sheet, else the clipboard */
+  async share() {
+    const s = App.setup;
+    if (!s) return;
+    const url = this.replay ? location.href : this.replayLink({ seed: s.seed, ids: s.opts.teams.map(t => t.id), theme: s.theme, cup: s.cup, week: s.week, weekMatch: s.weekMatch, start: this.cur ? this.cur.start : this.now() });
+    const codes = s.opts.teams.map(t => t.code).join('–'), btn = $('liveShare'), html = btn.innerHTML;
+    try {
+      if (navigator.share) { await navigator.share({ title: `${codes} · Satisfying Lig`, url }); return; }
+      await navigator.clipboard.writeText(url);
+      btn.innerHTML = '✓<span class="lbl"> Kopyalandı</span>';
+      setTimeout(() => { btn.innerHTML = html; }, 2500);
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;               // the share sheet was closed
+      window.prompt('Bağlantıyı kopyalayın:', url);
+    }
+  },
+
   /* --- boot / loop ---------------------------------------------------------- */
   async boot() {
     const q = new URLSearchParams(location.search).get('now');
@@ -4421,9 +3944,11 @@ const Live = {
     if (q && !isNaN(Date.parse(q))) this.offset = Math.min(0, Date.parse(q) - Date.now());
     document.body.classList.add('live');
     this.bootAt = Date.now();
-    this.watchSite();
-    this.startTitle();
     League.data = this.freshLeague();
+    const rp = new URLSearchParams(location.search).get('tekrar');
+    if (rp) this.openReplay(rp);
+    if (!this.replay) this.watchSite();
+    this.startTitle();
     UI.init();
     fitCanvas(); window.addEventListener('resize', fitCanvas);
     this.ui();
@@ -4434,6 +3959,7 @@ const Live = {
         new Promise(r => setTimeout(r, 2500)),
       ]);
     } catch (e) { /* fonts optional */ }
+    if (this.replay) { this.startReplay(); return; }
     await this.sync();
   },
   /* (re)build the league up to now and join the current match; used at start and after the page slept */
@@ -4455,14 +3981,27 @@ const Live = {
     const pane = document.createElement('div');
     pane.id = 'livePane'; pane.className = 'hidden';
     $('stage').appendChild(tabs); $('stage').appendChild(pane);
-    tabs.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) this.showTab(b.dataset.tab); });
+    const el = (e) => /** @type {HTMLElement} */ (e.target);
+    tabs.addEventListener('click', (e) => { const b = el(e).closest('button'); if (b) this.showTab(b.dataset.tab); });
     /* "Geçmiş": the season picker (a select, and ‹ › for the neighbouring seasons) */
-    pane.addEventListener('change', (e) => { if (e.target.matches('.hist-sel')) this.pickSeason(e.target.value); });
-    pane.addEventListener('click', (e) => { const b = e.target.closest('.hist-nav'); if (b && !b.disabled) this.pickSeason(b.dataset.season); });
+    pane.addEventListener('change', (e) => { const s = /** @type {HTMLSelectElement} */ (e.target); if (s.matches('.hist-sel')) this.pickSeason(s.value); });
+    pane.addEventListener('click', (e) => { const b = /** @type {HTMLButtonElement} */ (el(e).closest('.hist-nav')); if (b && !b.disabled) this.pickSeason(b.dataset.season); });
     const bar = document.createElement('div');
     bar.id = 'liveBar';
-    bar.innerHTML = `<button id="liveSound">🔇 Ses kapalı</button><span id="liveInfo"></span>`;
+    bar.innerHTML = `<button id="liveSound">🔇 Ses kapalı</button><span id="liveInfo"></span>`
+      + `<button id="liveShare" class="hidden" title="Bu maçın bağlantısı: açan kişi maçı baştan izler">🔗<span class="lbl"> Paylaş</span></button>`
+      + `<button id="liveAgain" class="hidden" title="Maçı baştan oynat">↻<span class="lbl"> Baştan</span></button><a id="liveBack" class="hidden" href="${esc(this.siteUrl())}">⚽ Canlıya dön</a>`;
     $('stage').appendChild(bar);
+    $('liveShare').addEventListener('click', () => this.share());
+    $('liveAgain').addEventListener('click', () => this.startReplay());
+    if (this.replay) {
+      /* a replayed match: no tabs (they would show no league), a tag on top says what is being replayed */
+      document.body.classList.add('replay');
+      const tag = document.createElement('div');
+      tag.id = 'replayTag'; tag.textContent = `▶ Tekrar · ${this.replay.label}`;
+      $('stage').appendChild(tag);
+      $('liveBack').classList.remove('hidden'); $('liveAgain').classList.remove('hidden');
+    }
     $('liveSound').addEventListener('click', () => {
       this.sound = !this.sound;
       if (this.sound) { AudioSys.init(); AudioSys.resume(); }
@@ -4472,6 +4011,8 @@ const Live = {
   },
   /* bottom bar: how often matches are now, and the next kick-off */
   info(now) {
+    if (this.replay) return `▶ Tekrar · ${this.replay.label}`;
+    if (this.notice && Date.now() < this.noticeUntil) return this.notice;
     if (this.phase === 'loading' || this.phase === 'error') return 'Lig yükleniyor…';
     const next = this.phase === 'match' && this.cur
       ? Math.max(this.slot(this.cur.n + 1), this.cur.start + Math.round(this.cur.dur * 1000) + this.cfg().gap * 1000)
@@ -4485,7 +4026,7 @@ const Live = {
   showTab(tab) {
     this.tab = tab; this.paneKey = '';
     if (tab === 'history') this.histSel = '';                 // opening the tab always starts at the latest season
-    document.querySelectorAll('#liveTabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#liveTabs button')).forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     $('livePane').classList.toggle('hidden', tab === 'live');
     this.renderPane();
     if (tab === 'fixture' || tab === 'cup') { const cur = document.querySelector('#livePane .fx-week.cur'); if (cur) cur.scrollIntoView({ block: 'start' }); }
@@ -4529,6 +4070,7 @@ const Live = {
     this.phase = 'wait';
   },
   frame(t) {
+    if (this.phase === 'replay') { this.replayFrame(); requestAnimationFrame((tt) => this.frame(tt)); return; }
     const now = this.now();
     try {
       if (this.phase !== 'loading' && this.lastFrame && now - this.lastFrame > this.RESYNC_GAP) {
@@ -4550,6 +4092,8 @@ const Live = {
     this.renderPane();
     const info = this.info(now);
     if (info !== this._info && $('liveInfo')) { this._info = info; $('liveInfo').textContent = info; }
+    const canShare = this.phase === 'match' && !!App.setup;
+    if (canShare !== this._canShare && $('liveShare')) { this._canShare = canShare; $('liveShare').classList.toggle('hidden', !canShare); }
     if (this.tab !== 'live') { /* a tab covers the stream: the match keeps running in sync, nothing to draw */ }
     else if (this.phase === 'match' && App.game) Renderer.draw(App.game, App);
     else LiveScreen.draw(Renderer.ctx, this, now);
@@ -4616,7 +4160,7 @@ const LivePages = {
   DAYS: ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'],
   local(ms) { return new Date(ms + Live.cfg().utcOffset * 3600e3); },
   day(ms) { const t = this.local(ms); return `${t.getUTCDate()} ${this.MONTHS[t.getUTCMonth()]} ${this.DAYS[t.getUTCDay()]}`; },
-  dot(t) { return `<span class="dot" style="background:${t.c1};border-color:${t.c2}"></span>`; },
+  dot(t) { return `<span class="dot" style="background:${esc(t.c1)};border-color:${esc(t.c2)}"></span>`; },
   champ() {
     const c = League.data.champions, last = c[c.length - 1];
     return last ? `<div class="lp-note">🏆 Sezon ${last.season} şampiyonu: <b>${esc(last.name)}</b></div>` : '';
@@ -4670,6 +4214,8 @@ const LivePages = {
     if (n === Live.count()) { const t = Live.nextStart(); return { t, late: t - Live.slot(n) > 1000 }; }
     return { t: Live.slot(n), late: false };
   },
+  /* "▶ İzle": the link that replays a finished match (Live.replayLink) */
+  replayA(m) { return `<a class="fx-rp" href="${esc(Live.replayLink(m))}" title="Bu maçı baştan izle (bağlantıyı paylaşabilirsiniz)">▶ İzle</a>`; },
   /* one 1v1 match as two lines (home first), with the goals once played; note: "altın gol" / "penaltılar 4–3" */
   pairHtml(a, b, sa, sb, done, win, ph) {
     const nm = (t, p) => (t ? `<li>${this.dot(t)}<span class="nm">${esc(t.name)}</span>` : `<li class="tbd"><span class="nm">${p}</span>`);
@@ -4686,7 +4232,8 @@ const LivePages = {
       const cur = list.some(m => !m.res) && !ms.some(m => m.r < r && !m.res);
       const body = list.map(m => {
         const K = o.kick(m), isLive = o.live === 'cup-' + m.k, def = CUP_SHAPE[m.i], R = m.res;
-        const badge = R ? '<span class="b done">Bitti</span>' : isLive ? '<span class="b live">● CANLI</span>' : '';
+        const badge = (R ? '<span class="b done">Bitti</span>' : isLive ? '<span class="b live">● CANLI</span>' : '')
+          + (R && R.seed !== undefined && R.date ? this.replayA({ seed: R.seed, ids: [m.a, m.b], theme: R.theme, cup: m.k, start: Date.parse(R.date) }) : '');
         const aWin = !!R && R.winner === m.a, sc = (w) => (w ? R.sw : R.sl);
         const note = R ? (R.pw !== undefined ? `<div class="fx-note">Penaltılar ${aWin ? R.pw : R.pl}–${aWin ? R.pl : R.pw}</div>` : R.gg ? '<div class="fx-note">Altın gol</div>' : '') : '';
         return `<div class="fx-match${R ? ' done' : ''}${isLive ? ' live' : ''}"><div class="fx-head"><b>${cupName(m.k)[1]}</b><span>${Live.clock(K.t)}${K.late ? ' · ertelendi' : ''}</span>${badge}</div>`
@@ -4771,7 +4318,8 @@ const LivePages = {
         const m = mi + 1, K = this.kickoff(w, m), ko = K.t;
         const h = d.history.find(x => x.week === w && x.weekMatch === m);
         const isLive = live === `${w}-${m}`;
-        const badge = h ? '<span class="b done">Bitti</span>' : isLive ? '<span class="b live">● CANLI</span>' : '';
+        const badge = (h ? '<span class="b done">Bitti</span>' : isLive ? '<span class="b live">● CANLI</span>' : '')
+          + (h && h.date ? this.replayA({ seed: h.seed, ids: h.teams, theme: h.theme, week: w, weekMatch: m, start: Date.parse(h.date) }) : '');
         let body;
         if (h && h.result.length === 2) {
           const [ra, rb] = h.result;

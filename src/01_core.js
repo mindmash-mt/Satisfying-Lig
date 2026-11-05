@@ -2,39 +2,31 @@
    CONFIG
    ===================================================================== */
 const CONFIG = {
-  W: 1080, H: 1920, CX: 510, CY: 975,
-  R0: 450,
-  /* arena is a fixed (non-rotating) polygon stretched vertically so its corners sit ARENA_HALF_H above/below centre */
-  ARENA_HALF_H: 465,
+  W: 1080, H: 1920, CX: 510, CY: 975,   // CX: centre of the screens' safe area (the pitch is centred on FINAL_CX)
   STEP_HZ: 240,
-  /* Tuned with the balance test. Single-ball mode: MAX_BALLS 1 (set >1 to bring back the ball schedule). */
+  /* Tuned with the balance test. One ball at a time. */
   /* ball starts at BALL_SPEED and gets WALL_ACCEL faster on every wall/post bounce, up to BALL_MAX_MULT × */
-  BALL_R: 16, BALL_SPEED: 600, WALL_ACCEL: 0.10, BALL_MAX_MULT: 2.4, MAX_BALLS: 1, BALL_ADD_EVERY: 3, GOAL_RESPAWN: 1.1,
-  POST_R: 10, GOAL_FRAC: 0.50, ELIM_GOAL_GROW: 0.25, FINAL_GOAL_FRAC: 0.54, NET_DEPTH: 50, NET_DEPTH_RECT: 34,
+  BALL_R: 16, BALL_SPEED: 600, WALL_ACCEL: 0.10, BALL_MAX_MULT: 2.4, GOAL_RESPAWN: 1.1,
+  POST_R: 10, FINAL_GOAL_FRAC: 0.54, NET_DEPTH_RECT: 34,
   KEEPER_INSET: 28, KEEPER_LEN_FRAC: 0.30, KEEPER_THICK: 14, KEEPER_SPEED: 320, KEEPER_GAIN: 3, KEEPER_READ: 0.3,
   PLAYER_R: 24, PLAYER_SPEED: 260,
-  ROT_SPEED_DEG: 0, ROT_GROWTH: 1.12,
-  GOAL_GROW: false,   // false: goals never widen (no growth after eliminations or in overtime)
-  OT_AT: 45, OT_RAMP: 10, OT_MULT: 1.6,
-  ELIM_SLOW_GAME: 0.18, ELIM_FREEZE: 1.0, WIN_SLOW_GAME: 0.24, TS_SLOW: 0.3,
+  WIN_SLOW_GAME: 0.24, TS_SLOW: 0.3,
   FINAL_SLOWMO_GAME: 0.375, FINAL_SLOWMO_TS: 0.25, FINAL_SLOWMO_DIST: 120,
-  /* the 1v1 pitch fills the frame from just under the top bar (title · score · clock) to the bottom edge; the goal tally
+  /* the pitch fills the frame from just under the top bar (title · score · clock) to the bottom edge; the goal tally
      (mini balls behind each net) still fits above / below it */
-  FINAL_W: 1020, FINAL_H: 1660, FINAL_GOALS: 2,   // final duel: first to FINAL_GOALS goals wins (narrower, longer pitch)
-  FINAL_DY: 37,   // the pitch's centre sits this much below the arena centre (top goal line y 182, bottom 1842)
-  FINAL_CX: 540,  // a 1v1 pitch is centred in the frame (x 30–1050, as wide as the top bar); the old arena keeps CX
-  TOPBAR_Y: 60,   // centre of the one-line top bar of a 1v1 match
-  /* final duel: 2 players per team, one is the captain. A captain touch that sends the ball toward the rival goal
-     (within CAPTAIN_AIM_DEG of the goal centre) makes it CAPTAIN_SHOT_MULT × faster until it hits anything else. */
+  FINAL_W: 1020, FINAL_H: 1660,
+  FINAL_DY: 37,   // the pitch's centre sits this much below CY (top goal line y 182, bottom 1842)
+  FINAL_CX: 540,  // the pitch is centred in the frame (x 30–1050, as wide as the top bar)
+  TOPBAR_Y: 60,   // centre of the one-line top bar
+  /* a captain touch that sends the ball toward the rival goal (within CAPTAIN_AIM_DEG of the goal centre) makes it
+     CAPTAIN_SHOT_MULT × faster until it hits anything else. */
   CAPTAIN_SHOT_MULT: 2, CAPTAIN_AIM_DEG: 25,
-  /* a 1v1 match: 4 outfield players per club (besides the keeper), each wandering at random in its own third of the pitch:
+  /* a match: 4 outfield players per club (besides the keeper), each wandering at random in its own third of the pitch:
      2 defenders (own third), the captain in midfield (middle third), 1 forward (the rival's third). A player's touch sends the
-     ball forward: a random direction whose up / down part points at the rival goal, at most KICK_MAX_DEG off straight ahead.
-     (The old arena final keeps 2 free players.) */
+     ball forward: a random direction whose up / down part points at the rival goal, at most KICK_MAX_DEG off straight ahead. */
   TEAM_PLAYERS: 4, KICK_MAX_DEG: 60,
-  PU_R: 26, PU_LIFE: 8, PU_MIN: 6, PU_MAX: 10, PU_MAX_COUNT: 2, PU_WALL_MARGIN: 80,
-  DEFAULT_LIVES: 1, DEFAULT_SPEED_MULT: 1.0,
-  /* every match is a 1v1 league match: two clubs on the duel pitch (keeper + captain + team-mates each, see TEAM_PLAYERS) for MATCH_TIME seconds.
+  DEFAULT_SPEED_MULT: 1.0,
+  /* every match is a league match between two clubs on the duel pitch (keeper + captain + team-mates each, see TEAM_PLAYERS) for MATCH_TIME seconds.
      The clock runs on screen time (slow-motion moments count too), so a match is MATCH_TIME seconds long on screen.
      A draw is a draw in the league; a promotion playoff match that is level goes to a golden goal (at most GOLDEN_TIME seconds)
      and then to a penalty shoot-out (PEN_P: chance a penalty goes in, PEN_STEP: seconds per penalty on screen).
@@ -116,17 +108,6 @@ const RESERVE_TEAMS = [
    "Beşiktaş" → "BEŞİKTAŞ" but "Manchester United" → "MANCHESTER UNITED" */
 const upTR = (s) => { s = String(s); return /[çğışöüÇĞİŞÖÜ]/.test(s) ? s.toLocaleUpperCase('tr-TR') : s.toUpperCase(); };
 const CODE_STRIP = /[^A-Z0-9ÇĞİÖŞÜ]/g;
-
-/* Power-up definitions (logic lives in Game.applyPowerup) */
-const POWERUP_DEFS = [
-  { id: 'giant', icon: '🧤', name: 'Giant Keeper', kind: 'pos', dur: 6, w: 22 },
-  { id: 'wall',  icon: '🧱', name: 'Goal Wall',    kind: 'pos', dur: 4, w: 15 },
-  { id: 'small', icon: '🔍', name: 'Small Goal',   kind: 'pos', dur: 6, w: 18 },
-  { id: 'big',   icon: '🎯', name: 'Big Goal',     kind: 'neg', dur: 6, w: 18 },
-  { id: 'speed', icon: '⚡', name: 'Speed Up',     kind: 'gen', dur: 4, w: 15 },
-  { id: 'split', icon: '➕', name: 'Split Ball',   kind: 'gen', dur: 0, w: 9 },
-  { id: 'life',  icon: '❤️', name: 'Extra Life',   kind: 'pos', dur: 0, w: 3 },
-];
 
 /* Theme gameplay definitions (visual palettes are in THEMES section) */
 const THEME_DEFS = {

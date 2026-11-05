@@ -20,7 +20,55 @@ const cupName = (k) => {
   return k[0] === 'R' ? ['FIRST ROUND ' + n, '1. tur ' + n + '. maç'] : k[0] === 'Q' ? ['QUARTER-FINAL ' + n, 'Çeyrek final ' + n] : ['SEMI-FINAL ' + n, 'Yarı final ' + n];
 };
 
+/* ---- the league's data format (League.data; the studio's export file and the live league's saved states use the same).
+   Changing it: add a migration to League.normalize so older saves still open. ---- */
+/** @typedef {{ id: string, name: string, code: string, c1: string, c2: string }} Club  a club: 3-letter code, two colours (#rrggbb) */
+/** @typedef {{ played: number, pts: number, w: number, d: number, l: number, gf: number, ga: number }} TableRow */
+/** @typedef {{ id: string, code: string, score: number, saves: number }} SideResult */
+/**
+ * @typedef {Object} HistoryEntry  a played league match of the running season
+ * @property {number} matchNo
+ * @property {number} week
+ * @property {number} weekMatch
+ * @property {'match'} mode
+ * @property {number} seed      the match's seed: seed + clubs + theme replay it exactly (same rules)
+ * @property {string} theme
+ * @property {string} date      kick-off (ISO)
+ * @property {string[]} teams   [home, away] club ids
+ * @property {string|null} winner
+ * @property {number} duration
+ * @property {SideResult[]} result  [home, away]
+ */
+/** @typedef {{ winner: string, loser: string, sw: number, sl: number, seed: number, theme: string, duration: number, date: string, pw?: number, pl?: number, gg?: number }} CupResult  sw / sl: goals of the winner / loser; pw / pl: penalties; gg: golden goal */
+/** @typedef {{ season: number, draw: string[], res: Object<string, CupResult> }} CupState  the promotion playoff: the draw (pool club ids) and the results by match key (CUP_SHAPE) */
+/** @typedef {{ season: number, key: string, size: number, created: string, weeks: string[][][] }} SeasonPlan  weeks[w][m] = [home, away] */
+/**
+ * @typedef {Object} LeagueData
+ * @property {number} version
+ * @property {number} teamsVersion
+ * @property {Club[]} teams          the clubs in the league
+ * @property {Club[]} reserve        the pool (promotion playoff clubs)
+ * @property {Object<string, TableRow>} table   by club id
+ * @property {number} week
+ * @property {number} weekMatch
+ * @property {number} matchNo
+ * @property {number} season
+ * @property {number} seasonLength
+ * @property {number[]} points       [win, draw, loss]
+ * @property {SeasonPlan|null} seasonPlan
+ * @property {string[]|null} tieOrder
+ * @property {CupState|null} cup
+ * @property {HistoryEntry[]} history
+ * @property {{ id: string, name: string, season: number, pts: number }[]} champions
+ * @property {Object<string, any>} settings
+ * @property {number} [liveCount]       live league: matches played
+ * @property {number} [liveSeasonStart]
+ * @property {number} [liveLastEnd]     live league: when the last match ended (ms)
+ * @property {Object[]} [seasons]       live league: the finished seasons' archive (Geçmiş)
+ * @property {any} [weekPlan]          a field of older saves (deleted on load)
+ */
 const League = {
+  /** @type {LeagueData} */
   data: null, storageOK: true,
   fresh() {
     return {
@@ -33,7 +81,7 @@ const League = {
     };
   },
   defaultSettings() {
-    return { theme: 'auto', lives: CONFIG.DEFAULT_LIVES, speedMult: CONFIG.DEFAULT_SPEED_MULT, powerups: false,
+    return { theme: 'auto', speedMult: CONFIG.DEFAULT_SPEED_MULT,
       simSpeed: 1, volume: 0.8, muted: false, testMatch: false, sv: 2 };
   },
   normalize(d) {
@@ -76,10 +124,10 @@ const League = {
     out.champions = Array.isArray(d.champions) ? d.champions : [];
     out.settings = Object.assign(this.defaultSettings(), d.settings || {});
     delete out.settings.seed;                 // the seed is chosen per match and never stored ahead of it
-    /* removed options: match mode (derby / season final), manual team pick, team count per match (always CONFIG.GROUP_SIZE) */
-    for (const k of ['mode', 'selMode', 'manual', 'teamCount']) delete out.settings[k];
-    /* settings v2: single life by default — migrate older saved settings once */
-    if (!d.settings || d.settings.sv !== 2) { out.settings.lives = CONFIG.DEFAULT_LIVES; out.settings.sv = 2; }
+    /* removed options: match mode (derby / season final), manual team pick, team count per match (always 2), and the old
+       6-team arena's lives and power-ups */
+    for (const k of ['mode', 'selMode', 'manual', 'teamCount', 'lives', 'powerups']) delete out.settings[k];
+    out.settings.sv = 2;
     if (out.settings.theme !== 'auto' && !THEME_DEFS[out.settings.theme]) out.settings.theme = 'auto';   // removed themes (bumpers)
     return out;
   },
@@ -362,6 +410,7 @@ const Recorder = {
 /* =====================================================================
    UI PANEL  (Turkish control panel)
    ===================================================================== */
+/** a panel element by id (typed loosely: inputs, selects, buttons, canvas…) @type {(id: string) => any} */
 const $ = (id) => document.getElementById(id);
 const UI = {
   init() {
@@ -408,11 +457,11 @@ const UI = {
     });
     $('btnImport').addEventListener('click', () => $('importFile').click());
     $('importFile').addEventListener('change', (ev) => {
-      const f = ev.target.files[0]; if (!f) return;
+      const f = /** @type {HTMLInputElement} */ (ev.target).files[0]; if (!f) return;
       const rd = new FileReader();
       rd.onload = () => {
         try {
-          const d = JSON.parse(rd.result);
+          const d = JSON.parse(String(rd.result));
           if (!d || !Array.isArray(d.teams) || d.teams.length < 2) throw new Error('Geçersiz dosya: takım listesi yok.');
           if (!League.validTeamCount(d.teams.length))
             throw new Error(`Takım sayısı (${d.teams.length}) çift olmalı; her hafta her takım bir maç oynar.`);
@@ -470,7 +519,7 @@ const UI = {
       $('fixture').innerHTML = '';
     } else {
       info += `<div class="kv"><span>Sıradaki maç</span><b>${d.week > d.seasonLength ? '—' : `${d.weekMatch} / ${App.perWeek()}`}</b></div><div class="kv"><span>Oynanan maç (bu sezon)</span><b>${d.history.length}</b></div>`
-        + `<div class="hint">${d.teams.length} takım, her maç 1'e 1 (${CONFIG.MATCH_TIME} sn) → haftada ${App.perWeek()} maç; her takım her hafta tam 1 maç oynar. Haftanın son maçı kaydedilince hafta kendiliğinden ilerler.</div>`;
+        + `<div class="hint">${d.teams.length} takım, her maç iki takım arasında (${CONFIG.MATCH_TIME} sn) → haftada ${App.perWeek()} maç; her takım her hafta tam 1 maç oynar. Haftanın son maçı kaydedilince hafta kendiliğinden ilerler.</div>`;
       const wk = plan.weeks[d.week - 1];
       if (wk) info += `<div class="hint" style="margin-top:10px"><b>Hafta ${d.week} maçları</b> (ilk yazılan ev sahibi, üst kale)</div>` + wk.map((g, i) =>
         `<div class="kv"><span>${i + 1}. maç${i + 1 < d.weekMatch ? ' ✓' : i + 1 === d.weekMatch ? ' ▶' : ''}</span><b style="font-weight:600">${g.map(code).join(' – ')}</b></div>`).join('');
@@ -549,17 +598,18 @@ const TeamEditor = {
     $('teBody').innerHTML = this.rows.map((t, i) => `<tr data-i="${i}">
       <td><input class="te-name" value="${esc(t.name)}" maxlength="40"></td>
       <td><input class="te-code" value="${esc(t.code)}" maxlength="3"></td>
-      <td><input type="color" class="te-c1" value="${t.c1.toLowerCase()}"></td>
-      <td><input type="color" class="te-c2" value="${t.c2.toLowerCase()}"></td>
+      <td><input type="color" class="te-c1" value="${esc(t.c1.toLowerCase())}"></td>
+      <td><input type="color" class="te-c2" value="${esc(t.c2.toLowerCase())}"></td>
       <td><button class="te-del" data-i="${i}" title="Sil">🗑</button></td></tr>`).join('');
-    document.querySelectorAll('.te-del').forEach(b => b.onclick = () => { this.collect(); this.rows.splice(+b.dataset.i, 1); this.render(); });
+    /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('.te-del')).forEach(b => b.onclick = () => { this.collect(); this.rows.splice(+b.dataset.i, 1); this.render(); });
   },
   collect() {
-    document.querySelectorAll('#teBody tr').forEach(tr => {
+    const val = (tr, cls) => /** @type {HTMLInputElement} */ (tr.querySelector(cls)).value;
+    /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#teBody tr')).forEach(tr => {
       const r = this.rows[+tr.dataset.i];
-      r.name = tr.querySelector('.te-name').value.trim() || r.name;
-      r.code = upTR(tr.querySelector('.te-code').value).replace(CODE_STRIP, '').slice(0, 3);
-      r.c1 = validColor(tr.querySelector('.te-c1').value, r.c1); r.c2 = validColor(tr.querySelector('.te-c2').value, r.c2);
+      r.name = val(tr, '.te-name').trim() || r.name;
+      r.code = upTR(val(tr, '.te-code')).replace(CODE_STRIP, '').slice(0, 3);
+      r.c1 = validColor(val(tr, '.te-c1'), r.c1); r.c2 = validColor(val(tr, '.te-c2'), r.c2);
     });
   },
   save() {
@@ -592,8 +642,6 @@ const App = {
   game: null, setup: null, running: false, paused: false, end: null, endT: 0, matchRealT: 0, title: '', intro: null, introT: 0,
   introOn() { return !!(this.running && this.intro && this.introT < CONFIG.INTRO_DURATION); },
   simSpeed() { return League.data.settings.simSpeed || 1; },
-  /* league points a finishing place earns (null in a playoff match: it earns none, the screens then show the place only) */
-  pointsForPlace(place) { return this.setup && this.setup.cup ? null : League.data.points[place - 1] || 0; },
   /* matches per week: every club plays once a week (18 clubs → 9 matches) */
   perWeek() { return Math.max(1, Math.floor(League.data.teams.length / 2)); },
   /* the season fixture: a round robin (see planRoundRobin), built once when the season starts and stored with the league;
@@ -625,7 +673,7 @@ const App = {
   /* a 1v1 match's options for the Game: CONFIG.MATCH_TIME seconds; a playoff match cannot end level (golden goal, penalties) */
   matchOpts(teams, seed, theme, knockout) {
     const s = League.data.settings;
-    return { mode: 'match', teams: teams.map(t => ({ ...t })), seed, theme, lives: s.lives, speedMult: s.speedMult, powerups: false,
+    return { mode: 'match', teams: teams.map(t => ({ ...t })), seed, theme, speedMult: s.speedMult,
       matchTime: CONFIG.MATCH_TIME, knockout: !!knockout };
   },
   /* a playoff match: two pool clubs, the first one drawn is the home club (top goal) */
@@ -772,7 +820,7 @@ const App = {
     const before = JSON.parse(JSON.stringify(d.table));
     const after = JSON.parse(JSON.stringify(d.table));
     League.applyTo(after, res);
-    const histAfter = d.history.concat([{ result: res.teams.map(t => ({ id: t.id, score: t.score })) }]);
+    const histAfter = d.history.concat([/** @type {HistoryEntry} */ ({ result: res.teams.map(t => ({ id: t.id, score: t.score })) })]);
     const rkB = League.ranking(before), rkA = League.ranking(after, histAfter);
     const oldRank = new Map(rkB.map((x, i) => [x.t.id, i])), newRank = new Map(rkA.map((x, i) => [x.t.id, i]));
     const today = new Set(res.teams.map(t => t.id));
@@ -964,7 +1012,8 @@ async function boot() {
   } catch (e) { /* fonts optional */ }
   App.prepare();
   document.addEventListener('keydown', (e) => {
-    if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    const el = /** @type {HTMLElement} */ (e.target);
+    if (el && /INPUT|TEXTAREA|SELECT/.test(el.tagName)) return;
     if (e.code === 'Space') { e.preventDefault(); if (!App.running || App.end) App.start(false); else App.togglePause(); }
   });
   requestAnimationFrame(frame);

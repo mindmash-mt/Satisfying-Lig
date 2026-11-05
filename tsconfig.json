@@ -1,0 +1,16 @@
+{
+  "//": "Tip denetimi (npm run typecheck): src/*.js tek bir betikte birleştiği için dosyalar birbirinin globallerini görür; derleme yapılmaz.",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "es2022",
+    "lib": ["es2022", "dom"],
+    "skipLibCheck": true
+  },
+  "files": [
+    "src/types.d.ts",
+    "src/01_core.js", "src/02_sim.js", "src/03_fx_audio.js", "src/04_render.js",
+    "src/05_app.js", "src/06_offline.js", "src/07_live.js"
+  ]
+}
