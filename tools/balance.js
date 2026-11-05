@@ -33,7 +33,7 @@ const scr = [], hist = {};
 for (let i = 0; i < N; i++) {
   const seed = (+process.env.SEED0 || 1000) + i * 7919, rng = new RNG(seed ^ 0x51ED27);
   const teams = rng.shuffle(teamsAll).slice(0, 2), theme = rng.pick(THEME_IDS);
-  const { r, screen, added } = run({ mode: 'match', teams, seed, theme, lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout });
+  const { r, screen, added } = run({ mode: 'match', teams, seed, theme, speedMult: 1, matchTime: CONFIG.MATCH_TIME, knockout });
   goals += r.goals; saves += r.saves; own += r.ownGoals; esc += r.escapes; scr.push(screen);
   if (r.draw) draws++; else if (r.winner === r.teams[0].id) home++;
   if (r.golden) golden++; if (r.pens) pens++;
@@ -48,5 +48,5 @@ console.log(`Ekran süresi (maç): min ${scr[0].toFixed(1)} · medyan ${scr[N >>
 console.log(`Uzatma (devre / maç sonunda top kaleye gidiyordu): maç başına ${(addN / N).toFixed(2)} kez · ort. +${addN ? (addT / addN).toFixed(1) : 0} sn`);
 console.log(`Ort. kurtarış: ${(saves / N).toFixed(1)} · Kendi kalesine: ${goals ? Math.round((own / goals) * 100) : 0}% · Duvardan kaçan top: ${esc}`);
 console.log('En sık skorlar: ' + Object.entries(hist).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k} (${pct(v)})`).join(' · '));
-const o = { mode: 'match', teams: teamsAll.slice(0, 2), seed: 48213, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout: true };
+const o = { mode: 'match', teams: teamsAll.slice(0, 2), seed: 48213, theme: 'classic', speedMult: 1, matchTime: CONFIG.MATCH_TIME, knockout: true };
 console.log('Determinizm (aynı seed iki kez):', JSON.stringify(run(o)) === JSON.stringify(run(o)) ? 'aynı ✅' : 'FARKLI ❌');

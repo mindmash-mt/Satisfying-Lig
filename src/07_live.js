@@ -18,6 +18,7 @@
    Changing the simulation never restarts the league: the Pages workflow freezes the league as it stands (BUILD_BASE) and the new
    rules play on from there (see hash() / applyRules() below and tools/live-base.js).
    The studio (old panel: preview, recording, videos) is at ?studio. Debug: ?now=<past ISO time>.
+   Match links: ?tekrar=… replays one finished match by itself (see replayLink), for sharing.
    ===================================================================== */
 const Live = {
   on: !/[?&]studio\b/.test(location.search),
@@ -122,7 +123,7 @@ const Live = {
   /* --- league state ------------------------------------------------------ */
   freshLeague() { const d = League.normalize(null); d.liveCount = 0; d.liveSeasonStart = 0; d.liveLastEnd = 0; d.seasons = []; return d; },
   /* The rules a live league plays by always come from CONFIG, never from what a saved state carries (League.normalize keeps a
-     saved league's points / lives / speed / season length). So a league frozen before a rule change plays the new rules from
+     saved league's points / speed / season length). So a league frozen before a rule change plays the new rules from
      its next match on; matches already played stay as they were. A season that has begun keeps its length until it ends.
      Idempotent: states taken after this ran come out unchanged. */
   applyRules(d = League.data) {
@@ -255,6 +256,7 @@ const Live = {
     return cm ? [cm.a, cm.b].filter(Boolean) : plan && d.week <= d.seasonLength ? ((plan.weeks[d.week - 1] || [])[d.weekMatch - 1] || []) : [];
   },
   titleText(now) {
+    if (this.replay) return `▶ ${this.replay.codes} · Tekrar · Satisfying Lig`;
     if (this.phase === 'loading' || this.phase === 'error') return this.titleBase;
     let on = false, next = 0, vs = '';
     if (this.cur) {
@@ -310,6 +312,80 @@ const Live = {
     }
   },
 
+  /* --- match links ------------------------------------------------------------------------------------------------------------
+     ?tekrar=1.<sim>.<seed>.<home>.<away>.<theme>.<w5m2 | cFIN>.<kick-off, unix s>
+     A finished match is fully described by its seed, its clubs (home first) and its theme, so the link replays it by itself: no
+     league to compute, it opens at once (a ?now= link would rebuild the whole league up to that moment). Only under the same
+     rules (<sim> = BUILD_SIM_HASH): with other rules the same seed plays a different match, so the link falls back to the live
+     site. A match that is not over yet is not replayed either (its result would show before the live one): the live site
+     opens, where it is on. Club ids are the same in every live league (DEFAULT_TEAMS + RESERVE_TEAMS). */
+  siteUrl() { return String(location.href || '').split(/[?#]/)[0]; },
+  /* m: { seed, ids: [home, away], theme, start (ms), cup } or { …, week, weekMatch } */
+  replayLink(m) {
+    const what = m.cup ? 'c' + m.cup : `w${m.week}m${m.weekMatch}`;
+    return `${this.siteUrl()}?tekrar=1.${this.sim()}.${m.seed >>> 0}.${m.ids[0]}.${m.ids[1]}.${m.theme}.${what}.${Math.round(m.start / 1000)}`;
+  },
+  openReplay(q) {
+    const p = /^1\.([\w-]+)\.(\d+)\.([\w-]+)\.([\w-]+)\.(\w+)\.(?:w(\d+)m(\d+)|c([\w-]+))\.(\d+)$/.exec(q);
+    const say = (msg) => { this.notice = msg; this.noticeUntil = Date.now() + 15e3; };
+    if (!p) return say('Maç bağlantısı geçersiz');
+    if (p[1] !== this.sim()) return say('Bu maç eski kurallarla oynandı, tekrarı gösterilemiyor');
+    const L = League.normalize(null), team = (id) => L.teams.find(t => t.id === id) || L.reserve.find(t => t.id === id);
+    const [A, B] = [team(p[3]), team(p[4])], cup = p[8] && CUP_SHAPE.some(c => c.k === p[8]) ? p[8] : null;
+    if (!A || !B || A === B || !THEME_DEFS[p[5]] || (p[8] && !cup)) return say('Maç bağlantısı geçersiz');
+    const seed = +p[2] >>> 0, start = +p[9] * 1000, opts = App.matchOpts([A, B], seed, p[5], !!cup);
+    /* not over yet (or a link from the future): the live site shows it */
+    const end = start + (this.timeGame(new Game(opts)) - CONFIG.END_DURATION - this.HOLD) * 1000;
+    if (!(end <= this.now())) return say('Bu maç henüz bitmedi: canlı yayındasınız');
+    const title = cup ? `PLAYOFF · ${cupName(cup)[0]}` : `WEEK ${+p[6]} · MATCH ${+p[7]}`;
+    const when = `${LivePages.day(start).split(' ').slice(0, 2).join(' ')} ${this.clock(start)}`;
+    this.replay = { opts, title, cup, week: +p[6] || 0, weekMatch: +p[7] || 0, codes: `${A.code}–${B.code}`,
+      label: `${cup ? cupName(cup)[1] : `${+p[6]}. hafta ${+p[7]}. maç`} · ${A.code}–${B.code} · ${when}` };
+  },
+  /* play the linked match from kick-off, in real time, without touching any league */
+  startReplay() {
+    const R = this.replay, s = { title: R.title, mode: 'match', cup: R.cup, week: R.week, weekMatch: R.weekMatch, seed: R.opts.seed, theme: R.opts.theme, test: true, opts: R.opts };
+    App.setup = s; App.title = s.title; App.end = null; App.intro = null;
+    App.game = new Game(Object.assign({}, R.opts, { teams: R.opts.teams.map(t => ({ ...t })) }));
+    App.game.onEvent = (t, d) => FX.onEvent(t, d);
+    FX.reset(App.game); Renderer.resetTrails();
+    App.running = true; App.paused = false; App.matchRealT = 0;
+    this.st = { acc: 0 }; this.replayAt = performance.now(); this.phase = 'replay';
+    $('liveShare').classList.remove('hidden');
+  },
+  replayFrame() {
+    const t = performance.now(), rdt = Math.min(0.1, (t - this.replayAt) / 1000), g = App.game;
+    this.replayAt = t;
+    if (!g.over) {
+      const ts = g.timeScale(), st = this.st;
+      st.acc += rdt * ts;
+      let n = 0;
+      while (st.acc >= DT && n < 200) { g.step(DT); st.acc -= DT; n++; if (g.over) break; }
+      if (n >= 200) st.acc = 0;
+      App.matchRealT += rdt;
+      FX.update(rdt * ts, rdt);
+    } else FX.update(rdt, rdt);
+    const info = this.info();
+    if (info !== this._info && $('liveInfo')) { this._info = info; $('liveInfo').textContent = info; }
+    Renderer.draw(g, App);
+  },
+  /* the share button: a link to the match on now (or the one being replayed); the phone's share sheet, else the clipboard */
+  async share() {
+    const s = App.setup;
+    if (!s) return;
+    const url = this.replay ? location.href : this.replayLink({ seed: s.seed, ids: s.opts.teams.map(t => t.id), theme: s.theme, cup: s.cup, week: s.week, weekMatch: s.weekMatch, start: this.cur ? this.cur.start : this.now() });
+    const codes = s.opts.teams.map(t => t.code).join('–'), btn = $('liveShare'), html = btn.innerHTML;
+    try {
+      if (navigator.share) { await navigator.share({ title: `${codes} · Satisfying Lig`, url }); return; }
+      await navigator.clipboard.writeText(url);
+      btn.innerHTML = '✓<span class="lbl"> Kopyalandı</span>';
+      setTimeout(() => { btn.innerHTML = html; }, 2500);
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;               // the share sheet was closed
+      window.prompt('Bağlantıyı kopyalayın:', url);
+    }
+  },
+
   /* --- boot / loop ---------------------------------------------------------- */
   async boot() {
     const q = new URLSearchParams(location.search).get('now');
@@ -317,9 +393,11 @@ const Live = {
     if (q && !isNaN(Date.parse(q))) this.offset = Math.min(0, Date.parse(q) - Date.now());
     document.body.classList.add('live');
     this.bootAt = Date.now();
-    this.watchSite();
-    this.startTitle();
     League.data = this.freshLeague();
+    const rp = new URLSearchParams(location.search).get('tekrar');
+    if (rp) this.openReplay(rp);
+    if (!this.replay) this.watchSite();
+    this.startTitle();
     UI.init();
     fitCanvas(); window.addEventListener('resize', fitCanvas);
     this.ui();
@@ -330,6 +408,7 @@ const Live = {
         new Promise(r => setTimeout(r, 2500)),
       ]);
     } catch (e) { /* fonts optional */ }
+    if (this.replay) { this.startReplay(); return; }
     await this.sync();
   },
   /* (re)build the league up to now and join the current match; used at start and after the page slept */
@@ -351,14 +430,27 @@ const Live = {
     const pane = document.createElement('div');
     pane.id = 'livePane'; pane.className = 'hidden';
     $('stage').appendChild(tabs); $('stage').appendChild(pane);
-    tabs.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) this.showTab(b.dataset.tab); });
+    const el = (e) => /** @type {HTMLElement} */ (e.target);
+    tabs.addEventListener('click', (e) => { const b = el(e).closest('button'); if (b) this.showTab(b.dataset.tab); });
     /* "Geçmiş": the season picker (a select, and ‹ › for the neighbouring seasons) */
-    pane.addEventListener('change', (e) => { if (e.target.matches('.hist-sel')) this.pickSeason(e.target.value); });
-    pane.addEventListener('click', (e) => { const b = e.target.closest('.hist-nav'); if (b && !b.disabled) this.pickSeason(b.dataset.season); });
+    pane.addEventListener('change', (e) => { const s = /** @type {HTMLSelectElement} */ (e.target); if (s.matches('.hist-sel')) this.pickSeason(s.value); });
+    pane.addEventListener('click', (e) => { const b = /** @type {HTMLButtonElement} */ (el(e).closest('.hist-nav')); if (b && !b.disabled) this.pickSeason(b.dataset.season); });
     const bar = document.createElement('div');
     bar.id = 'liveBar';
-    bar.innerHTML = `<button id="liveSound">🔇 Ses kapalı</button><span id="liveInfo"></span>`;
+    bar.innerHTML = `<button id="liveSound">🔇 Ses kapalı</button><span id="liveInfo"></span>`
+      + `<button id="liveShare" class="hidden" title="Bu maçın bağlantısı: açan kişi maçı baştan izler">🔗<span class="lbl"> Paylaş</span></button>`
+      + `<button id="liveAgain" class="hidden" title="Maçı baştan oynat">↻<span class="lbl"> Baştan</span></button><a id="liveBack" class="hidden" href="${esc(this.siteUrl())}">⚽ Canlıya dön</a>`;
     $('stage').appendChild(bar);
+    $('liveShare').addEventListener('click', () => this.share());
+    $('liveAgain').addEventListener('click', () => this.startReplay());
+    if (this.replay) {
+      /* a replayed match: no tabs (they would show no league), a tag on top says what is being replayed */
+      document.body.classList.add('replay');
+      const tag = document.createElement('div');
+      tag.id = 'replayTag'; tag.textContent = `▶ Tekrar · ${this.replay.label}`;
+      $('stage').appendChild(tag);
+      $('liveBack').classList.remove('hidden'); $('liveAgain').classList.remove('hidden');
+    }
     $('liveSound').addEventListener('click', () => {
       this.sound = !this.sound;
       if (this.sound) { AudioSys.init(); AudioSys.resume(); }
@@ -368,6 +460,8 @@ const Live = {
   },
   /* bottom bar: how often matches are now, and the next kick-off */
   info(now) {
+    if (this.replay) return `▶ Tekrar · ${this.replay.label}`;
+    if (this.notice && Date.now() < this.noticeUntil) return this.notice;
     if (this.phase === 'loading' || this.phase === 'error') return 'Lig yükleniyor…';
     const next = this.phase === 'match' && this.cur
       ? Math.max(this.slot(this.cur.n + 1), this.cur.start + Math.round(this.cur.dur * 1000) + this.cfg().gap * 1000)
@@ -381,7 +475,7 @@ const Live = {
   showTab(tab) {
     this.tab = tab; this.paneKey = '';
     if (tab === 'history') this.histSel = '';                 // opening the tab always starts at the latest season
-    document.querySelectorAll('#liveTabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#liveTabs button')).forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     $('livePane').classList.toggle('hidden', tab === 'live');
     this.renderPane();
     if (tab === 'fixture' || tab === 'cup') { const cur = document.querySelector('#livePane .fx-week.cur'); if (cur) cur.scrollIntoView({ block: 'start' }); }
@@ -425,6 +519,7 @@ const Live = {
     this.phase = 'wait';
   },
   frame(t) {
+    if (this.phase === 'replay') { this.replayFrame(); requestAnimationFrame((tt) => this.frame(tt)); return; }
     const now = this.now();
     try {
       if (this.phase !== 'loading' && this.lastFrame && now - this.lastFrame > this.RESYNC_GAP) {
@@ -446,6 +541,8 @@ const Live = {
     this.renderPane();
     const info = this.info(now);
     if (info !== this._info && $('liveInfo')) { this._info = info; $('liveInfo').textContent = info; }
+    const canShare = this.phase === 'match' && !!App.setup;
+    if (canShare !== this._canShare && $('liveShare')) { this._canShare = canShare; $('liveShare').classList.toggle('hidden', !canShare); }
     if (this.tab !== 'live') { /* a tab covers the stream: the match keeps running in sync, nothing to draw */ }
     else if (this.phase === 'match' && App.game) Renderer.draw(App.game, App);
     else LiveScreen.draw(Renderer.ctx, this, now);
@@ -512,7 +609,7 @@ const LivePages = {
   DAYS: ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'],
   local(ms) { return new Date(ms + Live.cfg().utcOffset * 3600e3); },
   day(ms) { const t = this.local(ms); return `${t.getUTCDate()} ${this.MONTHS[t.getUTCMonth()]} ${this.DAYS[t.getUTCDay()]}`; },
-  dot(t) { return `<span class="dot" style="background:${t.c1};border-color:${t.c2}"></span>`; },
+  dot(t) { return `<span class="dot" style="background:${esc(t.c1)};border-color:${esc(t.c2)}"></span>`; },
   champ() {
     const c = League.data.champions, last = c[c.length - 1];
     return last ? `<div class="lp-note">🏆 Sezon ${last.season} şampiyonu: <b>${esc(last.name)}</b></div>` : '';
@@ -566,6 +663,8 @@ const LivePages = {
     if (n === Live.count()) { const t = Live.nextStart(); return { t, late: t - Live.slot(n) > 1000 }; }
     return { t: Live.slot(n), late: false };
   },
+  /* "▶ İzle": the link that replays a finished match (Live.replayLink) */
+  replayA(m) { return `<a class="fx-rp" href="${esc(Live.replayLink(m))}" title="Bu maçı baştan izle (bağlantıyı paylaşabilirsiniz)">▶ İzle</a>`; },
   /* one 1v1 match as two lines (home first), with the goals once played; note: "altın gol" / "penaltılar 4–3" */
   pairHtml(a, b, sa, sb, done, win, ph) {
     const nm = (t, p) => (t ? `<li>${this.dot(t)}<span class="nm">${esc(t.name)}</span>` : `<li class="tbd"><span class="nm">${p}</span>`);
@@ -582,7 +681,8 @@ const LivePages = {
       const cur = list.some(m => !m.res) && !ms.some(m => m.r < r && !m.res);
       const body = list.map(m => {
         const K = o.kick(m), isLive = o.live === 'cup-' + m.k, def = CUP_SHAPE[m.i], R = m.res;
-        const badge = R ? '<span class="b done">Bitti</span>' : isLive ? '<span class="b live">● CANLI</span>' : '';
+        const badge = (R ? '<span class="b done">Bitti</span>' : isLive ? '<span class="b live">● CANLI</span>' : '')
+          + (R && R.seed !== undefined && R.date ? this.replayA({ seed: R.seed, ids: [m.a, m.b], theme: R.theme, cup: m.k, start: Date.parse(R.date) }) : '');
         const aWin = !!R && R.winner === m.a, sc = (w) => (w ? R.sw : R.sl);
         const note = R ? (R.pw !== undefined ? `<div class="fx-note">Penaltılar ${aWin ? R.pw : R.pl}–${aWin ? R.pl : R.pw}</div>` : R.gg ? '<div class="fx-note">Altın gol</div>' : '') : '';
         return `<div class="fx-match${R ? ' done' : ''}${isLive ? ' live' : ''}"><div class="fx-head"><b>${cupName(m.k)[1]}</b><span>${Live.clock(K.t)}${K.late ? ' · ertelendi' : ''}</span>${badge}</div>`
@@ -667,7 +767,8 @@ const LivePages = {
         const m = mi + 1, K = this.kickoff(w, m), ko = K.t;
         const h = d.history.find(x => x.week === w && x.weekMatch === m);
         const isLive = live === `${w}-${m}`;
-        const badge = h ? '<span class="b done">Bitti</span>' : isLive ? '<span class="b live">● CANLI</span>' : '';
+        const badge = (h ? '<span class="b done">Bitti</span>' : isLive ? '<span class="b live">● CANLI</span>' : '')
+          + (h && h.date ? this.replayA({ seed: h.seed, ids: h.teams, theme: h.theme, week: w, weekMatch: m, start: Date.parse(h.date) }) : '');
         let body;
         if (h && h.result.length === 2) {
           const [ra, rb] = h.result;

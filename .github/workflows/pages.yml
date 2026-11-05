@@ -49,7 +49,9 @@ jobs:
         env:
           LIVE_URL: ${{ steps.pages.outputs.base_url }}/
         run: node tools/live-base.js dist/live-base.json
-      - name: Derle
+      - name: Derle (public/ altındaki manifest, simgeler ve paylaşım görseli dist/'e kopyalanır)
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}/
         run: LIVE_BASE=dist/live-base.json LIVE_START_FILE=dist/live-start.json ./build.sh dist/index.html
       - name: Canlı lig checkpoint'i (yalnızca hızlandırır; başarısız olursa site yine çalışır)
         continue-on-error: true

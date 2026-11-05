@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  FOOTBALL ARENA LEAGUE
+  SATISFYING LIG
   Varsayılan: CANLI LİG — maçlar CONFIG.LIVE saatlerinde kendi kendine oynar, siteye giren herkes aynı maçı izler (src/07_live.js).
   index.html?studio → aşağıdaki stüdyo (kontrol paneli, önizleme, video kaydı). Stüdyo kullanımı:
   1) Maç başlatma: Sağdaki panelden mod/ayarları seçin, "▶ Başlat" (veya Boşluk tuşu). Her maç rastgele bir seed ile kurulur (görünmez; oynanan maçların seed'i maç geçmişinde saklanır).
@@ -13,7 +13,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Football Arena League</title>
+<title>Satisfying Lig</title>
+<meta name="description" content="Kendi kendine oynayan canlı futbol ligi: her 3 dakikada bir 90 saniyelik maç, herkes aynı maçı aynı anda izler. Lig tablosu, fikstür, yükselme elemesi ve geçmiş sezonlar.">
+<meta name="theme-color" content="#0b0e14">
+<link rel="canonical" href="__SITE_URL__">
+<!-- paylaşım kartı (WhatsApp, X, Telegram, Facebook…): mutlak adres gerekir, build.sh sitenin adresini (SITE_URL) yazar -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Satisfying Lig">
+<meta property="og:locale" content="tr_TR">
+<meta property="og:title" content="Satisfying Lig · canlı futbol ligi">
+<meta property="og:description" content="Her 3 dakikada bir maç, günde 480 maç. Herkes aynı maçı aynı anda izler.">
+<meta property="og:url" content="__SITE_URL__">
+<meta property="og:image" content="__SITE_URL__og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Satisfying Lig: dikey futbol sahasında oynanan canlı bir maç">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Satisfying Lig · canlı futbol ligi">
+<meta name="twitter:description" content="Her 3 dakikada bir maç, günde 480 maç. Herkes aynı maçı aynı anda izler.">
+<meta name="twitter:image" content="__SITE_URL__og.jpg">
+<!-- simge sayfaya gömülü (yerelde açılan index.html'de de görünür); manifest ve PNG simgeler public/ altında, yalnızca sitede -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,__ICON_SVG__">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Satisfying Lig">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -103,7 +127,12 @@
   body.live #stage { height: 100%; }
   #liveBar { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; background: rgba(10,14,22,.92); border: 1px solid var(--border); border-radius: 99px; padding: 5px 6px 5px 6px; font-size: 12.5px; color: var(--muted); white-space: nowrap; z-index: 5; }
   #liveBar button { border-radius: 99px; padding: 6px 12px; }
-  #liveBar span { padding-right: 10px; }
+  #liveBar span { padding-right: 10px; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  #liveBar a { border-radius: 99px; padding: 6px 12px; background: var(--accent); color: #062417; font-weight: 700; text-decoration: none; }
+  body.replay #liveTabs, body.replay #liveInfo { display: none; }
+  #replayTag { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: rgba(10,14,22,.88); border: 1px solid var(--border); border-radius: 99px; padding: 8px 14px; font-size: 13px; font-weight: 700; color: var(--text); z-index: 6; }
+  .fx-head .fx-rp { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 99px; background: #12324a; color: #8fd3ff; text-decoration: none; }
+  .fx-head .fx-rp:hover { background: #18466a; }
   #liveTabs { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; background: rgba(10,14,22,.82); border: 1px solid var(--border); border-radius: 99px; padding: 4px; z-index: 6; white-space: nowrap; }
   #liveTabs button { border: none; background: transparent; border-radius: 99px; padding: 7px 14px; color: var(--muted); }
   #liveTabs button.on { background: var(--accent); color: #062417; }
@@ -153,8 +182,11 @@
     .fx-match ol { grid-template-columns: 1fr; }
     .fx-grid { grid-template-columns: 1fr; }
     #liveTabs button { padding: 7px 11px; }
+    #liveBar { max-width: calc(100vw - 16px); gap: 6px; }
+    #liveBar button, #liveBar a { padding: 6px 9px; }
   }
   @media (max-width: 430px) {
+    #liveBar .lbl { display: none; }
     #liveTabs { gap: 2px; padding: 3px; }
     #liveTabs button { padding: 7px 8px; font-size: 12.5px; }
   }
@@ -170,7 +202,7 @@
 <div id="app">
   <div id="stage"><canvas id="c" width="1080" height="1920"></canvas></div>
   <aside id="panel">
-    <header><h1>⚽ Football Arena League</h1><div id="recBadge" class="rec hidden">● REC <span id="recTime">0:00</span></div></header>
+    <header><h1 lang="en">⚽ Satisfying <span lang="tr">Lig</span></h1><div id="recBadge" class="rec hidden">● REC <span id="recTime">0:00</span></div></header>
     <div id="storageWarn" class="warn hidden">⚠️ Tarayıcı depolaması (localStorage) kullanılamıyor. Uygulama bellekte çalışmaya devam ediyor ama sayfa kapanınca veriler kaybolur — <b>Tabloyu dışa aktar</b> ile yedekleyin.</div>
     <div id="seasonNote" class="note hidden"></div>
 
@@ -192,7 +224,7 @@
 
     <section>
       <h2>Ayarlar</h2>
-      <div class="hint" style="margin-top:0">Her maç, sezon fikstüründeki sıradaki <b>1'e 1 maçtır</b> (90 sn, ilk yazılan takım ev sahibi, üst kale).</div>
+      <div class="hint" style="margin-top:0">Her maç, sezon fikstüründeki sıradaki <b>maçtır</b> (iki takım, 90 sn, ilk yazılan takım ev sahibi, üst kale).</div>
       <label>Tema
         <select id="theme"><option value="auto">Otomatik (rastgele)</option><option value="classic">⚽ Classic</option><option value="snow">❄️ Snow</option><option value="rain">🌧️ Rain</option><option value="night">🌙 Night</option></select>
       </label>
@@ -238,7 +270,7 @@
       <details>
         <summary>❓ Yardım</summary>
         <ul>
-          <li><b>Başlat</b> (veya Boşluk): fikstürdeki sıradaki 1'e 1 maçı (90 sn) yeni bir rastgele seed ile oynatır. Galibiyet 3, beraberlik 1, mağlubiyet 0 puan.</li>
+          <li><b>Başlat</b> (veya Boşluk): fikstürdeki sıradaki maçı (90 sn) yeni bir rastgele seed ile oynatır. Galibiyet 3, beraberlik 1, mağlubiyet 0 puan.</li>
           <li><b>Fikstür:</b> tek devreli lig: her takım her takımla bir kez karşılaşır (18 takım → 17 hafta × 9 maç). Fikstür sezon başında bir kez oluşturulur ve sezon bitene kadar değişmez; ev sahipliği dengelidir. Takım sayısı çift olmalıdır; takımlar ve sezon uzunluğu yalnızca sezon başında değiştirilebilir.</li>
           <li><b>Kaydet ve Başlat</b>: maçı sıfırdan 1x gerçek zamanlı oynatır; bitiş ekranından sonra video otomatik iner. Kayıt sırasında sekmeyi arka plana atmayın (tarayıcı çizimi yavaşlatır).</li>
           <li>Kayıtlı (test olmayan) her maçtan sonra maç numarası artar ve maç geçmişine o maçın (görünmeyen) seed'i kaydedilir. Haftada her takım bir kez oynar; haftanın son maçından sonra hafta kendiliğinden ilerler (<b>Yeni hafta</b> ile elle de geçilebilir; haftada oynanmamış maç varsa uyarı çıkar, çünkü atlanan maçlar bir daha oynanmaz).</li>

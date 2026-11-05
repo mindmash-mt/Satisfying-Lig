@@ -1,0 +1,15 @@
+{
+  "name": "satisfying-lig",
+  "private": true,
+  "description": "Kendi kendine oynayan canlı futbol ligi (tek dosyalık tarayıcı uygulaması). Bağımlılık yok; komutlar için kısayollar.",
+  "scripts": {
+    "build": "./build.sh",
+    "test": "node tools/live-check.js --quick",
+    "test:full": "node tools/live-check.js",
+    "test:long": "node tools/live-check.js --long",
+    "typecheck": "npx -y -p typescript@5.6.3 tsc -p .",
+    "balance": "node tools/balance.js 1000",
+    "assets": "./build.sh /tmp/satisfying-site/index.html && node tools/make-assets.js /tmp/satisfying-site/index.html"
+  },
+  "engines": { "node": ">=18" }
+}

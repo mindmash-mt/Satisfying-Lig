@@ -1,5 +1,5 @@
 /* =====================================================================
-   RENDER — arena / entities (camera + shake apply here)
+   RENDER — pitch / entities (camera + shake apply here)
    ===================================================================== */
 const Renderer = {
   canvas: null, ctx: null, trails: new Map(), spins: new Map(),
@@ -14,8 +14,8 @@ const Renderer = {
     this.background(vis);
     if (!g) return;
     this.updateTrails(g, app);
-    this.arena(g, vis);
-    HUD.draw(ctx, g, app, vis);
+    this.pitch(g, vis);
+    HUD.draw(ctx, g, app);
     if (app.introOn()) IntroScreen.draw(ctx, app.intro, app.introT);
     if (app.end) EndScreen.draw(ctx, app.end, app.endT);
   },
@@ -54,7 +54,7 @@ const Renderer = {
     for (const id of [...this.trails.keys()]) if (!alive.has(id)) this.trails.delete(id);
   },
 
-  arena(g, vis) {
+  pitch(g, vis) {
     const ctx = this.ctx;
     ctx.save();
     if (FX.shakeT > 0) {
@@ -68,20 +68,8 @@ const Renderer = {
       const Fx = C.x + (FX.cam.x - C.x) * 0.55 * k, Fy = C.y + (FX.cam.y - C.y) * 0.55 * k;
       ctx.translate(C.x, C.y); ctx.scale(z, z); ctx.translate(-Fx, -Fy);
     }
-    let keeperAlpha = 1;
-    if (g.morph && g.morph.kind === 'rect') {
-      const e = easeInOutCubic(g.morph.t / g.morph.dur);
-      const pg = g.polyGeo(g.va, g.R, g.rot, g.sides);
-      this.shape(g, vis, pg, 1 - e, 1 - 0.12 * e, g.rot);
-      this.shape(g, vis, g.morph.targetGeo, e, 0.88 + 0.12 * e, 0);
-      keeperAlpha = 1 - e;
-      this.keepers(g, pg, keeperAlpha);
-    } else {
-      const geo = g.morph ? g.computeGeo() : g.geo;
-      this.shape(g, vis, geo, 1, 1, geo.kind === 'poly' ? g.rot : 0);
-      this.keepers(g, geo, 1);
-    }
-    this.powerups(g);
+    this.shape(g, vis, g.geo);
+    this.keepers(g, g.geo);
     this.players(g);
     this.balls(g, vis);
     this.particles();
@@ -96,26 +84,19 @@ const Renderer = {
     }
   },
 
-  shape(g, vis, geo, alpha, scale, rot) {
-    if (alpha <= 0.003) return;
+  shape(g, vis, geo) {
     const ctx = this.ctx, cx = g.cx, cy = CONFIG.CY;
     ctx.save();
-    ctx.globalAlpha = alpha;
-    if (scale !== 1) { ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy); }
     const V = geo.verts;
     /* nets (behind floor edge) */
-    for (const gl of geo.goals) {
-      if (gl.locked) { ctx.save(); ctx.globalAlpha *= 0.55; this.net(g, vis, gl, geo.netDepth); ctx.restore(); }
-      else this.net(g, vis, gl, geo.netDepth);
-    }
+    for (const gl of geo.goals) this.net(g, vis, gl, geo.netDepth);
     /* floor */
     ctx.save();
     ctx.beginPath(); V.forEach((v, i) => (i ? ctx.lineTo(v.x, v.y) : ctx.moveTo(v.x, v.y))); ctx.closePath();
     ctx.fillStyle = vis.f1; ctx.fill();
     ctx.clip();
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot);
-    /* mowing stripes: long enough to cover the whole pitch (the rect pitch is taller than the screen's middle 1400 px) and,
-       for the rotating polygon, its full diagonal */
+    ctx.save(); ctx.translate(cx, cy);
+    /* mowing stripes: long enough to cover the whole pitch (it is taller than the screen's middle 1400 px) */
     ctx.fillStyle = vis.f2;
     for (let s = -24; s <= 24; s += 2) ctx.fillRect(s * 45, -1200, 45, 2400);
     ctx.restore();
@@ -127,7 +108,7 @@ const Renderer = {
     ctx.fillStyle = lg; ctx.fillRect(0, 0, 1080, 1920);
     ctx.beginPath(); V.forEach((v, i) => (i ? ctx.lineTo(v.x, v.y) : ctx.moveTo(v.x, v.y))); ctx.closePath();
     ctx.strokeStyle = `rgba(0,0,0,${0.22 * sh})`; ctx.lineWidth = 44; ctx.stroke();
-    this.fieldLines(g, vis, geo, rot);
+    this.fieldLines(g, vis, geo);
     if (g.themeId === 'rain') {
       for (const s of FX.splashes) {
         const a = (FX.ut - s.t) / 0.7;
@@ -141,27 +122,23 @@ const Renderer = {
     /* walls */
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.beginPath();
-    for (const w of geo.walls) if (!w.goalWall) { ctx.moveTo(w.ax, w.ay); ctx.lineTo(w.bx, w.by); }
+    for (const w of geo.walls) { ctx.moveTo(w.ax, w.ay); ctx.lineTo(w.bx, w.by); }
     ctx.strokeStyle = vis.wallGlow; ctx.lineWidth = 30; ctx.stroke();
     ctx.strokeStyle = vis.wall; ctx.lineWidth = 12; ctx.stroke();
-    /* goal closures, posts, effect icons */
+    /* posts, the club's name behind its net and its goal tally */
     for (const gl of geo.goals) {
       const T = g.teams[gl.team];
-      if (gl.locked) this.lockWall(g, gl, T);
-      else if (gl.wallPU) this.brickWall(gl, T);
       for (const [px, py] of [[gl.p1x, gl.p1y], [gl.p2x, gl.p2y]]) {
         ctx.beginPath(); ctx.arc(px, py, CONFIG.POST_R, 0, TAU);
         ctx.fillStyle = '#ffffff'; ctx.fill();
         ctx.lineWidth = 4; ctx.strokeStyle = T.c1; ctx.stroke();
       }
-      if (!T.eliminated) this.goalIcons(g, gl, T);
-      this.nameTag(gl, T, geo.netDepth, g.o.lives > 1 && !T.eliminated && !g.finalDuel ? T.lives : 0); this.goalTally(g, gl, T, geo.netDepth);
-      if (gl.locked) this.resultTag(g, gl, T);
+      this.nameTag(gl, T, geo.netDepth); this.goalTally(g, gl, T, geo.netDepth);
     }
     ctx.restore();
   },
 
-  fieldLines(g, vis, geo, rot) {
+  fieldLines(g, vis, geo) {
     const ctx = this.ctx;
     ctx.save();
     ctx.strokeStyle = vis.line; ctx.lineWidth = 4; ctx.fillStyle = vis.line;   // always white
@@ -171,14 +148,6 @@ const Renderer = {
   },
   fieldLinesPath(geo) {
     const ctx = this.ctx, cx = geo.cx, cy = geo.cy;
-    if (geo.kind === 'poly') {
-      ctx.beginPath(); ctx.arc(cx, cy, 92, 0, TAU); ctx.stroke();
-      ctx.beginPath(); ctx.arc(cx, cy, 7, 0, TAU); ctx.fill();
-      ctx.save(); ctx.globalAlpha *= 0.35; ctx.beginPath();
-      geo.verts.forEach((v, i) => { const x = cx + (v.x - cx) * 0.55, y = cy + (v.y - cy) * 0.55; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-      ctx.closePath(); ctx.stroke(); ctx.restore();
-      return;
-    }
     const W = geo.W, H = geo.H, x0 = cx - W / 2, y0 = cy - H / 2;
     ctx.beginPath(); ctx.moveTo(x0, cy); ctx.lineTo(x0 + W, cy); ctx.stroke();
     ctx.beginPath(); ctx.arc(cx, cy, 86, 0, TAU); ctx.stroke();
@@ -227,33 +196,16 @@ const Renderer = {
     }
     ctx.stroke();
     ctx.restore();
-    const glow = T.eliminated ? 0.25 : 1;
     ctx.beginPath(); const a1 = P(-hw, 0), a2 = P(-hw, D + disp(-hw, D)), a3 = P(hw, D + disp(hw, D)), a4 = P(hw, 0);
     ctx.moveTo(a1[0], a1[1]); ctx.lineTo(a2[0], a2[1]); ctx.lineTo(a3[0], a3[1]); ctx.lineTo(a4[0], a4[1]);
-    ctx.lineWidth = 9; ctx.strokeStyle = rgba(T.c1, 0.25 * glow); ctx.stroke();
-    ctx.lineWidth = 4; ctx.strokeStyle = rgba(T.c1, 0.95 * glow); ctx.stroke();
+    ctx.lineWidth = 9; ctx.strokeStyle = rgba(T.c1, 0.25); ctx.stroke();
+    ctx.lineWidth = 4; ctx.strokeStyle = rgba(T.c1, 0.95); ctx.stroke();
     ctx.restore();
   },
 
-  lockWall(g, gl, T) {
-    const ctx = this.ctx;
-    const p = easeOutCubic((g.t - T.elimT) / 0.25);
-    const { mx, my, tx, ty, hw } = gl;
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.shadowColor = T.c1; ctx.shadowBlur = 22;
-    ctx.strokeStyle = T.c1; ctx.lineWidth = 16;
-    ctx.beginPath();
-    ctx.moveTo(gl.p1x, gl.p1y); ctx.lineTo(gl.p1x + tx * hw * p, gl.p1y + ty * hw * p);
-    ctx.moveTo(gl.p2x, gl.p2y); ctx.lineTo(gl.p2x - tx * hw * p, gl.p2y - ty * hw * p);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 4; ctx.stroke();
-    ctx.restore();
-  },
-  /* team name written across the net behind each goal (also after elimination), parallel to the goal line.
+  /* team name written across the net behind each goal, parallel to the goal line.
      Plain white letters with a dark outline, so the name reads on any pitch/theme. */
-  nameTag(gl, T, D, hearts) {
+  nameTag(gl, T, D) {
     const ctx = this.ctx;
     const ang = Math.atan2(gl.ty, gl.tx);
     const chars = [...upTR(T.name)];
@@ -261,9 +213,7 @@ const Renderer = {
     const maxW = Math.min(gl.L * 0.92, 470);
     const widthAt = (f) => { ctx.font = `${f}px ${FONT_BIG}`; return chars.reduce((w, ch) => w + ctx.measureText(ch).width, 0) + (chars.length - 1) * f * 0.06; };
     while (widthAt(fs) > maxW && fs > 16) fs -= 2;
-    const hs = hearts ? fs * 0.55 : 0, heartsW = hearts ? 10 + hearts * (hs + 3) : 0;
-    while (hearts && widthAt(fs) + heartsW > maxW && fs > 16) fs -= 2;
-    const total = widthAt(fs) + heartsW, gap = fs * 0.06;
+    const total = widthAt(fs), gap = fs * 0.06;
     ctx.save();
     ctx.translate(gl.mx + gl.nx * (D / 2 + 2), gl.my + gl.ny * (D / 2 + 2));
     ctx.rotate(ang);
@@ -279,7 +229,6 @@ const Renderer = {
       }
       x += w + gap;
     }
-    if (hearts) for (let h = 0; h < hearts; h++) drawHeart(ctx, x + 10 + h * (hs + 3) + hs / 2, 2, hs, '#ff3d57', 'rgba(0,0,0,0.6)');
     ctx.restore();
   },
   /* one mini football per goal this team has scored in the match, lined up behind its name; each pops in when the goal is scored */
@@ -317,70 +266,15 @@ const Renderer = {
     }
     ctx.restore();
   },
-  /* small result tag just in front of an eliminated team's closed goal: "4TH · +4 PTS" */
-  resultTag(g, gl, T) {
-    const ctx = this.ctx;
-    const p = easeOutBack((g.t - T.elimT - 0.15) / 0.35, 2);
-    if (p <= 0.01) return;
-    const pts = App.pointsForPlace(T.place);
-    const text = `${ordinal(T.place)}${pts === null ? '' : ` · +${pts} PTS`}`;
-    const ang = Math.atan2(gl.ty, gl.tx);
-    ctx.save();
-    ctx.translate(gl.mx - gl.nx * 34, gl.my - gl.ny * 34);
-    ctx.rotate(ang);
-    if (Math.cos(ang) < 0) ctx.rotate(Math.PI);
-    ctx.scale(p, p);
-    let fs = 32; ctx.font = `${fs}px ${FONT_BIG}`;
-    const maxW = Math.max(90, gl.L * 0.7);
-    while (ctx.measureText(text).width > maxW - 24 && fs > 16) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
-    const w = ctx.measureText(text).width + 28, h = fs + 12;
-    roundRect(ctx, -w / 2, -h / 2, w, h, h / 2);
-    ctx.fillStyle = 'rgba(8,10,18,0.78)'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = T.c1; ctx.stroke();
-    outlinedText(ctx, text, 0, 2, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
-    ctx.restore();
-  },
-  brickWall(gl, T) {
-    const ctx = this.ctx;
-    ctx.save(); ctx.lineCap = 'butt';
-    ctx.shadowColor = T.c1; ctx.shadowBlur = 18;
-    ctx.strokeStyle = T.c1; ctx.lineWidth = 18;
-    ctx.beginPath(); ctx.moveTo(gl.p1x, gl.p1y); ctx.lineTo(gl.p2x, gl.p2y); ctx.stroke();
-    ctx.shadowBlur = 0; ctx.setLineDash([22, 6]); ctx.strokeStyle = T.c2; ctx.lineWidth = 6; ctx.stroke(); ctx.setLineDash([]);
-    ctx.restore();
-  },
-  goalIcons(g, gl, T) {
-    const icons = [];
-    if (g.t < T.fx.giant) icons.push('🧤');
-    if (g.t < T.fx.wall) icons.push('🧱');
-    if (g.t < T.fx.small) icons.push('🔍');
-    if (g.t < T.fx.big) icons.push('🎯');
-    if (!icons.length) return;
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.font = `32px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.globalAlpha *= 0.75 + 0.25 * Math.sin(FX.ut * 6);
-    icons.forEach((ic, i) => {
-      const off = (i - (icons.length - 1) / 2) * 40;
-      const x = gl.mx - gl.nx * 74 + gl.tx * off, y = gl.my - gl.ny * 74 + gl.ty * off;
-      ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.beginPath(); ctx.arc(x, y, 21, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.fillText(ic, x, y + 2);
-    });
-    ctx.restore();
-  },
-
-  keepers(g, geo, alphaMul) {
+  keepers(g, geo) {
     const ctx = this.ctx;
     for (const gl of geo.goals) {
       const T = g.teams[gl.team], k = T.k;
-      let alpha = alphaMul;
-      if (T.eliminated) alpha *= 1 - clamp01((g.t - T.elimT) / 0.6);
-      if (alpha <= 0.01) continue;
       const half = Math.min(k.halfLen, gl.hw * 0.92), maxS = Math.max(0, gl.hw - half - 4);
       const s = clamp(k.s, -maxS, maxS);
       const x = gl.mx - gl.nx * CONFIG.KEEPER_INSET + gl.tx * s, y = gl.my - gl.ny * CONFIG.KEEPER_INSET + gl.ty * s;
       const ax = x - gl.tx * half, ay = y - gl.ty * half, bx = x + gl.tx * half, by = y + gl.ty * half;
-      ctx.save(); ctx.globalAlpha = alpha; ctx.lineCap = 'round';
+      ctx.save(); ctx.lineCap = 'round';
       const fl = g.t - k.flashT < 0.35 ? 1 - (g.t - k.flashT) / 0.35 : 0;
       if (fl > 0) { ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 30 * fl; }
       ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
@@ -391,34 +285,11 @@ const Renderer = {
       ctx.restore();
     }
   },
-  powerups(g) {
-    const ctx = this.ctx;
-    for (const p of g.powerups) {
-      const s = easeOutBack(p.age / 0.35) * (1 + 0.07 * Math.sin(p.age * 6));
-      let a = 1;
-      if (p.age > CONFIG.PU_LIFE - 2) a = 0.3 + 0.7 * (0.5 + 0.5 * Math.cos(p.age * 18));
-      ctx.save(); ctx.globalAlpha *= a;
-      ctx.translate(p.x, p.y); ctx.scale(s, s);
-      const gr = ctx.createRadialGradient(0, 0, 10, 0, 0, 58);
-      gr.addColorStop(0, 'rgba(255,215,64,0.55)'); gr.addColorStop(1, 'rgba(255,215,64,0)');
-      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, 58, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.arc(0, 0, CONFIG.PU_R, 0, TAU);
-      ctx.fillStyle = 'rgba(18,18,30,0.9)'; ctx.fill();
-      ctx.lineWidth = 4; ctx.strokeStyle = '#FFD740'; ctx.stroke();
-      ctx.rotate(Math.sin(p.age * 3) * 0.15);
-      ctx.font = `30px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
-      ctx.fillText(p.def.icon, 0, 2);
-      ctx.restore();
-    }
-  },
   players(g) {
     const ctx = this.ctx, R = CONFIG.PLAYER_R;
     for (const p of g.players) {
       const T = g.teams[p.team];
-      let a = 1;
-      if (!p.alive || T.eliminated) a = 1 - clamp01((g.t - T.elimT) / 0.6);
-      if (a <= 0.01) continue;
-      ctx.save(); ctx.globalAlpha *= a;
+      ctx.save();
       /* token: soft shadow, dark rim, shaded club colour, ring in the second colour, the code in a colour that reads on it */
       const sg = ctx.createRadialGradient(p.x + 3, p.y + 8, R * 0.3, p.x + 3, p.y + 8, R * 1.35);
       sg.addColorStop(0, 'rgba(0,0,0,0.45)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
@@ -532,7 +403,7 @@ const Renderer = {
     for (const gl of g.geo.goals) {
       const T = g.teams[gl.team];
       const gr = ctx.createRadialGradient(gl.mx, gl.my, 0, gl.mx, gl.my, gl.hw + 60);
-      gr.addColorStop(0, rgba(T.c1, T.eliminated ? 0.12 : 0.35)); gr.addColorStop(1, rgba(T.c1, 0));
+      gr.addColorStop(0, rgba(T.c1, 0.35)); gr.addColorStop(1, rgba(T.c1, 0));
       ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(gl.mx, gl.my, gl.hw + 60, 0, TAU); ctx.fill();
     }
     ctx.restore();
@@ -586,56 +457,18 @@ function outlinedText(ctx, text, x, y, font, fill, stroke, lw, align = 'center',
   if (stroke) { ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.strokeText(text, x, y); }
   ctx.fillStyle = fill; ctx.fillText(text, x, y);
 }
-function drawHeart(ctx, x, y, s, fill, stroke) {
-  ctx.save(); ctx.translate(x, y); ctx.scale(s / 16, s / 16);
-  ctx.beginPath();
-  ctx.moveTo(0, 6); ctx.bezierCurveTo(-14, -3, -9, -15, 0, -8); ctx.bezierCurveTo(9, -15, 14, -3, 0, 6);
-  ctx.closePath();
-  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-  if (stroke) { ctx.lineWidth = 2.2; ctx.strokeStyle = stroke; ctx.stroke(); }
-  ctx.restore();
-}
 
 /* =====================================================================
-   HUD  (title, final-duel scoreboard, big texts)
+   HUD  (top bar: title · clock · score, penalty table, announcements)
    ===================================================================== */
 const HUD = {
-  draw(ctx, g, app, vis) {
-    const SX = 510; // center of safe area (60..960)
-    /* 1v1 match: everything in one line on top (title · score · clock), the pitch fills the rest of the frame */
-    if (g.timed) {
-      this.topBar(ctx, g, app);
-      this.announcement(ctx, CONFIG.CY + CONFIG.FINAL_DY - CONFIG.FINAL_H * 0.27, g.cx);
-      if (g.pens) this.penalties(ctx, g, g.cx);
-      return;
-    }
-    /* title */
-    const title = app.title || '';
-    let tfs = 86; ctx.font = `${tfs}px ${FONT_BIG}`;
-    while (ctx.measureText(title).width > 800 && tfs > 50) { tfs -= 2; ctx.font = `${tfs}px ${FONT_BIG}`; }
-    const tw = ctx.measureText(title).width;
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 16;
-    outlinedText(ctx, title, SX - 34, 260, `${tfs}px ${FONT_BIG}`, '#ffffff', null, 0);
-    ctx.shadowBlur = 0;
-    ctx.font = `56px ${FONT_UI}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(THEME_DEFS[g.themeId].icon, SX - 34 + tw / 2 + 16, 256);
-    ctx.restore();
-    /* CTA — first 3 seconds */
-    const ct = app.matchRealT;
-    if (ct < 3) {
-      const a = ct > 2.6 ? (3 - ct) / 0.4 : 1;
-      ctx.save(); ctx.globalAlpha = a;
-      outlinedText(ctx, 'Who wins? Comment below 👇', SX, 316, `600 30px ${FONT_UI}`, '#ffffff', 'rgba(0,0,0,0.55)', 6);
-      ctx.restore();
-    }
-    /* final duel score shares the lane above the pitch with the elimination text and fades out while one shows */
-    const want = g.finalDuel && !g.morph && !FX.ann ? 1 : 0;
-    this.duelA = (this.duelA || 0) + (want - (this.duelA || 0)) * 0.18;
-    if (this.duelA > 0.02) { ctx.save(); ctx.globalAlpha = this.duelA; this.duelScore(ctx, g, SX); ctx.restore(); }
-    this.announcement(ctx, 394);
+  draw(ctx, g, app) {
+    /* everything in one line on top (title · score · clock), the pitch fills the rest of the frame */
+    this.topBar(ctx, g, app);
+    this.announcement(ctx, CONFIG.CY + CONFIG.FINAL_DY - CONFIG.FINAL_H * 0.27, g.cx);
+    if (g.pens) this.penalties(ctx, g, g.cx);
   },
-  /* 1v1 match: one line above the pitch — title + theme (left), the clock (centre; last 10 s red, golden goal gold), the score (right).
+  /* one line above the pitch — title + theme (left), the clock (centre; last 10 s red, golden goal gold), the score (right).
      A thin bar under the clock shows the time played. */
   topBar(ctx, g, app) {
     const y = CONFIG.TOPBAR_Y, X0 = 30, X1 = 1050, H = 84;
@@ -723,29 +556,6 @@ const HUD = {
     ctx.restore();
   },
 
-  /* duel score above the pitch: top-goal team (in a 1v1 match: the home club) on the left */
-  duelScore(ctx, g, SX) {
-    const [ia, ib] = g.rectTeams || [], A = g.teams[ia], B = g.teams[ib];
-    if (!A || !B) return;
-    ctx.save();
-    const cy = 380;
-    roundRect(ctx, SX - 360, cy - 52, 720, 104, 30);
-    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.stroke();
-    ctx.beginPath(); ctx.arc(SX - 315, cy, 22, 0, TAU); ctx.fillStyle = A.c1; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = A.c2; ctx.stroke();
-    ctx.beginPath(); ctx.arc(SX + 315, cy, 22, 0, TAU); ctx.fillStyle = B.c1; ctx.fill(); ctx.strokeStyle = B.c2; ctx.stroke();
-    outlinedText(ctx, A.code, SX - 280, cy + 4, `72px ${FONT_BIG}`, '#ffffff', null, 0, 'left');
-    outlinedText(ctx, B.code, SX + 280, cy + 4, `72px ${FONT_BIG}`, '#ffffff', null, 0, 'right');
-    const pulseA = g.t - (B.hitT >= 0 ? B.hitT : -9), pulseB = g.t - (A.hitT >= 0 ? A.hitT : -9);
-    const sa = pulseA < 0.5 ? 1 + 0.35 * Math.sin(pulseA / 0.5 * Math.PI) : 1, sb = pulseB < 0.5 ? 1 + 0.35 * Math.sin(pulseB / 0.5 * Math.PI) : 1;
-    ctx.save(); ctx.translate(SX - 70, cy + 4); ctx.scale(sa, sa); outlinedText(ctx, String(A.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
-    outlinedText(ctx, '–', SX, cy + 2, `80px ${FONT_BIG}`, 'rgba(255,255,255,0.7)', null, 0);
-    ctx.save(); ctx.translate(SX + 70, cy + 4); ctx.scale(sb, sb); outlinedText(ctx, String(B.score), 0, 0, `96px ${FONT_BIG}`, '#ffffff', null, 0); ctx.restore();
-    /* the longer final pitch reaches up to the scoreboard, so the rule line sits under the pitch (a timed match has its clock there) */
-    if (!g.timed) outlinedText(ctx, `FIRST TO ${CONFIG.FINAL_GOALS} WINS`, SX, CONFIG.CY + CONFIG.FINAL_DY + CONFIG.FINAL_H / 2 + CONFIG.NET_DEPTH_RECT + 40, `600 26px ${FONT_UI}`, 'rgba(255,255,255,0.75)', null, 0);
-    ctx.restore();
-  },
-
   /* green plus next to the scoring team's name, centred on (x, y), s = size */
   greenPlus(ctx, x, y, s) {
     const t = s * 0.3;
@@ -781,8 +591,8 @@ const HUD = {
       outlinedText(ctx, a.text, 0, 4, `${fs}px ${FONT_BIG}`, '#ffffff', a.color, 14);
       ctx.shadowBlur = 0;
       outlinedText(ctx, a.text, 0, 4, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
-    } else if (a.kind === 'elim' && a.goal) {
-      /* line 1: green plus + "ARSENAL GOAL" in the scoring team's colours; line 2: the eliminated-team pill */
+    } else if (a.kind === 'score' && a.goal) {
+      /* line 1: green plus + "ARSENAL GOAL" in the scoring team's colours; line 2: the new score in a pill */
       const G = a.goal;
       let gs = 64; ctx.font = `${gs}px ${FONT_BIG}`;
       while (ctx.measureText(G.text).width > 760 && gs > 36) { gs -= 2; ctx.font = `${gs}px ${FONT_BIG}`; }
@@ -802,9 +612,8 @@ const HUD = {
       ctx.lineWidth = 5; ctx.strokeStyle = a.color; ctx.stroke();
       outlinedText(ctx, a.text, 0, cy + 3, `${fs}px ${FONT_BIG}`, '#ffffff', null, 0);
     } else {
-      const elim = a.kind === 'elim';
-      let fs = elim ? 76 : 56; ctx.font = `${fs}px ${FONT_BIG}`;
-      while (ctx.measureText(a.text).width > (elim ? 800 : 820) && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
+      let fs = 56; ctx.font = `${fs}px ${FONT_BIG}`;
+      while (ctx.measureText(a.text).width > 820 && fs > 28) { fs -= 2; ctx.font = `${fs}px ${FONT_BIG}`; }
       const w = ctx.measureText(a.text).width + 70, h = fs + 26;
       roundRect(ctx, -w / 2, -h / 2, w, h, h / 2);
       ctx.fillStyle = 'rgba(10,10,20,0.85)'; ctx.fill();

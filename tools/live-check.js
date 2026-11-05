@@ -18,13 +18,15 @@
   5d) Yayında başlangıç (tools/live-start.js): yeni lig yayından birkaç dk sonra başlar, sonraki yayınlarda aynı kalır,
      live-start.json kaybolursa checkpoint'ten geri okunur, eski ligin şampiyonları ve sezonları taşınır.
   6) --long: gerçek takvimle 48 saatlik hızlandırılmış koşu (1440 maç, ~8,7 sezon: 153 lig + 12 eleme maçı, şampiyon sınırı).
-  Kullanım: node tools/live-check.js [maç sayısı] [--long]
+  --quick: hızlı koşu (geliştirirken, npm test): 2) ve uzatma testleri daha az maçla, 3d) 9 saatlik takvim koşusu atlanır.
+  Kullanım: node tools/live-check.js [maç sayısı] [--quick | --long]
 */
 const fs = require('fs'), path = require('path');
 const src = (f) => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8');
 const load = () => { const m = { exports: {} }; new Function('module', src('01_core.js') + '\n' + src('02_sim.js') +
   '\nmodule.exports = { CONFIG, DEFAULT_TEAMS, Game, RNG, DT, THEME_IDS, DM, planRoundRobin };')(m); return m.exports; };
-const N = +(process.argv.find(a => /^\d+$/.test(a)) || 20);
+const QUICK = process.argv.includes('--quick');
+const N = +(process.argv.find(a => /^\d+$/.test(a)) || (QUICK ? 6 : 20));
 let fail = 0;
 
 /* 1) accuracy */
@@ -53,7 +55,7 @@ const runAll = () => {
   for (const knockout of [false, true]) for (let i = 0; i < N; i++) {
     if (knockout) CONFIG.GOLDEN_TIME = 3;
     const seed = ((knockout ? 0x85EBCA6B : 0x9E3779B9) * (i + 1)) >>> 0, rng = new RNG(seed ^ 0x51ED27);
-    const g = new Game({ mode: 'match', teams: rng.shuffle(teams).slice(0, 2), seed, theme: rng.pick(THEME_IDS), lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout });
+    const g = new Game({ mode: 'match', teams: rng.shuffle(teams).slice(0, 2), seed, theme: rng.pick(THEME_IDS), speedMult: 1, matchTime: CONFIG.MATCH_TIME, knockout });
     let n = 0; while (!g.over) { g.step(DT); n++; }
     out.push({ n, r: g.getResult(), clock: g.clock, b: g.balls.map(b => [b.x, b.y, b.vx, b.vy]) });
   }
@@ -105,7 +107,7 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     const G0 = CONFIG.GOLDEN_TIME;
     const play = (knockout, seed, golden) => {
       if (golden !== undefined) CONFIG.GOLDEN_TIME = golden;
-      const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout });
+      const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed, theme: 'classic', speedMult: 1, matchTime: CONFIG.MATCH_TIME, knockout });
       let acc = 0, n = 0; while (!g.over) { acc += g.timeScale() / 60; while (acc >= DT && !g.over) { g.step(DT); acc -= DT; } n++; }
       return { g, r: g.getResult(), screen: n / 60 };
     };
@@ -125,8 +127,8 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
        until the ball turns back or goes in (at most ADDED_MAX s); it never ends while that is still the case */
     {
       let n = 0, withAdded = 0, bad = 0, maxAdd = 0;
-      for (let s = 1; s <= 150; s++) {
-        const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 5000 + s, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout: false });
+      for (let s = 1; s <= (QUICK ? 50 : 150); s++) {
+        const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 5000 + s, theme: 'classic', speedMult: 1, matchTime: CONFIG.MATCH_TIME, knockout: false });
         let added = false;
         g.onEvent = (t) => {
           if (t === 'addedTime') added = true;
@@ -149,8 +151,8 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     /* the same added time at half time: the first half never ends while the ball is on its way to a goal (at most ADDED_MAX s) */
     {
       let n = 0, withAdded = 0, bad = 0, maxAdd = 0;
-      for (let s = 1; s <= 150; s++) {
-        const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 6000 + s, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout: false });
+      for (let s = 1; s <= (QUICK ? 50 : 150); s++) {
+        const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 6000 + s, theme: 'classic', speedMult: 1, matchTime: CONFIG.MATCH_TIME, knockout: false });
         let added = false;
         g.onEvent = (t, d) => {
           if (t === 'addedTime' && d.half === 1) added = true;
@@ -170,7 +172,7 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     /* half time: at MATCH_TIME / 2 (+ added time) a HALF_BREAK-second break with the clock stopped; the clubs change ends and the
        second half kicks off from the centre at exactly MATCH_TIME / 2 */
     {
-      const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 777, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout: false });
+      const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 777, theme: 'classic', speedMult: 1, matchTime: CONFIG.MATCH_TIME, knockout: false });
       const home = g.teams[0].id, topOf = () => g.teams[g.geo.goals.find(x => x.my < g.rectCy()).team].id, ev = [];
       let topBefore = topOf(), atHT = null, after = null, pauseOK = true, kick2 = null;
       g.onEvent = (t, d) => {
@@ -192,7 +194,7 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     {
       let outside = 0, kicks = 0, badKick = 0, roles = '', flip = true;
       for (let s = 1; s <= 40; s++) {
-        const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 9000 + s, theme: 'classic', lives: 1, speedMult: 1, powerups: false, matchTime: CONFIG.MATCH_TIME, knockout: false });
+        const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 9000 + s, theme: 'classic', speedMult: 1, matchTime: CONFIG.MATCH_TIME, knockout: false });
         if (s === 1) roles = g.teams.map(T => g.players.filter(p => p.team === T.i).map(p => p.role + (p.captain ? '(C)' : '')).join('+')).join(' / ');
         const z0 = g.zoneOf(g.players.find(p => p.role === 'def'));
         /* the ball's direction right at the kick (later in the same step it may already bounce off a wall or a keeper) */
@@ -416,7 +418,8 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
       `Yayındaki sayfanın kendi koduyla ilerletilen lig (${P.League.data.liveCount} maç), kaynaktan yüklenen motorla birebir aynı`);
   }
   /* 3d) every league match fits its 2-minute slot; a playoff match that runs over only delays the next few matches */
-  {
+  if (QUICK) console.log('9 saatlik takvim koşusu atlandı (--quick) ⏭');
+  else {
     const long = process.argv.includes('--long'), L = loadLive(), t0 = Date.now();
     L.CONFIG.LIVE.start = '2026-11-04T00:00'; L.Live._slots = null; L.Live._sched = null; L.Live.adopt(null);
     const hours = long ? 48 : 9, log = await runUntil(L, L.Live.slot(0) + hours * 3600e3);

@@ -52,7 +52,7 @@ const Offline = {
 
   async pickCodec(w, h, bitrate) {
     for (const codec of ['avc1.640033', 'avc1.4d0033', 'avc1.42e033']) {
-      const cfg = { codec, width: w, height: h, bitrate, framerate: this.FPS, avc: { format: 'annexb' }, latencyMode: 'quality' };
+      const cfg = /** @type {VideoEncoderConfig} */ ({ codec, width: w, height: h, bitrate, framerate: this.FPS, avc: { format: 'annexb' }, latencyMode: 'quality' });
       try { if ((await VideoEncoder.isConfigSupported(cfg)).supported) return cfg; } catch (e) { /* try next */ }
     }
     throw new Error('Bu tarayıcıda H.264 VideoEncoder yok.');
