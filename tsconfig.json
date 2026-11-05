@@ -11,6 +11,6 @@
   "files": [
     "src/types.d.ts",
     "src/01_core.js", "src/02_sim.js", "src/03_fx_audio.js", "src/04_render.js",
-    "src/05_app.js", "src/06_offline.js", "src/07_live.js"
+    "src/05_app.js", "src/06_offline.js", "src/07_live.js", "src/08_stats.js"
   ]
 }
