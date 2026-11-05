@@ -2032,8 +2032,10 @@ const Renderer = {
     ctx.fillStyle = vis.f1; ctx.fill();
     ctx.clip();
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot);
+    /* mowing stripes: long enough to cover the whole pitch (the rect pitch is taller than the screen's middle 1400 px) and,
+       for the rotating polygon, its full diagonal */
     ctx.fillStyle = vis.f2;
-    for (let s = -12; s <= 12; s += 2) ctx.fillRect(s * 45, -700, 45, 1400);
+    for (let s = -24; s <= 24; s += 2) ctx.fillRect(s * 45, -1200, 45, 2400);
     ctx.restore();
     this.fieldLines(g, vis, geo, rot);
     if (g.themeId === 'rain') {
@@ -2098,7 +2100,9 @@ const Renderer = {
       ctx.strokeRect(cx - sw / 2, s > 0 ? ey : ey - sh, sw, sh);
       const py = ey + s * bh * 0.72;
       ctx.beginPath(); ctx.arc(cx, py, 6, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx, ey + s * bh, 60, s > 0 ? 0.2 * Math.PI : 1.2 * Math.PI, s > 0 ? 0.8 * Math.PI : 1.8 * Math.PI); ctx.stroke();
+      /* penalty arc ("D"): centred on the penalty spot, only the part outside the box, meeting the box line */
+      const dR = bh * 0.28 + 44, dA = Math.acos(clamp01(bh * 0.28 / dR)), dm = s > 0 ? Math.PI / 2 : -Math.PI / 2;
+      ctx.beginPath(); ctx.arc(cx, py, dR, dm - dA, dm + dA); ctx.stroke();
       for (const sx of [x0, x0 + W]) { ctx.beginPath(); ctx.arc(sx, ey, 22, 0, TAU); ctx.stroke(); }
     }
   },
