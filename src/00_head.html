@@ -38,9 +38,15 @@
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Satisfying Lig">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- fonts are served with the site (public/fonts, SIL Open Font License): no request to a third party; canvas text waits for them (document.fonts.load) -->
+<link rel="preload" href="__FONT_DIR__bebas-neue-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="__FONT_DIR__inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  @font-face { font-family: "Bebas Neue"; font-style: normal; font-weight: 400; font-display: swap; src: url(__FONT_DIR__bebas-neue-latin.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: "Bebas Neue"; font-style: normal; font-weight: 400; font-display: swap; src: url(__FONT_DIR__bebas-neue-latin-ext.woff2) format("woff2"); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+  @font-face { font-family: Inter; font-style: normal; font-weight: 100 900; font-display: swap; src: url(__FONT_DIR__inter-latin.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family: Inter; font-style: normal; font-weight: 100 900; font-display: swap; src: url(__FONT_DIR__inter-latin-ext.woff2) format("woff2"); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+</style>
 <style>
   :root {
     --bg: #0b0e14; --surface: #131823; --surface2: #1a2130; --border: #263046;
@@ -176,7 +182,64 @@
   .hist-nav:disabled { opacity: .35; }
   .lp-pool { list-style: none; margin: 0; padding: 10px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; background: var(--surface); border-radius: 12px; font-size: 13px; }
   .lp-pool li { display: flex; align-items: center; min-width: 0; }
+  /* accessibility: visible keyboard focus, text only screen readers read */
+  :focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+  #liveTabs button:focus-visible { outline-offset: 1px; }
+  #livePane:focus-visible, #livePane h2:focus-visible { outline: none; }
+  .sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  #liveTabs .sh { display: none; }
+  /* a club's name: opens its page */
+  button.tl { all: unset; cursor: pointer; color: inherit; font: inherit; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; vertical-align: bottom; }
+  button.tl:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+  button.tl:focus-visible { outline: 2px solid var(--accent2); outline-offset: 1px; }
+  .lp-champs li b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  /* "İstatistik" tab and the club pages */
+  .mut { color: var(--muted); font-weight: 400; }
+  em.on { font-style: normal; color: var(--accent); font-weight: 700; }
+  .st-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .st-card { margin: 0; background: var(--surface); border-color: var(--border); }
+  .st-card h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  .st-list { list-style: none; margin: 0; padding: 0; }
+  .st-list li { padding: 6px 2px; border-bottom: 1px solid #1f283a; font-size: 13px; line-height: 1.45; }
+  .st-list li:last-child { border-bottom: none; }
+  .st-list .sc { margin: 0 3px; color: var(--text); white-space: nowrap; }
+  .st-list .win { font-weight: 700; }
+  .st-list .fp { margin: 0 8px 0 0; }
+  ol.st-list:not(.st-card ol) { background: var(--surface); border-radius: 12px; padding: 4px 10px; }
+  .st-empty { color: var(--muted); font-size: 13px; padding: 8px 2px; }
+  .st-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 10px 8px; }
+  .st-chart { display: block; width: 100%; height: auto; overflow: visible; }
+  .st-chart .gr { stroke: #263046; stroke-width: 1; }
+  .st-chart .ax { fill: var(--muted); font: 600 11px Inter, sans-serif; }
+  .st-chart .vl { fill: var(--text); font: 700 11px Inter, sans-serif; }
+  .st-chart .dl { fill: var(--text); font: 700 12px Inter, sans-serif; } .st-chart .dl.mut { fill: var(--muted); }
+  .st-chart .bar { fill: var(--accent); } .st-chart .bar.cur { fill: var(--accent); opacity: .45; }
+  .st-chart .hit:hover .bar { fill: #5cf0b6; }
+  .st-chart .ln { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .st-chart .ln.lead { stroke: var(--muted); stroke-dasharray: 5 4; }
+  .st-chart .relband { fill: rgba(255,77,94,.1); }
+  .st-chart circle[class] { stroke: var(--surface); stroke-width: 2; }
+  .st-chart .pt-W, .st-chart .pt-up { fill: var(--accent); } .st-chart .pt-D, .st-chart .pt-pool { fill: #8b95a8; } .st-chart .pt-L { fill: var(--danger); }
+  .st-chart .pt-pos { fill: var(--text); } .st-chart .pt-champ { fill: var(--accent2); }
+  .st-chart circle.cur { fill: var(--surface); stroke: var(--accent); stroke-width: 2.5; }
+  .st-chart .hit:hover circle[class] { stroke: var(--text); }
+  .k-W { color: var(--accent); } .k-D { color: #8b95a8; } .k-L { color: var(--danger); }
+  .st-det { margin-top: 8px; } .st-det summary { font-size: 13px; color: var(--muted); padding: 4px 2px; } .st-det table { margin-top: 6px; }
+  .st-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; }
+  .st-tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px; text-align: center; min-width: 0; }
+  .st-tile b { display: block; font-family: "Bebas Neue", sans-serif; font-weight: 400; font-size: 30px; line-height: 1; }
+  .st-tile span { display: block; color: var(--muted); font-size: 11.5px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; }
+  .h2h-bar { display: flex; gap: 8px; align-items: center; margin: 6px 0 4px; } .h2h-bar select { flex: 1; min-width: 0; width: auto; } .h2h-bar span { color: var(--muted); font-weight: 700; }
+  .tm-back { margin: 2px 0 10px; }
+  .tm-head { display: flex; gap: 12px; align-items: center; }
+  .tm-badge { flex-shrink: 0; width: 54px; height: 54px; border-radius: 50%; border: 4px solid; display: flex; align-items: center; justify-content: center; font: 400 19px "Bebas Neue", sans-serif; letter-spacing: .5px; color: #fff; text-shadow: 0 0 3px #000, 0 0 2px #000; }
+  .tg { white-space: nowrap; font-size: 12px; font-weight: 700; }
+  .tg.champ { color: var(--accent2); } .tg.down { color: #ff8a95; } .tg.up { color: var(--accent); } .tg.cur { color: var(--muted); }
+  .st-seasons td.tn { white-space: normal; }
+  .st-seasons th:last-child { text-align: left; }
   @media (max-width: 520px) {
+    .st-grid { grid-template-columns: 1fr; }
+    .st-tiles { grid-template-columns: 1fr 1fr; }
     .lp-table .opt { display: none; }
     .lp-table { font-size: 13px; }
     .fx-match ol { grid-template-columns: 1fr; }
@@ -187,8 +250,9 @@
   }
   @media (max-width: 430px) {
     #liveBar .lbl { display: none; }
-    #liveTabs { gap: 2px; padding: 3px; }
-    #liveTabs button { padding: 7px 8px; font-size: 12.5px; }
+    #liveTabs { gap: 1px; padding: 3px; max-width: calc(100vw - 12px); }
+    #liveTabs button { padding: 7px 7px; font-size: 12.5px; }
+    #liveTabs .lg { display: none; } #liveTabs .sh { display: inline; }
   }
   @media (max-width: 900px) {
     #app { flex-direction: column; height: auto; }

@@ -17,7 +17,7 @@ Site adresi: https://mindmash-mt.github.io/Satisfying-Lig/ — **hiç durmayan b
 
 - **Maç sırasında:** maçın kendisi. Geç gelen kişi maçı baştan değil, **kaldığı yerden** izler; herkes aynı anda aynı maçı görür. Maçtan önce `WEEK 5 MATCHES` ekranı (haftanın 9 maçı: oynananlar skorlarıyla, sıradaki, kalanlar), maçtan sonra animasyonlu lig tablosu gelir.
 - **Maçlar arasında:** güncel lig tablosu, sıradaki eşleşme (ev sahibi solda) ve **geri sayım**.
-- Üstteki sekmeler: **⚽ Canlı** (yayın), **Lig tablosu** (O, G, B, M, AG, YG, AV, P, son 3 maç; düşme hattındaki son 3 takım kırmızı çizgili; son şampiyonlar), **Fikstür** (sezonun bütün haftaları ve her maçın saati; oynananlar skorlarıyla, oynanan maç `● CANLI`, geciken maç `ertelendi` etiketiyle), **Eleme** (havuzdaki 12 kulübün yükselme eleme tablosu: turlar, skorlar, altın gol / penaltılar, bay geçenler, sıradaki maç) ve **Geçmiş** (biten sezonların tablosu ve yükselme eleme sonuçları; eski 6'lı grup formatındaki ligin sezonları da; bkz. [Geçmiş sezonlar](#geçmiş-sezonlar)). Sekmeler açıkken yayın arka planda saate göre ilerler.
+- Üstteki sekmeler: **⚽ Canlı** (yayın), **Lig tablosu** (O, G, B, M, AG, YG, AV, P, son 3 maç; düşme hattındaki son 3 takım kırmızı çizgili; son şampiyonlar), **Fikstür** (sezonun bütün haftaları ve her maçın saati; oynananlar skorlarıyla, oynanan maç `● CANLI`, geciken maç `ertelendi` etiketiyle), **Eleme** (havuzdaki 12 kulübün yükselme eleme tablosu: turlar, skorlar, altın gol / penaltılar, bay geçenler, sıradaki maç) **Geçmiş** (biten sezonların tablosu ve yükselme eleme sonuçları; eski 6'lı grup formatındaki ligin sezonları da; bkz. [Geçmiş sezonlar](#geçmiş-sezonlar)) ve **İstatistik** (tüm zamanlar tablosu, şampiyonluklar, rekorlar, sezon başına gol ortalaması, ikili karşılaşma; bkz. [İstatistik ve kulüp sayfaları](#i̇statistik-ve-kulüp-sayfaları)). Tablolarda ve maç listelerinde bir kulübün adına dokununca **kulüp sayfası** açılır. Sekmeler açıkken yayın arka planda saate göre ilerler.
 - Alttaki çubuk: ses düğmesi (tarayıcı kuralları gereği kapalı başlar), "Her 3 dk'da bir maç · 90 sn · sıradaki 21:03" ve maç sırasında **🔗 Paylaş** (o maçın bağlantısı; telefonda paylaşım menüsü açılır, masaüstünde panoya kopyalanır).
 - **Maç bağlantısı (tekrar):** Fikstür ve Eleme sekmelerinde biten her maçın yanında **▶ İzle** vardır. Bağlantıyı açan kişi o maçı baştan, tek başına izler (sekmeler gizlenir; üstte `▶ Tekrar · 3. hafta 5. maç · RMA–BAR · 4 Kasım 22:09`, altta **↻ Baştan** ve **⚽ Canlıya dön**). Bkz. [Maç bağlantıları](#maç-bağlantıları).
 - **Paylaşım kartı ve simge:** sayfada açıklama, Open Graph / Twitter kartı (`og.jpg`, 1200×630, gerçek bir maç karesiyle), site simgesi ve web uygulaması manifesti vardır; bağlantı WhatsApp, X, Telegram gibi yerlerde önizlemeli görünür, telefonda "Ana ekrana ekle" ile uygulama gibi açılır (tam ekran, simgeli). Bkz. [Paylaşım dosyaları](#paylaşım-dosyaları).
@@ -56,9 +56,29 @@ LIVE: {
 
 **Geçmiş** sekmesi biten sezonları gösterir. Sekmeye tıklayınca **en son biten sezonun** lig tablosu açılır; altında o sezonun yükselme eleme sonuçları (turlar, skorlar, altın gol / penaltılar, bay geçenler, yükselenler) durur. Üstteki seçiciden (ya da ‹ › düğmelerinden) önceki sezonlar seçilir; **yalnızca seçilen sezon çizilir**, diğerleri sayfaya hiç yüklenmez. Sekmeyi yeniden açınca yine en son sezonla başlar. Tabloda sezonun puanlaması, son 3 maç ve sezon sonunda düşen (kırmızı çizgili) takımlar görünür.
 
-Biten her sezon, sezon geçişinde kompakt bir kayıt olarak lig durumuna eklenir (`seasons`; sezon başına ~1,2 KB, en yeni `CONFIG.LIVE.keepChampions` = 50 sezon): son tablo, düşenler, yükselenler ve eleme kurası/sonuçları. Lig maçlarının kendisi tutulmaz. Kayıt, tablonun sezonun bittiği andaki hâlidir; sonradan puanlama değişse de yeniden yazılmaz. Kural değişikliklerinde taban bu arşivi de taşır.
+Biten her sezon, sezon geçişinde kompakt bir kayıt olarak lig durumuna eklenir (`seasons`; sezon başına ~1,9 KB, en yeni `CONFIG.LIVE.keepChampions` = 50 sezon): son tablo, düşenler, yükselenler, eleme kurası/sonuçları ve lig maçlarının skorları (`m`: maç başına 4 karakter, ev sahibi · deplasman · goller; İstatistik sekmesi ve kulüp sayfaları için). Maçların seed'i ve ayrıntısı tutulmaz. Kayıt, tablonun sezonun bittiği andaki hâlidir; sonradan puanlama değişse de yeniden yazılmaz. Kural değişikliklerinde taban bu arşivi de taşır.
 
 **Eski lig (6'lı grup maçları):** iki takımlı maç formatına geçilmeden önce oynanan ligin biten sezonları ve şampiyonları, yeni ligin ilk yayınında yayındaki checkpoint'ten alınıp `live-start.json`'a yazılır ve Geçmiş seçicisinde `Eski lig · Sezon N` olarak, kendi sütunlarıyla (sıra puanları, birincilikler, son 3 maçtaki sırası) görünür. Eski ligin o an sürmekte olan sezonu bitmediği için taşınmaz.
+
+### İstatistik ve kulüp sayfaları
+
+**İstatistik** sekmesi ligin bütün sezonlarından (Geçmiş arşivi + sürmekte olan sezon) hesaplanır; sunucu ya da ek veri gerekmez:
+
+- **Tüm zamanlar tablosu:** her kulübün ligde oynadığı sezon sayısı, O, G, B, M, AG, YG, AV, puan (her sezonun kendi puanlamasıyla) ve şampiyonlukları. Sıralama: puan → averaj → atılan gol.
+- **Şampiyonluklar:** kulüp başına şampiyonluk sayısı ve sezonları.
+- **Rekorlar:** en farklı galibiyetler, en gollü maçlar, en uzun galibiyet ve yenilmezlik serileri (lig maçları; kulüp ligde kaldıkça sezondan sezona sürer, düşünce kesilir; süren seri `sürüyor` etiketiyle) ve sezon rekorları (en çok / en az puan, en çok galibiyet, en çok gol atan, en az gol yiyen).
+- **Sezon başına gol ortalaması:** çubuk grafik (üstüne gelince maç, gol, beraberlik oranı) ve aynı sayılar tablo olarak.
+- **İkili karşılaşma:** iki kulüp seçilir (varsayılan: sıradaki maçın kulüpleri); galibiyet / beraberlik, goller ve bütün maçları.
+
+**Kulüp sayfası** (bir kulübün adına dokununca; **‹ Geri** ya da `Esc` ile kapanır): kulübün şu anki durumu, şampiyonluk sayısı, ligde geçirdiği sezonlar, tüm zamanlar sırası; bu sezonki **form grafiği** (her maçtan sonraki toplam puan, liderle karşılaştırmalı) ve son 10 maçı; **sezon sezon sıra grafiği** (düşme hattı, şampiyonluklar, havuzda geçen sezonlar); **sezon geçmişi** tablosu (sıra, G-B-M, averaj, puan, şampiyon / düştü / yükseldi, havuzdaysa elemede nereye kadar geldiği); **şampiyonluk, düşme ve yükselme geçmişi** ve kulüp rekorları (en farklı galibiyet, en ağır yenilgi, en uzun seriler).
+
+Skorlar arşive bu özellikle birlikte eklendi: daha önce biten sezonlar tablolara, şampiyonluklara ve gol ortalamalarına girer, ama maç rekorları (farklı galibiyet, seriler, ikili karşılaşma) onlardan sonraki sezondan başlar (sekmede not düşülür). İstatistikler lig verisini değiştirmez ve maç sonuçlarını etkilemez (simülasyon parmak izi aynı kalır, lig dondurulmaz); yalnızca lig değişince (maç ya da sezon bitince) yeniden hesaplanır. Kod: `src/08_stats.js`.
+
+### Erişilebilirlik
+
+- Sekmeler WAI-ARIA sekme düzenindedir (`role="tablist"` / `tab` / `tabpanel`, `aria-selected`); klavyede **← →** sekmeler arasında gezer, **Home / End** ilk ve son sekmeye gider, yalnızca seçili sekme Tab sırasındadır. Klavye odağı her yerde görünür (`:focus-visible`).
+- Canvas'taki maç ekran okuyucuya gizli bir canlı bölgeyle (`aria-live="polite"`) anlatılır: maç başladı, her gol ve yeni skor, devre arası, ikinci yarı, altın gol, penaltılar, maç sonucu. Maça geç katılınca bir kez o anki skor söylenir; ileri sarılan kısımda bir şey söylenmez. Canvas'ın etiketi (`role="img"`) güncel skoru taşır.
+- Grafiklerin her birinin özet etiketi ve aynı verinin tablo hâli vardır; tablo başlıkları `scope="col"`, kulüp adları klavyeyle açılabilen düğmelerdir. Ses ve paylaş düğmeleri durumlarını/adlarını bildirir (`aria-pressed`, `aria-label`).
 
 ### Nasıl çalışıyor (sunucusuz, ücretsiz)
 
@@ -120,7 +140,7 @@ Biten bir maç yalnızca seed'i, kulüpleri (ev sahibi önce) ve temasıyla beli
 
 ### Paylaşım dosyaları
 
-`public/` altındaki dosyalar (`manifest.webmanifest`, `icon.svg`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`, `og.jpg`) site derlemesinde sayfanın yanına kopyalanır (`./build.sh dist/index.html`). Sekme simgesi sayfaya gömülüdür, yerelde açılan `index.html`'de de görünür. Paylaşım kartı mutlak adres ister: `build.sh` sitenin adresini `SITE_URL` ile alır (Pages iş akışı kendi adresini verir; varsayılan `https://mindmash-mt.github.io/Satisfying-Lig/`).
+`public/` altındaki dosyalar (`manifest.webmanifest`, `icon.svg`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`, `og.jpg`, `fonts/`) site derlemesinde sayfanın yanına kopyalanır (`./build.sh dist/index.html`). Sekme simgesi sayfaya gömülüdür, yerelde açılan `index.html`'de de görünür. Paylaşım kartı mutlak adres ister: `build.sh` sitenin adresini `SITE_URL` ile alır (Pages iş akışı kendi adresini verir; varsayılan `https://mindmash-mt.github.io/Satisfying-Lig/`).
 
 Simge ya da görünüm değişirse PNG'ler ve `og.jpg` yeniden üretilir (Playwright + Chromium): `npm run assets` (ya da `node tools/make-assets.js <derlenmiş sayfa> [geçmiş bir an]`; görseldeki maç karesi o anda oynanan maçtır). Servis çalışanı (çevrimdışı önbellek) bilerek yoktur: canlı lig her an güncel `live-state.json`'u okumalı.
 
@@ -314,7 +334,8 @@ src/
   04_render.js      Canvas çizimi, üst şerit (hafta · saat · skor), penaltı tablosu, maç öncesi / sonu ekranları
   05_app.js         Lig (puan, sıralama, eleme), kayıt, kontrol paneli, denge testi, ana döngü
   06_offline.js     Ekransız video üretimi (kare kare çizim, WebCodecs H.264, OfflineAudioContext)
-  07_live.js        Canlı lig: maç takvimi, seed türetme, geçmiş maçları hesaplama, saate senkron oynatma, geri sayım ekranı, sekmeler, maç bağlantıları (tekrar)
+  07_live.js        Canlı lig: maç takvimi, seed türetme, geçmiş maçları hesaplama, saate senkron oynatma, geri sayım ekranı, sekmeler, maç bağlantıları (tekrar), ekran okuyucu duyuruları
+  08_stats.js       İstatistik sekmesi ve kulüp sayfaları (tüm zamanlar tablosu, rekorlar, seriler, ikili karşılaşma, grafikler)
   types.d.ts        Yalnızca tip denetimi için (sayfaya girmez)
 tools/
   balance.js        Terminalden denge testi (Node.js)
@@ -326,7 +347,7 @@ tools/
   live-node.js      Canlı lig motorunu tarayıcısız (Node) yükler: kaynaktan ya da derlenmiş bir sayfadan (loadPage)
   daily.js          Stüdyo ligi: maçları oynatır, MP4 üretir, lig verisini günceller
   make-assets.js    public/ altındaki PNG simgeleri ve paylaşım görselini (og.jpg) üretir
-public/             Site derlemesinde sayfanın yanına kopyalanan dosyalar: manifest, simgeler, og.jpg
+public/             Site derlemesinde sayfanın yanına kopyalanan dosyalar: manifest, simgeler, og.jpg, fonts/ (yazı tipleri ve lisansları)
 package.json        Komut kısayolları (npm test, npm run typecheck …); bağımlılık yok
 tsconfig.json       Tip denetimi ayarları
 data/
@@ -365,7 +386,7 @@ Aynı komutların kısayolları (`package.json`; kurulacak paket yok):
 
 **Simülasyonu sadeleştirirken:** `node tools/live-fingerprint.js` çıktısı aynı kalıyorsa maç sonuçları değişmemiştir (canlı lig dondurulmaz). Eski 6 takımlık arena kodu bu yolla, parmak izi değişmeden kaldırıldı.
 
-Harici kütüphane kullanılmaz (vanilla JavaScript + Canvas 2D + Web Audio). Fizik motoru, bir maçın kayıtlı seed'i ile birebir tekrarlanabilmesi (hata ayıklama, yeniden render) için uygulamaya özel yazılmıştır: sabit zaman adımı (240 Hz), oyun mantığı ve görsel efektler için ayrı seed'li rastgele sayı üreteçleri. Yazı tipleri (Bebas Neue, Inter) Google Fonts'tan yüklenir; internet yoksa sistem yazı tiplerine düşer.
+Harici kütüphane kullanılmaz (vanilla JavaScript + Canvas 2D + Web Audio). Fizik motoru, bir maçın kayıtlı seed'i ile birebir tekrarlanabilmesi (hata ayıklama, yeniden render) için uygulamaya özel yazılmıştır: sabit zaman adımı (240 Hz), oyun mantığı ve görsel efektler için ayrı seed'li rastgele sayı üreteçleri. Yazı tipleri (Bebas Neue ve değişken ağırlıklı Inter; latin + latin-ext, Türkçe karakterler dahil) sitenin kendisinden yüklenir (`public/fonts/`, SIL Open Font License; lisans metinleri aynı klasörde): üçüncü bir tarafa (Google Fonts) istek gitmez, en çok kullanılan iki dosya sayfayla birlikte önceden yüklenir (`preload`). `build.sh` font yolunu çıktıya göre yazar: site derlemesinde `fonts/`, repodaki `index.html`'de (diskten açılınca, stüdyo ve `tools/daily.js`) `public/fonts/`. Font yüklenemezse sistem yazı tiplerine düşer.
 
 ---
 

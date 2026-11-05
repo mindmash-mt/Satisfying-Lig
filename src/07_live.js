@@ -182,13 +182,18 @@ const Live = {
      promotion playoff's bracket. The matches themselves are dropped. Times are minutes since 1970 (0 = unknown).
      f: 2 = a 1v1 season (rows: id, played, pts, W, D, L, GF, GA, last results; p: win/draw/loss points);
      a season of the old group-match league (no f) has rows: id, played, pts, 1st places, GF, GA, last places; p: points per place.
-     Playoff results: [winner, loser, goals, goals, time, (penalties winner, penalties loser) | (golden goal: 1)]. */
+     Playoff results: [winner, loser, goals, goals, time, (penalties winner, penalties loser) | (golden goal: 1)].
+     m: the season's league matches in the order played, 4 base-36 characters each: home and away club (index into rows) and
+     their goals (the "İstatistik" tab and the club pages: records, streaks, head-to-head; ~0,6 KB a season). '' = not kept. */
   archiveSeason(a) {
     const min = (iso) => { const t = Date.parse(iso); return isNaN(t) ? 0 : Math.round(t / 60000); };
     const cup = a.cup, ts = a.history.map(h => min(h.date)).concat(cup ? Object.values(cup.res).map(r => min(r.date)) : []).filter(Boolean);
     const cr = (r) => [r.winner, r.loser, r.sw, r.sl, min(r.date)].concat(r.pw !== undefined ? [r.pw, r.pl] : r.gg ? [1] : []);
+    const ix = new Map(a.table.map((x, i) => [x.id, i])), b36 = (v) => Math.min(35, Math.max(0, v | 0)).toString(36);
+    const keepM = a.table.length <= 36 && a.history.every(h => h.result.length === 2 && ix.has(h.result[0].id) && ix.has(h.result[1].id));
     return { f: 2, season: a.season, champ: a.champion.id, t0: ts.length ? Math.min(...ts) : 0, t1: ts.length ? Math.max(...ts) : 0,
       n: a.history.length, p: (a.points || League.data.points).slice(0, 3),
+      m: keepM ? a.history.map(h => b36(ix.get(h.result[0].id)) + b36(ix.get(h.result[1].id)) + b36(h.result[0].score) + b36(h.result[1].score)).join('') : '',
       rows: a.table.map(x => [x.id, x.played, x.pts, x.w, x.d, x.l, x.gf, x.ga].concat(League.formOf(x.id, a.history))),
       out: a.relegated.map(t => t.id), up: a.promoted.map(t => t.id),
       cup: cup ? { draw: cup.draw.slice(), res: Object.fromEntries(Object.entries(cup.res).map(([k, r]) => [k, cr(r)])) } : null };
@@ -347,8 +352,9 @@ const Live = {
     const R = this.replay, s = { title: R.title, mode: 'match', cup: R.cup, week: R.week, weekMatch: R.weekMatch, seed: R.opts.seed, theme: R.opts.theme, test: true, opts: R.opts };
     App.setup = s; App.title = s.title; App.end = null; App.intro = null;
     App.game = new Game(Object.assign({}, R.opts, { teams: R.opts.teams.map(t => ({ ...t })) }));
-    App.game.onEvent = (t, d) => FX.onEvent(t, d);
+    App.game.onEvent = (t, d) => { FX.onEvent(t, d); this.onGameEvent(t, d); };
     FX.reset(App.game); Renderer.resetTrails();
+    this.say(`Tekrar başladı: ${this.matchName()}.`);
     App.running = true; App.paused = false; App.matchRealT = 0;
     this.st = { acc: 0 }; this.replayAt = performance.now(); this.phase = 'replay';
     $('liveShare').classList.remove('hidden');
@@ -368,6 +374,40 @@ const Live = {
     const info = this.info();
     if (info !== this._info && $('liveInfo')) { this._info = info; $('liveInfo').textContent = info; }
     Renderer.draw(g, App);
+  },
+  /* --- screen readers ---------------------------------------------------------------------------------------------------
+     The canvas shows the match and says nothing: a hidden live region (#liveAnnounce, polite) tells what happens — kick-off,
+     goals with the new score, half time, golden goal, penalties, full time — and the canvas's label carries the score.
+     Nothing is said while a match is being fast-forwarded (joining late says the score once instead). */
+  ff: false, joined: false,
+  say(text) {
+    const el = $('liveAnnounce');
+    if (!el || !text) return;
+    el.textContent = '';                                         // the same sentence twice is still read out
+    setTimeout(() => { el.textContent = text; }, 40);
+  },
+  matchName() {
+    const t = App.setup && App.setup.opts ? App.setup.opts.teams : [];
+    return t.length === 2 ? `${t[0].name} – ${t[1].name}` : '';
+  },
+  scoreText(g) { return g && g.teams.length === 2 ? `${g.teams[0].name} ${g.teams[0].score}, ${g.teams[1].name} ${g.teams[1].score}` : ''; },
+  onGameEvent(type, d) {
+    const g = App.game;
+    if (this.ff || !g) return;
+    let text = '';
+    if (type === 'kickoff') text = d.half === 2 ? `İkinci yarı başladı. ${this.scoreText(g)}.` : `Maç başladı: ${this.matchName()}.`;
+    else if (type === 'goal') text = `Gol! ${g.teams[d.benefit] ? g.teams[d.benefit].name : ''}${d.own ? ' (kendi kalesine)' : ''}. Skor: ${this.scoreText(g)}.`;
+    else if (type === 'halfTime') text = `Devre arası. ${this.scoreText(g)}.`;
+    else if (type === 'goldenGoal') text = `Berabere bitti, altın gol başladı: ilk golü atan kazanır.`;
+    else if (type === 'penalties') text = 'Altın golde gol çıkmadı, penaltı atışları başlıyor.';
+    else if (type === 'win') {
+      const w = g.teams[d.team];
+      text = `Maç bitti. ${this.scoreText(g)}. ${w ? `${w.name} kazandı${g.pens ? ' (penaltılarla)' : ''}.` : 'Berabere.'}`;
+    }
+    if (!text) return;
+    this.say(text);
+    const cv = $('c'), sc = this.scoreText(g);
+    if (cv && sc) cv.setAttribute('aria-label', `${type === 'win' ? 'Maç sonucu' : 'Canlı maç'}: ${sc}`);
   },
   /* the share button: a link to the match on now (or the one being replayed); the phone's share sheet, else the clipboard */
   async share() {
@@ -424,22 +464,53 @@ const Live = {
     this.lastFrame = this.now();
   },
   ui() {
+    /* the tabs (WAI-ARIA tabs: ← → Home End move between them; only the selected one is in the Tab order) */
     const tabs = document.createElement('nav');
     tabs.id = 'liveTabs';
-    tabs.innerHTML = `<button data-tab="live" class="on">⚽ Canlı</button><button data-tab="table">Lig tablosu</button><button data-tab="fixture">Fikstür</button><button data-tab="cup">Eleme</button><button data-tab="history">Geçmiş</button>`;
+    tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', 'Bölümler');
+    tabs.innerHTML = this.TABS.map(([k, label, short], i) => `<button type="button" role="tab" id="tab-${k}" data-tab="${k}" aria-controls="${k === 'live' ? 'c' : 'livePane'}" aria-selected="${i ? 'false' : 'true'}" tabindex="${i ? -1 : 0}"${i ? '' : ' class="on"'}>`
+      + (short ? `<span class="lg">${label}</span><span class="sh" aria-hidden="true">${short}</span>` : label) + '</button>').join('');
     const pane = document.createElement('div');
     pane.id = 'livePane'; pane.className = 'hidden';
-    $('stage').appendChild(tabs); $('stage').appendChild(pane);
+    pane.setAttribute('role', 'tabpanel'); pane.tabIndex = -1;
+    const cv = $('c');
+    cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', 'Canlı maç yayını');
+    /* screen readers: the canvas shows the match, this hidden region says what happens (Live.say) */
+    const ann = document.createElement('div');
+    ann.id = 'liveAnnounce'; ann.className = 'sr-only';
+    ann.setAttribute('aria-live', 'polite'); ann.setAttribute('aria-atomic', 'true');
+    $('stage').appendChild(tabs); $('stage').appendChild(pane); $('stage').appendChild(ann);
     const el = (e) => /** @type {HTMLElement} */ (e.target);
     tabs.addEventListener('click', (e) => { const b = el(e).closest('button'); if (b) this.showTab(b.dataset.tab); });
-    /* "Geçmiş": the season picker (a select, and ‹ › for the neighbouring seasons) */
-    pane.addEventListener('change', (e) => { const s = /** @type {HTMLSelectElement} */ (e.target); if (s.matches('.hist-sel')) this.pickSeason(s.value); });
-    pane.addEventListener('click', (e) => { const b = /** @type {HTMLButtonElement} */ (el(e).closest('.hist-nav')); if (b && !b.disabled) this.pickSeason(b.dataset.season); });
+    tabs.addEventListener('keydown', (e) => {
+      const keys = this.TABS.map(t => t[0]), i = keys.indexOf(this.tab);
+      const j = e.key === 'ArrowRight' ? (i + 1) % keys.length : e.key === 'ArrowLeft' ? (i - 1 + keys.length) % keys.length : e.key === 'Home' ? 0 : e.key === 'End' ? keys.length - 1 : -1;
+      if (j < 0) return;
+      e.preventDefault(); this.showTab(keys[j]); $('tab-' + keys[j]).focus();
+    });
+    /* "Geçmiş": the season picker (a select, and ‹ › for the neighbouring seasons); "İstatistik": the head-to-head pickers */
+    pane.addEventListener('change', (e) => {
+      const s = /** @type {HTMLSelectElement} */ (e.target);
+      if (s.matches('.hist-sel')) this.pickSeason(s.value);
+      else if (s.matches('.h2h-sel')) {
+        const p = this.h2hPair().slice(); p[+s.dataset.i] = s.value; this.h2h = p; this.paneKey = ''; this.renderPane();
+        const again = /** @type {HTMLElement} */ (document.querySelector(`#livePane .h2h-sel[data-i="${s.dataset.i}"]`)); if (again) again.focus();
+      }
+    });
+    pane.addEventListener('click', (e) => {
+      const b = /** @type {HTMLButtonElement} */ (el(e).closest('.hist-nav')); if (b && !b.disabled) { this.pickSeason(b.dataset.season); return; }
+      const t = /** @type {HTMLElement} */ (el(e).closest('[data-team]')); if (t) { this.openClub(t.dataset.team); return; }
+      if (el(e).closest('[data-back]')) this.closeClub();
+    });
+    pane.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.club) { e.preventDefault(); this.closeClub(); } });
+    /* the charts (İstatistik, club pages) are drawn for the pane's width: redraw after a resize */
+    let rz = 0;
+    window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (this.tab === 'stats' || this.club) { this.paneKey = ''; this.renderPane(); } }, 250); });
     const bar = document.createElement('div');
     bar.id = 'liveBar';
-    bar.innerHTML = `<button id="liveSound">🔇 Ses kapalı</button><span id="liveInfo"></span>`
-      + `<button id="liveShare" class="hidden" title="Bu maçın bağlantısı: açan kişi maçı baştan izler">🔗<span class="lbl"> Paylaş</span></button>`
-      + `<button id="liveAgain" class="hidden" title="Maçı baştan oynat">↻<span class="lbl"> Baştan</span></button><a id="liveBack" class="hidden" href="${esc(this.siteUrl())}">⚽ Canlıya dön</a>`;
+    bar.innerHTML = `<button type="button" id="liveSound" aria-pressed="false">🔇 Ses kapalı</button><span id="liveInfo"></span>`
+      + `<button type="button" id="liveShare" class="hidden" aria-label="Paylaş" title="Bu maçın bağlantısı: açan kişi maçı baştan izler">🔗<span class="lbl" aria-hidden="true"> Paylaş</span></button>`
+      + `<button type="button" id="liveAgain" class="hidden" aria-label="Baştan" title="Maçı baştan oynat">↻<span class="lbl" aria-hidden="true"> Baştan</span></button><a id="liveBack" class="hidden" href="${esc(this.siteUrl())}">⚽ Canlıya dön</a>`;
     $('stage').appendChild(bar);
     $('liveShare').addEventListener('click', () => this.share());
     $('liveAgain').addEventListener('click', () => this.startReplay());
@@ -456,6 +527,7 @@ const Live = {
       if (this.sound) { AudioSys.init(); AudioSys.resume(); }
       AudioSys.muted = !this.sound; if (AudioSys.ctx) AudioSys.apply();
       $('liveSound').textContent = this.sound ? '🔊 Ses açık' : '🔇 Ses kapalı';
+      $('liveSound').setAttribute('aria-pressed', String(this.sound));
     });
   },
   /* bottom bar: how often matches are now, and the next kick-off */
@@ -469,14 +541,41 @@ const Live = {
     if (!this.count() && this.phase === 'wait') return `Lig ${LivePages.day(next).split(' ').slice(0, 2).join(' ')} ${this.clock(next)}'te başlıyor`;
     return `Her ${this.every(now)} dk'da bir maç · ${CONFIG.MATCH_TIME} sn · sıradaki ${this.clock(next)}`;
   },
+  /* [key, label, short label for narrow screens] */
+  TABS: [['live', '⚽ Canlı', ''], ['table', 'Lig tablosu', 'Tablo'], ['fixture', 'Fikstür', ''], ['cup', 'Eleme', ''], ['history', 'Geçmiş', ''], ['stats', 'İstatistik', 'İstat.']],
   tab: 'live', paneKey: '',
   histSel: '',              // "Geçmiş": the selected season's key (LivePages.histList; '' = the latest finished one)
+  club: '',                 // a club's page is open over the tab (StatsPages.club)
+  h2h: null,                // "İstatistik": the two clubs of the head-to-head (null = the next match's)
   pickSeason(k) { this.histSel = k; this.paneKey = ''; this.renderPane(); $('livePane').scrollTop = 0; },
+  /* the head-to-head's clubs: picked, else the next match's, else the top two */
+  h2hPair() {
+    const d = League.data, known = (id) => d.teams.some(t => t.id === id) || d.reserve.some(t => t.id === id);
+    if (this.h2h && this.h2h.every(known)) return this.h2h;
+    const n = this.nextIds();
+    if (n.length === 2 && n.every(known)) return n.slice();
+    const rk = League.ranking();
+    return rk.length >= 2 ? [rk[0].t.id, rk[1].t.id] : [d.teams[0].id, (d.teams[1] || d.teams[0]).id];
+  },
+  openClub(id) {
+    this.club = id; this.paneKey = ''; this.renderPane(); $('livePane').scrollTop = 0;
+    const h = $('tmTitle'); if (h) h.focus();
+  },
+  closeClub() {
+    const id = this.club;
+    this.club = ''; this.paneKey = ''; this.renderPane();
+    const b = /** @type {HTMLElement} */ (document.querySelector(`#livePane [data-team="${CSS.escape(id)}"]`));
+    if (b) b.focus(); else $('tab-' + this.tab).focus();
+  },
   showTab(tab) {
-    this.tab = tab; this.paneKey = '';
+    this.tab = tab; this.paneKey = ''; this.club = '';
     if (tab === 'history') this.histSel = '';                 // opening the tab always starts at the latest season
-    /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#liveTabs button')).forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#liveTabs button')).forEach(b => {
+      const on = b.dataset.tab === tab;
+      b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1;
+    });
     $('livePane').classList.toggle('hidden', tab === 'live');
+    $('livePane').setAttribute('aria-labelledby', 'tab-' + tab);
     this.renderPane();
     if (tab === 'fixture' || tab === 'cup') { const cur = document.querySelector('#livePane .fx-week.cur'); if (cur) cur.scrollIntoView({ block: 'start' }); }
     else $('livePane').scrollTop = 0;
@@ -487,10 +586,16 @@ const Live = {
     const d = League.data, s = App.setup;
     const live = this.phase === 'match' && s ? (s.cup ? 'cup-' + s.cup : !d.history.some(h => h.week === s.week && h.weekMatch === s.weekMatch) ? `${s.week}-${s.weekMatch}` : '') : '';
     /* the history tab shows one finished season only: it is built (and redrawn) when the selection or the archive changes, nothing else */
-    const key = this.tab === 'history' ? ['history', this.histSel, (d.seasons || []).length].join('|') : [this.tab, d.season, d.history.length, this.count(), live].join('|');
+    const pair = this.tab === 'stats' && !this.club ? this.h2hPair() : null;
+    const key = this.club ? ['club', this.club, d.season, d.history.length, (d.seasons || []).length, d.cup ? Object.keys(d.cup.res).length : 0].join('|')
+      : this.tab === 'history' ? ['history', this.histSel, (d.seasons || []).length].join('|')
+      : this.tab === 'stats' ? ['stats', d.season, d.history.length, (d.seasons || []).length, pair.join()].join('|')
+      : [this.tab, d.season, d.history.length, this.count(), live].join('|');
     if (key === this.paneKey) return;
     this.paneKey = key;
-    $('livePane').innerHTML = `<div class="lp-in">${this.tab === 'table' ? LivePages.table() : this.tab === 'cup' ? LivePages.cup(live) : this.tab === 'history' ? LivePages.history() : LivePages.fixture(live)}</div>`;
+    const html = this.club ? StatsPages.club(this.club) : this.tab === 'table' ? LivePages.table() : this.tab === 'cup' ? LivePages.cup(live)
+      : this.tab === 'history' ? LivePages.history() : this.tab === 'stats' ? StatsPages.page(pair) : LivePages.fixture(live);
+    $('livePane').innerHTML = `<div class="lp-in">${html}</div>`;
   },
   /* join a computed match that is on: replay it from its kick-off up to now */
   startMatch(m) {
@@ -498,16 +603,24 @@ const Live = {
     if (!App.game) { this.phase = 'error'; this.err = App.setup && App.setup.err || ''; return; }
     App.running = true; App.paused = false;
     this.cur = m; this.st = { acc: 0 }; this.simT = 0;
-    this.phase = 'match';
+    this.phase = 'match'; this.joined = false;
+    const g = App.game, fx = g.onEvent;
+    g.onEvent = (t, d) => { if (fx) fx(t, d); this.onGameEvent(t, d); };
   },
   /* fixed 60 fps steps up to the wall clock (so every viewer stays in sync); the match ends at its computed length */
   advanceMatch(now) {
     const m = this.cur, target = Math.min((now - m.start) / 1000, m.dur), rdt = 1 / 60;
     const enabled = AudioSys.enabled;
-    if (target - this.simT > 0.5) AudioSys.enabled = false;      // no burst of sounds while fast-forwarding
+    this.ff = target - this.simT > 0.5;
+    if (this.ff) AudioSys.enabled = false;                       // no burst of sounds (or announcements) while fast-forwarding
     try {
       while (this.simT + rdt <= target) { Offline.stepFrame(this.st, rdt); this.simT += rdt; }
-    } finally { AudioSys.enabled = enabled; }
+    } finally { AudioSys.enabled = enabled; this.ff = false; }
+    if (!this.joined) {                                          // the first frame of this match on this screen
+      this.joined = true;
+      const g = App.game;
+      if (g && this.simT > 3 && !g.over) this.say(`Canlı maç sürüyor: ${this.scoreText(g)}.`);
+    }
     if ((now - m.start) / 1000 >= m.dur) this.finishMatch();
   },
   finishMatch() {
@@ -609,14 +722,21 @@ const LivePages = {
   DAYS: ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'],
   local(ms) { return new Date(ms + Live.cfg().utcOffset * 3600e3); },
   day(ms) { const t = this.local(ms); return `${t.getUTCDate()} ${this.MONTHS[t.getUTCMonth()]} ${this.DAYS[t.getUTCDay()]}`; },
-  dot(t) { return `<span class="dot" style="background:${esc(t.c1)};border-color:${esc(t.c2)}"></span>`; },
+  dot(t) { return `<span class="dot" style="background:${esc(t.c1)};border-color:${esc(t.c2)}" aria-hidden="true"></span>`; },
+  /* a club's name that opens its page (StatsPages.club); a club the league does not know stays plain text */
+  tlink(t) { return t && t.id && this.anyTeam(t.id) ? `<button type="button" class="tl" data-team="${esc(t.id)}">${esc(t.name)}</button>` : esc(t ? t.name : '?'); },
+  /* a finished season's playoff bracket (Live.archiveSeason's compact form) as { draw, res } for League.cupMatchesOf */
+  cupOf(rec) {
+    return { draw: rec.cup.draw, res: Object.fromEntries(Object.entries(rec.cup.res).map(([k, r]) => [k, Object.assign({ winner: r[0], loser: r[1], sw: r[2], sl: r[3], t: r[4] * 60000 },
+      r.length >= 7 ? { pw: r[5], pl: r[6] } : r.length === 6 ? { gg: 1 } : {})])) };
+  },
   champ() {
     const c = League.data.champions, last = c[c.length - 1];
     return last ? `<div class="lp-note">🏆 Sezon ${last.season} şampiyonu: <b>${esc(last.name)}</b></div>` : '';
   },
   champs() {
     const c = League.data.champions.slice(-10).reverse();
-    return c.length ? `<h3 class="lp-h3">Son şampiyonlar</h3><ol class="lp-champs">${c.map(x => `<li><span>Sezon ${x.season}</span><b>${esc(x.name)}</b><span>${x.pts} puan</span></li>`).join('')}</ol>` : '';
+    return c.length ? `<h3 class="lp-h3">Son şampiyonlar</h3><ol class="lp-champs">${c.map(x => `<li><span>Sezon ${x.season}</span><b>${this.tlink({ id: x.id, name: x.name })}</b><span>${x.pts} puan</span></li>`).join('')}</ol>` : '';
   },
   /* kick-off of a season's match: the actual one once played (or next), the planned slot otherwise */
   kickoff(w, m) {
@@ -634,19 +754,19 @@ const LivePages = {
   tableHtml(list) {
     const rows = list.map((x, i) => {
       const av = x.r.gf - x.r.ga;
-      return `<tr class="${x.rel ? 'rel' : ''}"><td>${i + 1}</td><td class="tn">${this.dot(x.t)}${esc(x.t.name)}</td><td>${x.r.played}</td>` +
+      return `<tr class="${x.rel ? 'rel' : ''}"><td>${i + 1}</td><td class="tn">${this.dot(x.t)}${this.tlink(x.t)}</td><td>${x.r.played}</td>` +
         `<td class="opt">${x.r.w}</td><td class="opt">${x.r.d}</td><td class="opt">${x.r.l}</td><td class="opt">${x.r.gf}</td><td class="opt">${x.r.ga}</td><td>${av > 0 ? '+' : ''}${av}</td><td><b>${x.r.pts}</b></td><td class="form">${formHtml(x.form)}</td></tr>`;
     }).join('');
-    return `<table class="lp-table"><thead><tr><th>#</th><th>Takım</th><th title="Oynanan">O</th><th class="opt" title="Galibiyet">G</th><th class="opt" title="Beraberlik">B</th><th class="opt" title="Mağlubiyet">M</th><th class="opt" title="Atılan gol">AG</th><th class="opt" title="Yenilen gol">YG</th><th title="Averaj">AV</th><th title="Puan">P</th><th title="Son ${CONFIG.FORM_COUNT} maç (en sağdaki en yeni)">Son ${CONFIG.FORM_COUNT}</th></tr></thead><tbody>${rows}</tbody></table>`;
+    return `<table class="lp-table"><thead><tr><th scope="col">#</th><th scope="col">Takım</th><th scope="col" title="Oynanan">O</th><th scope="col" class="opt" title="Galibiyet">G</th><th scope="col" class="opt" title="Beraberlik">B</th><th scope="col" class="opt" title="Mağlubiyet">M</th><th scope="col" class="opt" title="Atılan gol">AG</th><th scope="col" class="opt" title="Yenilen gol">YG</th><th scope="col" title="Averaj">AV</th><th scope="col" title="Puan">P</th><th scope="col" title="Son ${CONFIG.FORM_COUNT} maç (en sağdaki en yeni)">Son ${CONFIG.FORM_COUNT}</th></tr></thead><tbody>${rows}</tbody></table>`;
   },
   /* a finished season of the old group-match league (6 clubs a match, points by place) */
   tableHtmlGroup(list) {
     const rows = list.map((x, i) => {
       const av = x.r.gf - x.r.ga;
-      return `<tr class="${x.rel ? 'rel' : ''}"><td>${i + 1}</td><td class="tn">${this.dot(x.t)}${esc(x.t.name)}</td><td>${x.r.played}</td><td><b>${x.r.pts}</b></td>` +
+      return `<tr class="${x.rel ? 'rel' : ''}"><td>${i + 1}</td><td class="tn">${this.dot(x.t)}${this.tlink(x.t)}</td><td>${x.r.played}</td><td><b>${x.r.pts}</b></td>` +
         `<td class="opt">${x.r.wins}</td><td class="opt">${x.r.gf}</td><td class="opt">${x.r.ga}</td><td>${av > 0 ? '+' : ''}${av}</td><td class="form">${formHtml(x.form)}</td></tr>`;
     }).join('');
-    return `<table class="lp-table"><thead><tr><th>#</th><th>Takım</th><th title="Oynanan">O</th><th title="Puan">P</th><th class="opt" title="Birincilik">1.</th><th class="opt" title="Atılan gol">AG</th><th class="opt" title="Yenilen gol">YG</th><th title="Averaj">AV</th><th title="Son ${CONFIG.FORM_COUNT} maçtaki sırası">Son ${CONFIG.FORM_COUNT}</th></tr></thead><tbody>${rows}</tbody></table>`;
+    return `<table class="lp-table"><thead><tr><th scope="col">#</th><th scope="col">Takım</th><th scope="col" title="Oynanan">O</th><th scope="col" title="Puan">P</th><th scope="col" class="opt" title="Birincilik">1.</th><th scope="col" class="opt" title="Atılan gol">AG</th><th scope="col" class="opt" title="Yenilen gol">YG</th><th scope="col" title="Averaj">AV</th><th scope="col" title="Son ${CONFIG.FORM_COUNT} maçtaki sırası">Son ${CONFIG.FORM_COUNT}</th></tr></thead><tbody>${rows}</tbody></table>`;
   },
   pointsText(p) { return `Galibiyet ${p[0]}, beraberlik ${p[1]}, mağlubiyet ${p[2]} puan`; },
   table() {
@@ -667,7 +787,7 @@ const LivePages = {
   replayA(m) { return `<a class="fx-rp" href="${esc(Live.replayLink(m))}" title="Bu maçı baştan izle (bağlantıyı paylaşabilirsiniz)">▶ İzle</a>`; },
   /* one 1v1 match as two lines (home first), with the goals once played; note: "altın gol" / "penaltılar 4–3" */
   pairHtml(a, b, sa, sb, done, win, ph) {
-    const nm = (t, p) => (t ? `<li>${this.dot(t)}<span class="nm">${esc(t.name)}</span>` : `<li class="tbd"><span class="nm">${p}</span>`);
+    const nm = (t, p) => (t ? `<li>${this.dot(t)}<span class="nm">${this.tlink(t)}</span>` : `<li class="tbd"><span class="nm">${p}</span>`);
     const side = (t, sc, w, p) => nm(t, p) + (done ? `<span class="pt ${w ? 'g' : ''}">${sc}</span>` : '') + '</li>';
     return `<ol class="res pair">${side(a, sa, win === 'a', ph ? ph[0] : '—')}${side(b, sb, win === 'b', ph ? ph[1] : '—')}</ol>`;
   },
@@ -703,7 +823,7 @@ const LivePages = {
     const c = League.cup(), ms = League.cupMatches();
     if (!c) {
       return `${head}<div class="lp-sub">Sezon ${d.season} · lig maçları bitince başlar (${d.history.length} / ${d.seasonLength * App.perWeek()} maç oynandı)</div>${this.champ()}${guide}`
-        + `<h3 class="lp-h3">Havuzdaki takımlar</h3><ul class="lp-pool">${d.reserve.map(t => `<li>${this.dot(t)}${esc(t.name)}</li>`).join('')}</ul>`;
+        + `<h3 class="lp-h3">Havuzdaki takımlar</h3><ul class="lp-pool">${d.reserve.map(t => `<li>${this.dot(t)}${this.tlink(t)}</li>`).join('')}</ul>`;
     }
     const rounds = this.cupRounds(ms, c, { team: (id) => League.poolTeam(id), kick: (m) => this.cupKickoff(m.i, m), live });
     const top = League.cupTop3();
@@ -743,8 +863,7 @@ const LivePages = {
     }
     let cup;
     if (rec.cup) {
-      const c = { draw: rec.cup.draw, res: Object.fromEntries(Object.entries(rec.cup.res).map(([k, r]) => [k, Object.assign({ winner: r[0], loser: r[1], sw: r[2], sl: r[3], t: r[4] * 60000 },
-        r.length >= 7 ? { pw: r[5], pl: r[6] } : r.length === 6 ? { gg: 1 } : {})])) };
+      const c = this.cupOf(rec);
       const ms = League.cupMatchesOf(c);
       cup = `<h3 class="lp-h3">Yükselme eleme maçları</h3><div class="lp-note">🔺 Yükselenler: <b>${rec.up.map(id => esc(team(id).name)).join(', ')}</b></div>`
         + this.cupRounds(ms, c, { team: (id) => this.anyTeam(id), kick: (m) => ({ t: m.res ? m.res.t : 0, late: false }) });
