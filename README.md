@@ -180,8 +180,8 @@ ffmpeg -i girdi.webm -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 60 -c
 - **Kaptan şutu:** kaptan topa dokunduğunda top rakip kaleye doğru gidiyorsa (kale merkezine `CAPTAIN_AIM_DEG` = 25° içinde) **2 kat hızlı** gider; başka bir şeye çarpınca hız eski değerine döner.
 - **Kaleciler** topu sürekli takip eder; her takımın kalecisine maç başında rastgele bir yetenek atanır.
 - **Süre:** maç **90 saniye** sürer (`CONFIG.MATCH_TIME`). Saat ekran süresine göre işler: ağır çekim anları da saatten düşer, yani maç ekranda tam 90 saniyedir. Ekranın üstünde **tek satırlık bir şerit** vardır: solda hafta ve maç (`WEEK 5 · MATCH 3` + tema), ortada saat ve altında geçen süre çubuğu (ortasında devre işareti, yanında `1H` / `2H`), sağda kulüp renklerindeki kutularda takım kodları ve aralarında çerçeveli skor (ev sahibi solda). Sahada çim şeritleri, ince çim dokusu, ortası aydınlık kenarları koyulaşan ışık ve duvar boyunca gölge vardır; oyuncu rozetlerinde takım kodu her renkte okunur (açık renkte koyu, koyu renkte beyaz konturlu yazı). Saat son 10 saniyede kırmızıya döner ve her saniye tıklar; altın golde altın rengi `GOLDEN GOAL 21`, penaltılarda `PENALTIES` yazar. Başlangıçta ve bitişte düdük çalar.
-- **Devre arası:** 45. saniyede (`MATCH_TIME / 2`) ilk yarı biter; top kaleye gidiyorsa maç sonundaki uzatma kuralı burada da aynen geçerlidir (en fazla `ADDED_MAX` = 10 sn, saatte `0:45+`). **6 sn devre arası** (`HALF_BREAK`) olur: saat durur ve `HALF TIME` yazar, top kaybolur, takımlar **kale değiştirir** (ev sahibi ikinci yarıda alt kalede) ve oyuncular yeni yarı sahalarına yürür. İkinci yarı tam 0:45'ten ortadan başlar; ilk yarının uzatması ikinci yarıdan yemez. Her iki yarının sonunda da uzatma olabildiği için maç ekranda 96–116 sn sürer.
-- **Bitiş düdüğü ve uzatma:** süre bittiğinde top bir kalenin yarı sahasındaysa ve **o kaleye doğru** gidiyorsa (yalnızca yukarı/aşağı yön dikkate alınır, sağa sola gidişi önemsizdir) maç bitmez: top öbür kaleye doğru dönene ya da gol olana kadar sürer (en fazla `ADDED_MAX` = 10 sn). Bu sırada saatte `1:30+` yazar. Bu kural altın golün sonunda da geçerlidir. Sonra çok gol atan kazanır; skor eşitse **beraberlik**.
+- **Devre arası:** 45. saniyede (`MATCH_TIME / 2`) ilk yarı biter; maç sonundaki uzatma kuralı burada da aynen geçerlidir: 45. saniye dolunca devre arası, **top orta sahayı geçince** başlar (en fazla `ADDED_MAX` = 10 sn, saatte `0:45+`). **6 sn devre arası** (`HALF_BREAK`) olur: saat durur ve `HALF TIME` yazar, top kaybolur, takımlar **kale değiştirir** (ev sahibi ikinci yarıda alt kalede) ve oyuncular yeni yarı sahalarına yürür. İkinci yarı tam 0:45'ten ortadan başlar; ilk yarının uzatması ikinci yarıdan yemez. Her iki yarının sonunda da top orta sahayı geçene kadar oyun sürdüğü için maç ekranda yaklaşık 97–109 sn sürer.
+- **Bitiş düdüğü ve uzatma:** süre bittiğinde maç (ve devre arası) hemen bitmez; oyun **top orta sahayı geçene** kadar sürer, yani düdük hiçbir zaman atağın ortasında çalmaz. Süre dolduğu anda topun hangi yarı sahada olduğu hatırlanır; top öbür yarı sahaya geçince (ya da gol olunca, top ağda ise) maç biter. En fazla `ADDED_MAX` = 10 sn beklenir. Bu sırada saatte `1:30+` yazar. Bu kural altın golün sonunda da geçerlidir. Sonra çok gol atan kazanır; skor eşitse **beraberlik**.
 - **Goller:** her gol skora rakip takım lehine yazılır; kalecinin kendi kalesine sektirdiği top da rakibin golüdür. Bu yüzden skor, AG ve YG her zaman birbirini tutar. Gol anında sahanın üst yarısında kısa süre `+ ARSENAL GOAL` ve altında yeni skor (`ARS 2 – 1 CHE`) belirir; golü atan takımın kalesinin arkasında her gol için bir mini futbol topu çıkar.
 - **Ağır çekim:** son 10 saniyede skor eşitken ya da fark 1 golken (ve altın golde) top kaleye yaklaşırsa kısa bir ağır çekim ve kamera yakınlaşması olur.
 - **Maç öncesi (~5 sn, `INTRO_DURATION`):** **`WEEK 5 MATCHES`** ekranı: haftanın 9 maçı, oynananlar skorlarıyla (`FULL TIME`), sıradaki maç (`PLAYING NOW`) ve kalanlar (`COMING UP`).
@@ -292,7 +292,7 @@ Eskiden aktif lig, Claude Code'da tanımlı bir zamanlanmış görevle her gece 
 
 ## Denge
 
-Varsayılan ayarlarla 90 saniyelik 1000 maçlık testte (`node tools/balance.js 1000`): ortalama **7,2 gol**, **%16 beraberlik**; 3000 maçta üst kale (ev sahibi) ve alt kale galibiyeti eşit (%42 / %43). Eleme maçlarında (`--eleme`) ~%16 maç altın gole, ~%1,3'ü penaltıya gider; en uzun eleme maçı ~125 sn. Uzatma (devre ya da maç sonunda top kaleye gidiyorsa) maç başına ~1 kez, ortalama +0,7 sn.
+Varsayılan ayarlarla 90 saniyelik 1000 maçlık testte (`node tools/balance.js 1000`): ortalama **7,2 gol**, **%16 beraberlik**; 3000 maçta üst kale (ev sahibi) ve alt kale galibiyeti eşit (%42 / %43). Eleme maçlarında (`--eleme`) ~%16 maç altın gole, ~%1,3'ü penaltıya gider; en uzun eleme maçı ~125 sn. Uzatma (devre ve maç sonunda top orta sahayı geçene kadar) maç başına ~1,8 kez, ortalama +1,2 sn; maç ekranda 97–109 sn sürer.
 
 Önemli ayarlar `src/01_core.js` dosyasının başındaki `CONFIG` nesnesinde:
 
@@ -300,7 +300,7 @@ Varsayılan ayarlarla 90 saniyelik 1000 maçlık testte (`node tools/balance.js 
 |---|---|---|
 | `MATCH_TIME` | 90 | Maç süresi (ekran saniyesi) |
 | `GOLDEN_TIME` | 20 | Eleme maçında beraberlikte altın gol süresi (sn); sonra penaltılar |
-| `ADDED_MAX` | 10 | Süre bittiğinde top kaleye giderken verilen uzatmanın üst sınırı (sn) |
+| `ADDED_MAX` | 10 | Süre bittikten sonra top orta sahayı geçene kadar verilen uzatmanın üst sınırı (sn) |
 | `HALF_BREAK` | 6 | Devre arası (sn; saat durur, takımlar kale değiştirir) |
 | `PEN_P` / `PEN_STEP` | 0.75 / 0.9 | Penaltının gol olma olasılığı / ekranda her atışın süresi (sn) |
 | `POINTS` | 3, 1, 0 | Galibiyet, beraberlik, mağlubiyet puanı |

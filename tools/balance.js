@@ -45,7 +45,7 @@ const pct = (x) => Math.round((x / N) * 1000) / 10 + '%';
 console.log(`${N} maç · 1'e 1 · ${CONFIG.MATCH_TIME} sn${knockout ? ' · eleme (altın gol + penaltı)' : ''}`);
 console.log(`Ort. gol: ${(goals / N).toFixed(2)} · Beraberlik: ${pct(draws)} · Ev sahibi (üst kale) galibiyeti: ${pct(home)} · Deplasman: ${pct(N - draws - home)}`);
 console.log(`Ekran süresi (maç): min ${scr[0].toFixed(1)} · medyan ${scr[N >> 1].toFixed(1)} · maks ${scr[N - 1].toFixed(1)} sn${knockout ? ` · altın gole giden ${pct(golden)} · penaltıya giden ${pct(pens)}` : ''}`);
-console.log(`Uzatma (devre / maç sonunda top kaleye gidiyordu): maç başına ${(addN / N).toFixed(2)} kez · ort. +${addN ? (addT / addN).toFixed(1) : 0} sn`);
+console.log(`Uzatma (devre / maç sonunda top orta sahayı geçene kadar): maç başına ${(addN / N).toFixed(2)} kez · ort. +${addN ? (addT / addN).toFixed(1) : 0} sn`);
 console.log(`Ort. kurtarış: ${(saves / N).toFixed(1)} · Kendi kalesine: ${goals ? Math.round((own / goals) * 100) : 0}% · Duvardan kaçan top: ${esc}`);
 console.log('En sık skorlar: ' + Object.entries(hist).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k} (${pct(v)})`).join(' · '));
 const o = { mode: 'match', teams: teamsAll.slice(0, 2), seed: 48213, theme: 'classic', speedMult: 1, matchTime: CONFIG.MATCH_TIME, knockout: true };

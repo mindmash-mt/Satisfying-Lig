@@ -509,7 +509,7 @@ const HUD = {
     outlinedText(ctx, ':', SX, y, `40px ${FONT_BIG}`, 'rgba(255,255,255,0.55)', null, 0);
     /* centre: the clock */
     const T = g.matchTime, gold = g.extra || g.pens, left = g.timeLeft();
-    /* added time (the ball is on its way to a goal when the time is up): "1:30+" / "GOLDEN GOAL +" */
+    /* added time (the time is up, play goes on until the ball crosses the centre line): "1:30+" / "GOLDEN GOAL +" */
     const brk = g.morph && g.morph.kind === 'half';
     const shown = g.pens ? 'PENALTIES' : g.winnerSet || g.over ? 'FULL TIME' : brk ? 'HALF TIME' : gold ? `GOLDEN GOAL ${g.added ? '+' : Math.ceil(left)}` : (() => {
       const t = Math.min(g.half === 1 ? T / 2 : T, Math.floor(g.clock)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}${g.added ? '+' : ''}`; })();

@@ -30,9 +30,8 @@ const CONFIG = {
      The clock runs on screen time (slow-motion moments count too), so a match is MATCH_TIME seconds long on screen.
      A draw is a draw in the league; a promotion playoff match that is level goes to a golden goal (at most GOLDEN_TIME seconds)
      and then to a penalty shoot-out (PEN_P: chance a penalty goes in, PEN_STEP: seconds per penalty on screen).
-     Added time: when the time is up (full time, end of the golden goal) while the ball is in a goal's half and moving towards
-     that goal (only the up / down direction counts), play goes on until the ball turns towards the other goal or a goal is
-     scored — at most ADDED_MAX seconds. The same at half time.
+     Added time: when the time is up (half time, full time, end of the golden goal) play goes on until the ball crosses the centre
+     line (or a goal is scored), so the whistle never blows in the middle of an attack — at most ADDED_MAX seconds.
      Half time at MATCH_TIME / 2: a HALF_BREAK-second break (the clock stops), the clubs change ends and walk into their new
      halves; the second half kicks off from the centre at MATCH_TIME / 2 (first-half added time does not shorten it). */
   MATCH_TIME: 90, GOLDEN_TIME: 20, PEN_P: 0.75, PEN_STEP: 0.9, ADDED_MAX: 10, HALF_BREAK: 6,
