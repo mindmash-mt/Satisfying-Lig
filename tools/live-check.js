@@ -125,51 +125,57 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     const pw = pens && pens.g.teams[pens.g.winner], pl = pens && pens.g.teams[1 - pens.g.winner];
     ok(gg && pens && gg.g.winner >= 0 && gg.r.teams[gg.g.winner].score === gg.r.teams[1 - gg.g.winner].score + 1 && !pens.r.draw && pw.score === pl.score && pw.pen > pl.pen && pens.g.pens.kicks.length >= 6,
       `Eleme maçı berabere bitmez: altın gol (${gg && gg.r.teams.map(t => t.score).join('–')}), sonra penaltılar (${pens && `${pw.score}–${pl.score}, pen. ${pw.pen}–${pl.pen}`})`);
-    /* added time: when the time is up while the ball is in a goal's half moving towards it (up / down), the match goes on
-       until the ball turns back or goes in (at most ADDED_MAX s); it never ends while that is still the case */
+    /* added time: when the time is up the match goes on until the ball crosses the centre line (or a goal is scored; at most
+       ADDED_MAX s) — the whistle never blows while the ball is still on the side where it was when the time ran out */
     {
-      let n = 0, withAdded = 0, bad = 0, maxAdd = 0;
+      const sideOf = (g) => { const b = g.balls.find(x => x.state === 'live'); return b ? (b.y < g.rectCy() ? -1 : 1) : 0; };
+      let n = 0, withAdded = 0, bad = 0, maxAdd = 0, crossed = 0;
       for (let s = 1; s <= (QUICK ? 50 : 150); s++) {
         const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 5000 + s, theme: 'classic', speedMult: 1, matchTime: CONFIG.MATCH_TIME, knockout: false });
-        let added = false;
+        let added = false, side = 0;
         g.onEvent = (t) => {
-          if (t === 'addedTime') added = true;
+          if (t === 'addedTime') { added = true; side = sideOf(g); }
           if (t === 'halfTime') added = false;                    // this test looks at full time
           if (t === 'win') {
-            const over = g.clock - CONFIG.MATCH_TIME;
-            if (g.attacking() && over < CONFIG.ADDED_MAX) bad++;
-            if (added) maxAdd = Math.max(maxAdd, over);
-            const b = g.balls.find(x => x.state === 'live');
-            if (!added && over > 0.05) bad++;                     // no added time → ends right at full time
-            if (added && b && over < CONFIG.ADDED_MAX && ((b.vy < 0 && b.y < g.rectCy()) || (b.vy > 0 && b.y > g.rectCy()))) bad++;
+            const over = g.clock - CONFIG.MATCH_TIME, now = sideOf(g);
+            if (!added && over > 0.05) bad++;                     // the whistle waits only through added time
+            if (added) {
+              maxAdd = Math.max(maxAdd, over);
+              if (now !== 0 && now === side && over < CONFIG.ADDED_MAX) bad++;   // ball still on the same side, limit not reached: must not end
+              if (now !== 0 && now !== side) crossed++;
+            }
           }
         };
         while (!g.over) g.step(DT);
         n++; if (added) withAdded++;
       }
-      ok(bad === 0 && withAdded > 10 && withAdded < n && maxAdd <= CONFIG.ADDED_MAX + 0.01,
-        `Uzatma: ${n} maçın ${withAdded}'inde süre bittiğinde top kaleye gidiyordu → maç top geri dönene / gol olana kadar sürdü (en uzun +${maxAdd.toFixed(1)} sn); top kaleye giderken hiç bitmedi`);
+      ok(bad === 0 && withAdded > n / 2 && crossed > withAdded / 2 && maxAdd <= CONFIG.ADDED_MAX + 0.01,
+        `Uzatma: ${n} maçın ${withAdded}'inde süre bittikten sonra maç, top orta sahayı geçene / gol olana kadar sürdü (${crossed}'inde top orta sahayı geçince bitti, en uzun +${maxAdd.toFixed(1)} sn); top süre bittiği taraftayken hiç bitmedi`);
     }
-    /* the same added time at half time: the first half never ends while the ball is on its way to a goal (at most ADDED_MAX s) */
+    /* the same at half time: the first half ends only when the ball crosses the centre line (at most ADDED_MAX s) */
     {
-      let n = 0, withAdded = 0, bad = 0, maxAdd = 0;
+      const sideOf = (g) => { const b = g.balls.find(x => x.state === 'live'); return b ? (b.y < g.rectCy() ? -1 : 1) : 0; };
+      let n = 0, withAdded = 0, bad = 0, maxAdd = 0, crossed = 0;
       for (let s = 1; s <= (QUICK ? 50 : 150); s++) {
         const g = new Game({ mode: 'match', teams: League.data.teams.slice(0, 2).map(t => ({ ...t })), seed: 6000 + s, theme: 'classic', speedMult: 1, matchTime: CONFIG.MATCH_TIME, knockout: false });
-        let added = false;
+        let added = false, side = 0;
         g.onEvent = (t, d) => {
-          if (t === 'addedTime' && d.half === 1) added = true;
-          if (t === 'halfTime') {
-            const over = g.clock - CONFIG.MATCH_TIME / 2;
-            if (g.attacking() && over < CONFIG.ADDED_MAX) bad++;  // halfTime() runs after this event, the ball is still in play here
+          if (t === 'addedTime' && d.half === 1) { added = true; side = sideOf(g); }
+          if (t === 'halfTime') {                                 // halfTime() runs after this event, the ball is still in play here
+            const over = g.clock - CONFIG.MATCH_TIME / 2, now = sideOf(g);
             if (!added && over > 0.05) bad++;
-            if (added) maxAdd = Math.max(maxAdd, over);
+            if (added) {
+              maxAdd = Math.max(maxAdd, over);
+              if (now !== 0 && now === side && over < CONFIG.ADDED_MAX) bad++;
+              if (now !== 0 && now !== side) crossed++;
+            }
           }
         };
         while (!g.over && g.half === 1) g.step(DT);
         n++; if (added) withAdded++;
       }
-      ok(bad === 0 && withAdded > 10 && withAdded < n && maxAdd <= CONFIG.ADDED_MAX + 0.01,
-        `İlk yarı uzatması: ${n} maçın ${withAdded}'inde 45. sn'de top kaleye gidiyordu → ilk yarı top geri dönene / gol olana kadar sürdü (en uzun +${maxAdd.toFixed(1)} sn)`);
+      ok(bad === 0 && withAdded > n / 2 && crossed > withAdded / 2 && maxAdd <= CONFIG.ADDED_MAX + 0.01,
+        `İlk yarı uzatması: ${n} maçın ${withAdded}'inde 45. sn'den sonra devre arası, top orta sahayı geçene / gol olana kadar ertelendi (${crossed}'inde top orta sahayı geçince başladı, en uzun +${maxAdd.toFixed(1)} sn)`);
     }
     /* half time: at MATCH_TIME / 2 (+ added time) a HALF_BREAK-second break with the clock stopped; the clubs change ends and the
        second half kicks off from the centre at exactly MATCH_TIME / 2 */

@@ -58,6 +58,7 @@ class Game {
     this.knockout = !!o.knockout; this.clock = 0; this.extra = false; this.pens = null; this.draw = false;
     this.extraStart = 0;         // clock when the golden goal began
     this.added = 0;              // clock when the running added time began (0: none)
+    this.addedSide = 0;          // which half the ball was in when the time ran out (-1 top, 1 bottom); the whistle waits for the other one
     this.half = 1;               // 1 / 2; at half time the clubs change ends (rectTeams swaps)
     this.slowmo = null; this.slowmoCd = 0;
     this.spawnBlock = 0;
@@ -81,12 +82,16 @@ class Game {
   emit(type, data) { if (this.onEvent) this.onEvent(type, data || {}); }
   /* seconds left on the clock (the golden goal has its own clock) */
   timeLeft() { return this.extra ? Math.max(0, this.extraStart + CONFIG.GOLDEN_TIME - this.clock) : Math.max(0, this.matchTime - this.clock); }
-  /* added time: the ball is in a goal's half and moving towards that goal — up / down only (vy), sideways movement does not count */
-  attacking() {
+  /* added time: once the time is up (half time, full time, end of the golden goal) play goes on until the ball crosses the centre
+     line — the whistle never blows in the middle of an attack. The side the ball is on when the clock runs out is remembered; the
+     whistle waits for the ball to be on the other side (or in the net: the attack is over), at most ADDED_MAX seconds after the
+     time was up (over). Returns true while play must go on. */
+  waitForCentreLine(over, data) {
     const b = this.balls.find(x => x.state === 'live');
-    if (!b) return false;                                     // in the net / about to respawn: nothing to wait for
-    const mid = this.rectCy();
-    return (b.vy < 0 && b.y < mid) || (b.vy > 0 && b.y > mid);
+    if (!b || over >= CONFIG.ADDED_MAX) return false;         // in the net / about to respawn, or the limit is reached: nothing to wait for
+    const side = b.y < this.rectCy() ? -1 : 1;
+    if (!this.added) { this.added = this.clock; this.addedSide = side; this.emit('addedTime', data); }
+    return side === this.addedSide;
   }
 
   /* ---------- geometry ---------- */
@@ -506,21 +511,15 @@ class Game {
     if (this.half === 1 && !this.extra) {
       const ht = this.matchTime / 2;
       if (this.clock < ht) return;
-      if (this.attacking() && this.clock < ht + CONFIG.ADDED_MAX) {
-        if (!this.added) { this.added = this.clock; this.emit('addedTime', { half: 1 }); }
-        return;
-      }
+      if (this.waitForCentreLine(this.clock - ht, { half: 1 })) return;
       this.added = 0;
       this.halfTime();
       return;
     }
     const [A, B] = this.teams, end = this.extra ? this.extraStart + CONFIG.GOLDEN_TIME : this.matchTime;
     if (this.clock < end) return;
-    /* time is up, but the ball is on its way to a goal: added time until it turns back (or goes in), at most ADDED_MAX seconds */
-    if (this.attacking() && this.clock < end + CONFIG.ADDED_MAX) {
-      if (!this.added) { this.added = this.clock; this.emit('addedTime', {}); }
-      return;
-    }
+    /* time is up: added time until the ball crosses the centre line (or goes in), at most ADDED_MAX seconds */
+    if (this.waitForCentreLine(this.clock - end, {})) return;
     this.added = 0;
     if (!this.extra) {
       if (A.score !== B.score) this.finish(A.score > B.score ? 0 : 1);
