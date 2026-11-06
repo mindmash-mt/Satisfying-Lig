@@ -22,7 +22,10 @@ const when = process.argv[3] || '2026-11-04T19:54:35Z';
   /* og image: a real frame of a live match, inside a 1200×630 card */
   const p = await b.newPage({ viewport: { width: 540, height: 960 } });
   await p.goto('file://' + site + '?now=' + encodeURIComponent(when));
-  await p.waitForTimeout(7000);
+  /* the site opens on the fixture: watch the league's match on the canvas */
+  await p.waitForFunction(() => typeof Live !== 'undefined' && (Live.phase === 'match' || Live.phase === 'wait'), null, { timeout: 120000 });
+  await p.evaluate(() => Live.watchCh('main'));
+  await p.waitForTimeout(3000);
   const frame = await p.locator('#c').screenshot({ type: 'png' });
   await p.close();
   const og = await b.newPage({ viewport: { width: 1200, height: 630 } });
