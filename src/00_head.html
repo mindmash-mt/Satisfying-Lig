@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   SATISFYING LIG
-  Varsayılan: CANLI LİG — maçlar CONFIG.LIVE saatlerinde kendi kendine oynar, siteye giren herkes aynı maçı izler (src/07_live.js).
+  Varsayılan: CANLI LİG — lig ve yükselme ligi maçları CONFIG.LIVE saatlerinde aynı anda, kendi kendine oynar; site fikstürle açılır, "Canlı" sekmesinde istenen maç seçilip izlenir (src/07_live.js).
   index.html?studio → aşağıdaki stüdyo (kontrol paneli, önizleme, video kaydı). Stüdyo kullanımı:
   1) Maç başlatma: Sağdaki panelden mod/ayarları seçin, "▶ Başlat" (veya Boşluk tuşu). Her maç rastgele bir seed ile kurulur (görünmez; oynanan maçların seed'i maç geçmişinde saklanır).
   2) Kayıt alma: "● Kaydet ve Başlat" maçı sıfırdan 1x hızda oynatır, bitiş ekranından sonra video dosyasını otomatik indirir (sekme açık/görünür kalmalı).
@@ -14,7 +14,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Satisfying Lig</title>
-<meta name="description" content="Kendi kendine oynayan canlı futbol ligi: her 3 dakikada bir 90 saniyelik maç, herkes aynı maçı aynı anda izler. Lig tablosu, fikstür, yükselme elemesi ve geçmiş sezonlar.">
+<meta name="description" content="Kendi kendine oynayan canlı futbol ligi: her 3 dakikada bir lig ve yükselme ligi maçı aynı anda başlar, 90 saniye sürer; herkes aynı maçı aynı anda izler. Fikstür, lig tablosu, yükselme ligi ve elemesi, geçmiş sezonlar.">
 <meta name="theme-color" content="#0b0e14">
 <link rel="canonical" href="__SITE_URL__">
 <!-- paylaşım kartı (WhatsApp, X, Telegram, Facebook…): mutlak adres gerekir, build.sh sitenin adresini (SITE_URL) yazar -->
@@ -22,7 +22,7 @@
 <meta property="og:site_name" content="Satisfying Lig">
 <meta property="og:locale" content="tr_TR">
 <meta property="og:title" content="Satisfying Lig · canlı futbol ligi">
-<meta property="og:description" content="Her 3 dakikada bir maç, günde 480 maç. Herkes aynı maçı aynı anda izler.">
+<meta property="og:description" content="Her 3 dakikada iki ligden maç: lig ve yükselme ligi aynı anda. Herkes aynı maçı aynı anda izler.">
 <meta property="og:url" content="__SITE_URL__">
 <meta property="og:image" content="__SITE_URL__og.jpg">
 <meta property="og:image:width" content="1200">
@@ -30,7 +30,7 @@
 <meta property="og:image:alt" content="Satisfying Lig: dikey futbol sahasında oynanan canlı bir maç">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Satisfying Lig · canlı futbol ligi">
-<meta name="twitter:description" content="Her 3 dakikada bir maç, günde 480 maç. Herkes aynı maçı aynı anda izler.">
+<meta name="twitter:description" content="Her 3 dakikada iki ligden maç: lig ve yükselme ligi aynı anda. Herkes aynı maçı aynı anda izler.">
 <meta name="twitter:image" content="__SITE_URL__og.jpg">
 <!-- simge sayfaya gömülü (yerelde açılan index.html'de de görünür); manifest ve PNG simgeler public/ altında, yalnızca sitede -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,__ICON_SVG__">
@@ -166,6 +166,34 @@
   .fx-head .b { margin-left: auto; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 99px; }
   .fx-head .b.done { background: #263046; color: var(--muted); }
   .fx-head .b.live { background: #00E676; color: #062417; }
+  .fx-head button.b.live { border: none; cursor: pointer; font-family: inherit; line-height: 1.5; }
+  .fx-head button.b.live:hover { background: #5cf0b6; }
+  /* a club playing now (tables): ⚽ opens its live match */
+  .lv-ball { all: unset; display: inline-block; vertical-align: 1px; cursor: pointer; margin-left: 6px; font-size: 13px; line-height: 1; padding: 2px 4px; border-radius: 99px; background: rgba(0,230,118,.16); box-shadow: inset 0 0 0 1px rgba(0,230,118,.6); animation: lvpulse 1.6s ease-in-out infinite; flex-shrink: 0; }
+  .lv-ball:hover { background: rgba(0,230,118,.32); }
+  .lv-ball:focus-visible { outline: 2px solid var(--accent2); outline-offset: 1px; }
+  @keyframes lvpulse { 50% { box-shadow: inset 0 0 0 1px rgba(0,230,118,.15); } }
+  .lp-table tr.po td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  /* the fixture's league switch */
+  .seg { display: inline-flex; gap: 2px; padding: 3px; margin: 6px 0 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 99px; }
+  .seg button { border: none; background: transparent; border-radius: 99px; padding: 6px 14px; color: var(--muted); font-weight: 600; }
+  .seg button.on { background: var(--surface2); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
+  /* "Canlı": the matches on now and starting soon */
+  .lv-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .lv-card { display: flex; flex-direction: column; gap: 8px; text-align: left; width: 100%; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; color: var(--text); cursor: pointer; font: inherit; min-width: 0; }
+  .lv-card:hover { border-color: var(--accent); background: var(--surface2); }
+  .lv-card.on { border-color: #00E676; box-shadow: inset 0 0 0 1px #00E676; }
+  .lv-top { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted); min-width: 0; }
+  .lv-tag { font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .lv-st { margin-left: auto; white-space: nowrap; }
+  .lv-live { color: #00E676; letter-spacing: .04em; }
+  .lv-teams { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+  .lv-t { display: flex; align-items: center; min-width: 0; }
+  .lv-t.r { flex-direction: row-reverse; text-align: right; }
+  .lv-t.r .dot { margin: 0 0 0 7px; }
+  .lv-t .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lv-t .nm.tbd { color: var(--muted); font-style: italic; font-weight: 400; }
+  .lv-vs { color: var(--muted); }
   .fx-match ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 13px; }
   .fx-match ol li { display: flex; align-items: center; min-width: 0; padding: 2px 0; }
   .fx-match ol li .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -244,6 +272,7 @@
     .lp-table { font-size: 13px; }
     .fx-match ol { grid-template-columns: 1fr; }
     .fx-grid { grid-template-columns: 1fr; }
+    .lv-list { grid-template-columns: 1fr; }
     #liveTabs button { padding: 7px 11px; }
     #liveBar { max-width: calc(100vw - 16px); gap: 6px; }
     #liveBar button, #liveBar a { padding: 6px 9px; }
@@ -259,7 +288,7 @@
     #stage { height: 82vh; }
     #panel { width: 100%; border-left: none; }
   }
-  @media (prefers-reduced-motion: reduce) { .rec { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .rec, .lv-ball { animation: none; } }
 </style>
 </head>
 <body>

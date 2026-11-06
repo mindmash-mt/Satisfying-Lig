@@ -666,7 +666,8 @@ const LeagueTable = {
     });
     this.pill(ctx, slotX(N - 1), cy, C.pillW, h, newF[newF.length - 1], easeOutBack((tt - 2.2) / 0.35, 2.6));
   },
-  /* rows: see App.onOver / LiveScreen. st: { tt: seconds since this screen started, post: animate the match result, alpha } */
+  /* rows: see App.onOver / LiveScreen. st: { tt: seconds since this screen started, post: animate the match result, alpha,
+     po: the promotion league's table — its top po rows are the playoff places (green, a PLAYOFFS line under them) and nobody goes down } */
   draw(ctx, rows, title, sub, st) {
     const SX = 510, tt = st.tt, post = st.post;
     const n = rows.length, X0 = 70, W = 880, top = 345;
@@ -685,8 +686,14 @@ const LeagueTable = {
     if (post) outlinedText(ctx, 'MATCH', X0 + C.match, hy, head, hc, null, 0);
     outlinedText(ctx, 'PTS', X0 + C.pts, hy, head, hc, null, 0);
     if (CONFIG.FORM_COUNT > 0) outlinedText(ctx, `LAST ${CONFIG.FORM_COUNT}`, X0 + C.form + formW / 2, hy, head, hc, null, 0);
-    /* relegation line above the last RELEGATE_COUNT rows */
-    const RC = CONFIG.RELEGATE_COUNT, zones = RC > 0 && n >= RC + 5;
+    /* relegation line above the last RELEGATE_COUNT rows (the promotion league: the playoff line under its top po rows) */
+    const PO = st.po || 0, RC = PO ? 0 : CONFIG.RELEGATE_COUNT, zones = RC > 0 && n >= RC + 5, poZone = PO > 0 && n > PO;
+    if (poZone) {
+      const ly = top + PO * rh;
+      ctx.save(); ctx.setLineDash([14, 10]); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(46,230,107,0.85)';
+      ctx.beginPath(); ctx.moveTo(X0, ly); ctx.lineTo(X0 + W, ly); ctx.stroke(); ctx.restore();
+      outlinedText(ctx, 'PLAYOFFS', X0 + W, ly - 1, `700 15px ${FONT_UI}`, this.GREEN, 'rgba(0,0,0,0.8)', 4, 'right');
+    }
     if (zones) {
       const ly = top + (n - RC) * rh;
       ctx.save(); ctx.setLineDash([14, 10]); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,77,77,0.85)';
@@ -709,7 +716,11 @@ const LeagueTable = {
       else if (r.out) { ctx.lineWidth = 4; ctx.strokeStyle = this.RED; ctx.stroke(); }          // relegated
       ctx.fillStyle = r.c1; roundRect(ctx, x, y + 3, 12, rh - 6, 6); ctx.fill();
       const rank = Math.round(pos) + 1;
-      if (zones && (rank === 1 || rank > n - RC)) {          // leader: gold badge, relegation places: red badge
+      if (poZone && rank <= PO) {                            // promotion league: playoff places, green badges
+        const bs = rh * 0.62;
+        roundRect(ctx, x + C.rank - bs / 2, cy - bs / 2, bs, bs, 8); ctx.fillStyle = rank === 1 ? '#FFD54F' : '#22C55E'; ctx.fill();
+        outlinedText(ctx, String(rank), x + C.rank, cy + 2, `${Math.round(rh * 0.5)}px ${FONT_BIG}`, rank === 1 ? '#2a1f00' : '#04210f', null, 0);
+      } else if (zones && (rank === 1 || rank > n - RC)) {   // leader: gold badge, relegation places: red badge
         const lead = rank === 1, bs = rh * 0.62;
         roundRect(ctx, x + C.rank - bs / 2, cy - bs / 2, bs, bs, 8); ctx.fillStyle = lead ? '#FFD54F' : 'rgba(255,77,77,0.9)'; ctx.fill();
         outlinedText(ctx, String(rank), x + C.rank, cy + 2, `${Math.round(rh * 0.5)}px ${FONT_BIG}`, lead ? '#2a1f00' : '#ffffff', null, 0);
@@ -874,7 +885,7 @@ const EndScreen = {
     }
     const se = e.seasonEnd;
     const sc = e.score ? `FULL TIME · ${upTR(e.score.a.name)} ${e.score.sa}–${e.score.sb} ${upTR(e.score.b.name)}` : 'AFTER ' + e.title;
-    LeagueTable.draw(ctx, e.rows, 'LEAGUE TABLE', se ? `🏆 ${upTR(se.champion.name)} · SEASON ${se.season} CHAMPIONS` : sc, { tt: et, post: true, alpha: clamp01(et / 0.3) });
+    LeagueTable.draw(ctx, e.rows, e.tableTitle || 'LEAGUE TABLE', se ? `🏆 ${upTR(se.champion.name)} · SEASON ${se.season} CHAMPIONS` : sc, { tt: et, post: true, alpha: clamp01(et / 0.3), po: e.po || 0 });
     for (const p of FX.endParts) {
       if (et > 2.3) break;
       ctx.save(); ctx.globalAlpha = clamp01((2.3 - et) / 0.3); ctx.translate(p.x, p.y); ctx.rotate(p.rot);

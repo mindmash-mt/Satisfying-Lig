@@ -111,7 +111,7 @@ const LiveStats = {
     if (!c || !c.draw.includes(id)) return '';
     const ms = League.cupMatchesOf(c).filter(m => m.res && (m.res.winner === id || m.res.loser === id));
     const last = ms[ms.length - 1];
-    if (!last) return c.draw.slice(0, 4).includes(id) ? 'Elemede (1. turu bay geçti)' : 'Elemede';
+    if (!last) return c.draw.length > PO_SIZE && c.draw.slice(0, 4).includes(id) ? 'Elemede (1. turu bay geçti)' : 'Elemede';
     const won = last.res.winner === id;
     if (last.k === 'FIN') return won ? 'Eleme birincisi' : 'Eleme finalisti';
     if (last.k === '3RD') return won ? 'Eleme üçüncüsü' : 'Eleme dördüncüsü';
@@ -128,13 +128,22 @@ const LiveStats = {
     for (const r of S.recs) {
       const i = r.rows.findIndex(x => x[0] === id), up = (r.up || []).includes(id);
       if (i >= 0) out.push({ season: r.season, rank: i + 1, size: r.rows.length, row: r.rows[i], pts: r.rows[i][2], played: r.rows[i][1], champ: r.champ === id, down: (r.out || []).includes(id), up: false, pool: false, fate: '' });
-      else if (up || (r.cup && r.cup.draw.includes(id))) out.push({ season: r.season, pool: true, up, fate: r.cup ? this.cupFate(LivePages.cupOf(r), id) : '', champ: false, down: false });
+      else if (r.pl && r.pl.rows.some(x => x[0] === id)) {
+        /* the promotion league: its place, and the playoff for its top 4 */
+        const k = r.pl.rows.findIndex(x => x[0] === id), cf = r.cup ? this.cupFate(LivePages.cupOf(r), id) : '';
+        out.push({ season: r.season, pool: true, up, fate: `Yükselme ligi ${k + 1}.${cf ? ' · ' + cf : ''}`, champ: false, down: false });
+      } else if (up || (r.cup && r.cup.draw.includes(id))) out.push({ season: r.season, pool: true, up, fate: r.cup ? this.cupFate(LivePages.cupOf(r), id) : '', champ: false, down: false });
     }
     const pos = S.cur.rows.findIndex(x => x[0] === id);
     if (pos >= 0) out.push({ season: d.season, cur: true, rank: pos + 1, size: S.cur.rows.length, row: S.cur.rows[pos], pts: S.cur.rows[pos][2], played: S.cur.rows[pos][1], champ: false, down: false, up: false, pool: false, fate: '' });
     else if (d.reserve.some(t => t.id === id)) {
-      const c = League.cup();
-      out.push({ season: d.season, cur: true, pool: true, up: false, champ: false, down: false, fate: c ? this.cupFate(c, id) : 'Lig maçları bitince eleme oynar' });
+      const c = League.cup(), cf = c ? this.cupFate(c, id) : '';
+      let fate = cf || 'Lig maçları bitince eleme oynar';
+      if (League.promoOn()) {
+        const k = League.promoRanking().findIndex(x => x.t.id === id), r = League.rowOf(d.promo.table, id);
+        fate = `Yükselme ligi ${k + 1}. sırada (${r.played} maç, ${r.pts} puan)${cf ? ' · ' + cf : ''}`;
+      }
+      out.push({ season: d.season, cur: true, pool: true, up: false, champ: false, down: false, fate });
     }
     return out;
   },
@@ -233,7 +242,7 @@ const StatsPages = {
     if (!t) return `${back}<h2>Kulüp bulunamadı</h2>`;
     const S = LiveStats.get(), d = League.data, list = LiveStats.seasonsOf(id), cur = list.find(x => x.cur);
     const A = S.allTime.find(x => x.id === id), atRank = S.allTime.indexOf(A) + 1, T = S.titles.find(x => x.id === id);
-    const status = !cur ? 'Bu sezon ligde değil' : cur.pool ? `Sezon ${d.season} · havuzda (yükselme elemesi): ${cur.fate}` : `Sezon ${d.season} · ${cur.rank}. sırada · ${cur.played} maç, ${cur.pts} puan`;
+    const status = !cur ? 'Bu sezon ligde değil' : cur.pool ? `Sezon ${d.season} · havuzda: ${cur.fate}` : `Sezon ${d.season} · ${cur.rank}. sırada · ${cur.played} maç, ${cur.pts} puan`;
     const tile = (v, l) => `<div class="st-tile"><b>${v}</b><span>${l}</span></div>`;
     const tiles = `<div class="st-tiles">${tile(T ? T.n : 0, 'şampiyonluk')}${tile(list.filter(x => !x.pool && !x.old).length, 'ligde sezon')}${tile(A ? `${atRank}.` : '—', 'tüm zamanlar')}${tile(A ? A.pts : 0, 'toplam puan')}</div>`;
     const head = `${back}<div class="tm-head"><span class="tm-badge" style="background:${esc(t.c1)};border-color:${esc(t.c2)}" aria-hidden="true">${esc(t.code)}</span><div><h2 tabindex="-1" id="tmTitle">${esc(t.name)}</h2><div class="lp-sub" style="margin:0">${status}</div></div></div>`;
@@ -310,7 +319,7 @@ const StatsPages = {
       const nm = `${s.old ? 'Eski lig · ' : ''}Sezon ${s.season}`;
       if (s.champ) ev.push(`<span class="tg champ">🏆</span> ${nm} şampiyonu (${s.pts} puan)`);
       if (s.down) ev.push(`<span class="tg down">🔻</span> ${nm} sonunda ${s.rank}. sırayla ligden düştü`);
-      if (s.up) ev.push(`<span class="tg up">🔺</span> ${nm} sonunda yükselme elemesinden lige çıktı${s.fate ? ` (${esc(s.fate.toLowerCase())})` : ''}`);
+      if (s.up) ev.push(`<span class="tg up">🔺</span> ${nm} sonunda lige yükseldi${s.fate ? ` (${esc(s.fate)})` : ''}`);
     }
     return `<h3 class="lp-h3">Şampiyonluk, düşme ve yükselme</h3>` + (ev.length ? `<ol class="st-list">${ev.reverse().map(x => `<li>${x}</li>`).join('')}</ol>` : '<div class="st-empty">Henüz şampiyonluk, düşme ya da yükselme yok.</div>');
   },
