@@ -1597,6 +1597,233 @@ const AudioSys = {
 };
 
 /* =====================================================================
+   BACKGROUND MUSIC  (live site: plays on the screens without a match in play — the pages, the "Canlı" list, the countdown
+   table, a match's intro and end screens — and fades out at kick-off). Several tracks, synthesised like the sound effects
+   (no files); each plays for about a minute and a half, then another one follows (never the same twice in a row, every track
+   once before any repeats). Music goes through the master gain, so "Ses kapalı" silences it too. Never in a video render.
+   ===================================================================== */
+/**
+ * @typedef {Object} MusicTrack
+ * @property {string} name
+ * @property {number} lvl        the track's level (evens out how loud the tracks sound)
+ * @property {number} bpm
+ * @property {number} swing        delay of every second 16th (share of a 16th)
+ * @property {Array<[number, number[]]>} chords  one chord a bar: root (MIDI) and intervals
+ * @property {Object<string, string>} [drums]   16 steps a bar: k kick, s snare, c clap, h hat, H open hat ('x' full, 'o' soft)
+ * @property {{ wave: OscillatorType, pat: string, oct: number, gain: number, lp: number }} [bass]  x root, o octave, 5 fifth, 3 third
+ * @property {{ wave: OscillatorType, gain: number, lp: number, attack: number, release: number, detune?: number }} [pad]  the bar's chord, held
+ * @property {{ wave: OscillatorType, pat: string, gain: number, lp: number, len: number, oct: number, order: string, lo?: number }} [arp]  chord tones on the pattern's steps (also stabs: order 'chord')
+ * @property {{ wave: OscillatorType, pat: string, gain: number, lp: number, oct: number, kind?: string }} [lead]  a motif (32 steps) fitted to the chords, every second pass
+ */
+const Music = {
+  /** @type {MusicTrack[]} */
+  TRACKS: [
+    { name: 'Gece Lo-fi', lvl: 0.56, bpm: 80, swing: 0.2,
+      chords: [[53, [0, 4, 7, 11]], [52, [0, 3, 7, 10]], [50, [0, 3, 7, 10]], [48, [0, 4, 7, 11]]],
+      drums: { k: 'x......x..x.....', s: '....x.......x...', h: 'o.o.o.o.o.o.o.oo' },
+      bass: { wave: 'sine', pat: 'x.......x..5....', oct: -12, gain: 0.2, lp: 500 },
+      pad: { wave: 'triangle', gain: 0.032, lp: 1300, attack: 0.25, release: 0.8 },
+      lead: { wave: 'sine', pat: '..x...x.x.....x...x.x...x.......', gain: 0.07, lp: 2500, oct: 12, kind: 'keys' } },
+    { name: 'Neon Gece', lvl: 0.85, bpm: 100, swing: 0,
+      chords: [[57, [0, 3, 7]], [53, [0, 4, 7]], [48, [0, 4, 7]], [55, [0, 4, 7]]],
+      drums: { k: 'x...x...x...x...', s: '....x.......x...', h: '..x...x...x...x.' },
+      bass: { wave: 'sawtooth', pat: 'x.x.x.x.x.x.x.xo', oct: -24, gain: 0.11, lp: 520 },
+      pad: { wave: 'sawtooth', gain: 0.018, lp: 900, attack: 0.4, release: 0.6, detune: 9 },
+      arp: { wave: 'sawtooth', pat: 'xxxxxxxxxxxxxxxx', gain: 0.03, lp: 2000, len: 0.12, oct: 12, order: 'up' } },
+    { name: 'Tribün Funk', lvl: 0.65, bpm: 108, swing: 0.12,
+      chords: [[52, [0, 3, 7, 10]], [57, [0, 4, 7, 10]], [52, [0, 3, 7, 10]], [59, [0, 3, 7, 10]]],
+      drums: { k: 'x..x..x...x..x..', s: '....x.......x..o', h: 'xoxoxoxoxoxoxoxo' },
+      bass: { wave: 'square', pat: 'x..o..x.5.x..o.x', oct: -12, gain: 0.08, lp: 750 },
+      arp: { wave: 'square', pat: '....x..x....x.x.', gain: 0.03, lp: 1900, len: 0.09, oct: 0, order: 'chord' },
+      lead: { wave: 'square', pat: 'x.x...x...x.x.x.....x.x...x.....', gain: 0.035, lp: 2400, oct: 12 } },
+    { name: '8-Bit Marş', lvl: 0.66, bpm: 144, swing: 0,
+      chords: [[60, [0, 4, 7]], [55, [0, 4, 7]], [57, [0, 3, 7]], [53, [0, 4, 7]]],
+      drums: { k: 'x.......x.......', s: '....x.......x...', h: 'x.x.x.x.x.x.x.x.' },
+      bass: { wave: 'triangle', pat: 'x.o.x.o.x.o.x.o.', oct: -24, gain: 0.22, lp: 3000 },
+      arp: { wave: 'square', pat: 'x.x.x.x.x.x.x.x.', gain: 0.018, lp: 4000, len: 0.07, oct: 0, order: 'updown' },
+      lead: { wave: 'square', pat: 'x.x.x...x.x.xx..x...x.x.x.x.....', gain: 0.035, lp: 5000, oct: 12 } },
+    { name: 'Tropik Akşam', lvl: 0.61, bpm: 116, swing: 0.06,
+      chords: [[52, [0, 3, 7]], [48, [0, 4, 7]], [55, [0, 4, 7]], [50, [0, 4, 7]]],
+      drums: { k: 'x...x...x...x...', c: '....x.......x...', h: '..x...x...x...x.' },
+      bass: { wave: 'sine', pat: 'x..x..x...x..x..', oct: -12, gain: 0.2, lp: 600 },
+      arp: { wave: 'sine', pat: 'x.xx.x.xx.x.x.x.', gain: 0.07, lp: 3000, len: 0.18, oct: 12, order: 'random' },
+      lead: { wave: 'triangle', pat: '....x.x.x...x.......x.x.x.x.x...', gain: 0.06, lp: 3000, oct: 24, kind: 'pluck' } },
+    { name: 'Soyunma Odası', lvl: 0.75, bpm: 70, swing: 0,
+      chords: [[50, [0, 4, 7, 11, 14]], [47, [0, 3, 7, 10, 14]], [43, [0, 4, 7, 11, 14]], [45, [0, 5, 7, 10, 14]]],
+      bass: { wave: 'sine', pat: 'x.......5.......', oct: -12, gain: 0.16, lp: 400 },
+      pad: { wave: 'triangle', gain: 0.03, lp: 1100, attack: 1.2, release: 2.2, detune: 6 },
+      arp: { wave: 'sine', pat: 'x.....x.....x...', gain: 0.045, lp: 6000, len: 1.6, oct: 24, order: 'random', lo: 1 } },
+    { name: 'Stadyum Rock', lvl: 0.91, bpm: 126, swing: 0,
+      chords: [[50, [0, 7, 12]], [45, [0, 7, 12]], [47, [0, 7, 12]], [43, [0, 7, 12]]],
+      drums: { k: 'x.....x.x.......', s: '....x.......x...', h: 'x.x.x.x.x.x.x.x.' },
+      bass: { wave: 'sawtooth', pat: 'x.x.x.x.x.x.x.x.', oct: -12, gain: 0.09, lp: 480 },
+      arp: { wave: 'sawtooth', pat: 'x.x.x.x.x.x.x.x.', gain: 0.025, lp: 1500, len: 0.2, oct: 0, order: 'chord' },
+      lead: { wave: 'sawtooth', pat: 'x...x...x.x.x.......x...x.x.x...', gain: 0.03, lp: 2600, oct: 12 } },
+  ],
+  vol: 0.6,                 // the music bus' level (the master volume and mute come after it)
+  TRACK_SEC: 90,            // a track plays about this long (whole passes of its chords), then the next one follows
+  on: false, ctx: null, out: null, bus: null, timer: 0,
+  /** @type {MusicTrack|null} */ track: null,
+  ti: -1, bag: [], step: 0, nextT: 0, steps: 0, motif: null,
+  /* called every frame: want = music should play now (sound on, no match in play on the screen) */
+  want(want) {
+    const A = AudioSys, ok = !!(want && A.ctx && !A.offline && !A.muted && A.ctx.state === 'running');
+    if (ok === this.on) return;
+    this.on = ok;
+    if (ok) this.begin(A.ctx, A.master); else this.stop();
+  },
+  /* start playing (a new track) into dest; live: a timer schedules the notes ahead of time */
+  begin(ctx, dest, live = true) {
+    this.ctx = ctx; this.out = dest;
+    this.play(this.pick(), ctx.currentTime + 0.15);
+    if (live && !this.timer) this.timer = setInterval(() => this.pump(), 200);
+    if (live) this.pump();
+  },
+  stop() {
+    clearInterval(this.timer); this.timer = 0;
+    this.fade(this.bus); this.bus = null; this.track = null;
+  },
+  /* the next track: every track once in a random order, then a new order (never the one just played first) */
+  pick() {
+    if (!this.bag.length) {
+      const n = this.TRACKS.length, a = [...Array(n).keys()];
+      for (let i = n - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+      if (a[0] === this.ti && n > 1) a.push(a.shift());
+      this.bag = a;
+    }
+    return this.ti = /** @type {number} */ (this.bag.shift());
+  },
+  fade(bus) {
+    if (!bus || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    bus.gain.cancelScheduledValues(t); bus.gain.setTargetAtTime(0, t, 0.35);
+    setTimeout(() => { try { bus.disconnect(); } catch (e) { /* gone */ } }, 4000);
+  },
+  /* track i from time t: a fresh bus (the old one fades out underneath, so tracks cross-fade) */
+  play(i, t) {
+    const c = this.ctx, T = this.TRACKS[i];
+    this.fade(this.bus);
+    const bus = c.createGain();
+    bus.gain.setValueAtTime(0.0001, t); bus.gain.setTargetAtTime(this.vol * T.lvl, t, 0.7);
+    bus.connect(this.out);
+    this.bus = bus; this.track = T; this.step = 0; this.nextT = t;
+    const bars = T.chords.length, barSec = 240 / T.bpm;
+    this.steps = 16 * bars * Math.max(1, Math.round(this.TRACK_SEC / (barSec * bars)));
+    this.motif = this.makeMotif(i);
+  },
+  /* the lead's motif: a gentle random walk over the chord tones, the second half a variation of the first */
+  makeMotif(i) {
+    const T = this.TRACKS[i];
+    if (!T.lead) return null;
+    const r = new RNG(7919 * (i + 1)), pat = T.lead.pat, half = pat.length >> 1, out = [];
+    let v = 3;
+    for (let k = 0; k < pat.length; k++) {
+      if (pat[k] !== 'x') { out.push(-1); continue; }
+      if (k >= half && k < pat.length - 6 && out[k - half] >= 0) { out.push(out[k - half]); continue; }
+      v = Math.max(0, Math.min(7, v + r.int(-2, 2)));
+      out.push(v);
+    }
+    return out;
+  },
+  /* schedule the notes up to `until` (seconds of the context clock) */
+  scheduleUntil(until) {
+    while (this.track && this.nextT < until) {
+      const T = this.track, sd = 15 / T.bpm, s = this.step;
+      if (s >= this.steps) { this.play(this.pick(), this.nextT + sd * 2); continue; }
+      this.doStep(T, s, this.nextT + (s % 2 ? T.swing * sd : 0), sd);
+      this.step++; this.nextT += sd;
+    }
+  },
+  pump() { if (this.on && this.ctx) this.scheduleUntil(this.ctx.currentTime + 1.5); },
+  hz(m) { return 440 * Math.pow(2, (m - 69) / 12); },
+  /* one 16th step of the track (t: its time, sd: a 16th in seconds) */
+  doStep(T, s, t, sd) {
+    const bar = Math.floor(s / 16), st = s % 16, nb = T.chords.length, [root, iv] = T.chords[bar % nb];
+    const tones = iv.map(x => root + x), pass = Math.floor(bar / nb), first = bar === 0;
+    const len = (pat, k) => { let n = 1; while (n < pat.length && pat[(k + n) % pat.length] === '.') n++; return n; };
+    /* drums (the track's first bar without kick and snare: it eases in) */
+    if (T.drums) for (const [kind, pat] of Object.entries(T.drums)) {
+      const ch = pat[st];
+      if (ch === '.' || (first && kind !== 'h')) continue;
+      this.drum(kind, t, ch === 'o' ? 0.5 : 1);
+    }
+    if (T.bass) {
+      const B = T.bass, ch = B.pat[st];
+      if (ch !== '.') {
+        const m = root + B.oct + (ch === 'o' ? 12 : ch === '5' ? 7 : ch === '3' ? iv[1] : 0);
+        this.voice(t, m, Math.min(len(B.pat, st), 8) * sd * 0.92, { wave: B.wave, gain: B.gain, lp: B.lp, attack: 0.008, sus: 0.7, release: 0.06 });
+      }
+    }
+    if (T.pad && st === 0) {
+      const P = T.pad;
+      for (const m of tones) this.voice(t, m, 16 * sd, { wave: P.wave, gain: P.gain, lp: P.lp, attack: P.attack, sus: 0.85, release: P.release, detune: P.detune });
+    }
+    if (T.arp && T.arp.pat[st] === 'x') {
+      const A = T.arp, k = (bar * 16 + st);
+      const ms = A.order === 'chord' ? tones
+        : [A.order === 'up' ? tones[k % tones.length]
+          : A.order === 'updown' ? tones.concat(tones.slice(1, -1).reverse())[k % Math.max(1, 2 * tones.length - 2)]
+          : tones[(A.lo || 0) + Math.floor(Math.random() * (tones.length - (A.lo || 0)))]];
+      for (const m of ms) this.voice(t, m + A.oct, A.len, { wave: A.wave, gain: A.gain, lp: A.lp, attack: 0.004, sus: A.len > 0.5 ? 0.3 : 0.15, release: Math.max(0.05, A.len * 0.6), bell: A.len > 0.5 });
+    }
+    /* the lead: every second pass through the chords */
+    if (T.lead && this.motif && pass % 2 === 1) {
+      const L = T.lead, k = (bar % 2) * 16 + st, v = this.motif[k];
+      if (v >= 0) {
+        const n = tones.length, m = tones[v % n] + 12 * Math.floor(v / n) + L.oct;
+        const d = Math.min(len(L.pat, k), 4) * sd;
+        const o = L.kind === 'pluck' ? { attack: 0.003, sus: 0.1, release: 0.12 } : L.kind === 'keys' ? { attack: 0.01, sus: 0.35, release: 0.3 } : { attack: 0.01, sus: 0.6, release: 0.08 };
+        this.voice(t, m, d, Object.assign({ wave: L.wave, gain: L.gain, lp: L.lp }, o));
+        if (L.kind === 'keys') this.voice(t, m + 12, d * 0.5, { wave: 'sine', gain: L.gain * 0.25, lp: L.lp, attack: 0.005, sus: 0.1, release: 0.2 });
+      }
+    }
+  },
+  /* a note: oscillator(s) → low-pass → envelope (attack, a decay to sus × peak, release after dur) → the bus */
+  voice(t, m, dur, o) {
+    const c = this.ctx, f = this.hz(m), g = c.createGain(), lp = c.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = o.lp || 4000; lp.Q.value = 0.4;
+    const pk = o.gain, at = o.attack || 0.005, end = t + Math.max(dur, at + 0.01), rel = o.release || 0.08;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(pk, t + at);
+    g.gain.setTargetAtTime(Math.max(0.0001, pk * (o.sus === undefined ? 0.7 : o.sus)), t + at, Math.max(0.03, (end - t - at) * 0.35));
+    g.gain.setTargetAtTime(0.0001, end, rel / 3);
+    lp.connect(g); g.connect(this.bus);
+    const oscs = [o.wave || 'sine'].concat(o.detune ? [o.wave || 'sine'] : []).map((w, i) => {
+      const x = c.createOscillator(); x.type = w; x.frequency.value = f; if (i) x.detune.value = o.detune;
+      x.connect(lp); return x;
+    });
+    if (o.bell) { const x = c.createOscillator(), xg = c.createGain(); x.frequency.value = f * 2.76; xg.gain.value = 0.35; x.connect(xg); xg.connect(lp); oscs.push(x); }
+    for (const x of oscs) { x.start(t); x.stop(end + rel * 2 + 0.05); }
+  },
+  /* drum sounds: kick, snare, clap, closed / open hat (v: 0..1) */
+  drum(kind, t, v) {
+    const c = this.ctx;
+    const env = (node, gain, dur, at = 0.002) => {
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(gain * v, t + at); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      node.connect(g); g.connect(this.bus); return g;
+    };
+    const noise = (type, f, q, gain, dur) => {
+      const s = c.createBufferSource(); s.buffer = AudioSys.noiseBuf; s.loop = true;
+      const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+      s.connect(fl); env(fl, gain, dur); s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.05);
+    };
+    if (kind === 'k') {
+      const o = c.createOscillator(); o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.18);
+      env(o, 0.42, 0.28); o.start(t); o.stop(t + 0.32);
+    } else if (kind === 's') {
+      noise('bandpass', 1900, 0.8, 0.16, 0.16);
+      const o = c.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(200, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.08);
+      env(o, 0.08, 0.1); o.start(t); o.stop(t + 0.14);
+    } else if (kind === 'c') {
+      noise('bandpass', 1300, 1.2, 0.17, 0.13);
+    } else if (kind === 'h' || kind === 'H') {
+      noise('highpass', 7500, 0.7, 0.05, kind === 'H' ? 0.22 : 0.045);
+    }
+  },
+};
+
+/* =====================================================================
    RENDER — pitch / entities (camera + shake apply here)
    ===================================================================== */
 const Renderer = {
@@ -4231,6 +4458,7 @@ const Live = {
       App.matchRealT += rdt;
       FX.update(rdt * ts, rdt);
     } else FX.update(rdt, rdt);
+    Music.want(this.sound && this.musicTime());
     const info = this.info();
     if (info !== this._info && $('liveInfo')) { this._info = info; $('liveInfo').textContent = info; }
     Renderer.draw(g, App);
@@ -4410,6 +4638,12 @@ const Live = {
     const on = this.watched(), what = on ? `${LivePages.what(on.ch, on.s.cup ? { cup: on.s.cup } : on.s)} · ` : this.watch ? `${this.watch === 'promo' ? 'Yükselme ligi' : 'Lig'} · ` : '';
     return `${what}Her ${this.every(now)} dk'da maç · sıradaki ${this.clock(next)}`;
   },
+  /* background music plays on every screen without a match in play: the pages, the "Canlı" list, the countdown table, and a
+     match's intro and end screens (it fades out at kick-off and comes back after the final whistle) */
+  musicTime() {
+    const g = this.replay ? App.game : this.tab === 'live' && this.watched() ? App.game : null;
+    return !g || !!App.end || g.over || App.introOn();
+  },
   /* the match on the canvas (one of the slot's), or null */
   watched() { return this.wm && App.game ? this.wm : null; },
   /* [key, label, short label for narrow screens] */
@@ -4553,7 +4787,8 @@ const Live = {
     const M = this.wm, target = Math.min((now - M.start) / 1000, M.dur), rdt = 1 / 60;
     const enabled = AudioSys.enabled;
     this.ff = target - this.simT > 0.5;
-    if (this.ff) AudioSys.enabled = false;                       // no burst of sounds (or announcements) while fast-forwarding
+    /* no burst of sounds (or announcements) while fast-forwarding; no match sounds while a page covers the canvas (music plays then) */
+    if (this.ff || this.tab !== 'live') AudioSys.enabled = false;
     try {
       while (this.simT + rdt <= target) { Offline.stepFrame(this.st, rdt); this.simT += rdt; }
     } finally { AudioSys.enabled = enabled; this.ff = false; }
@@ -4596,6 +4831,7 @@ const Live = {
     } catch (e) { console.error(e); this.phase = 'error'; this.err = String(e && e.message || e); }
     this.renderPane();
     this.tickCountdowns(now);
+    Music.want(this.sound && this.musicTime());
     const info = this.info(now);
     if (info !== this._info && $('liveInfo')) { this._info = info; $('liveInfo').textContent = info; }
     const canShare = !!this.watched();

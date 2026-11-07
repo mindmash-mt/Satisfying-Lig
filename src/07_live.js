@@ -460,6 +460,7 @@ const Live = {
       App.matchRealT += rdt;
       FX.update(rdt * ts, rdt);
     } else FX.update(rdt, rdt);
+    Music.want(this.sound && this.musicTime());
     const info = this.info();
     if (info !== this._info && $('liveInfo')) { this._info = info; $('liveInfo').textContent = info; }
     Renderer.draw(g, App);
@@ -639,6 +640,12 @@ const Live = {
     const on = this.watched(), what = on ? `${LivePages.what(on.ch, on.s.cup ? { cup: on.s.cup } : on.s)} · ` : this.watch ? `${this.watch === 'promo' ? 'Yükselme ligi' : 'Lig'} · ` : '';
     return `${what}Her ${this.every(now)} dk'da maç · sıradaki ${this.clock(next)}`;
   },
+  /* background music plays on every screen without a match in play: the pages, the "Canlı" list, the countdown table, and a
+     match's intro and end screens (it fades out at kick-off and comes back after the final whistle) */
+  musicTime() {
+    const g = this.replay ? App.game : this.tab === 'live' && this.watched() ? App.game : null;
+    return !g || !!App.end || g.over || App.introOn();
+  },
   /* the match on the canvas (one of the slot's), or null */
   watched() { return this.wm && App.game ? this.wm : null; },
   /* [key, label, short label for narrow screens] */
@@ -782,7 +789,8 @@ const Live = {
     const M = this.wm, target = Math.min((now - M.start) / 1000, M.dur), rdt = 1 / 60;
     const enabled = AudioSys.enabled;
     this.ff = target - this.simT > 0.5;
-    if (this.ff) AudioSys.enabled = false;                       // no burst of sounds (or announcements) while fast-forwarding
+    /* no burst of sounds (or announcements) while fast-forwarding; no match sounds while a page covers the canvas (music plays then) */
+    if (this.ff || this.tab !== 'live') AudioSys.enabled = false;
     try {
       while (this.simT + rdt <= target) { Offline.stepFrame(this.st, rdt); this.simT += rdt; }
     } finally { AudioSys.enabled = enabled; this.ff = false; }
@@ -825,6 +833,7 @@ const Live = {
     } catch (e) { console.error(e); this.phase = 'error'; this.err = String(e && e.message || e); }
     this.renderPane();
     this.tickCountdowns(now);
+    Music.want(this.sound && this.musicTime());
     const info = this.info(now);
     if (info !== this._info && $('liveInfo')) { this._info = info; $('liveInfo').textContent = info; }
     const canShare = !!this.watched();

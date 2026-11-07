@@ -34,7 +34,7 @@ function loadLive({ simHash, base, start } = {}) {
   const code = (simHash ? `const BUILD_SIM_HASH = ${JSON.stringify(simHash)};\n` : '') + `const BUILD_BASE = ${JSON.stringify(base || null)};\n` +
     `const BUILD_START = ${JSON.stringify(start || null)};\n` +
     FILES.map(f => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8')).join('\n') +
-    '\nreturn { Live, League, App, CONFIG, Game, DT, RNG, planRoundRobin, fixtureStats, DM, LivePages, LiveStats, StatsPages };';
+    '\nreturn { Live, League, App, CONFIG, Game, DT, RNG, planRoundRobin, fixtureStats, DM, LivePages, LiveStats, StatsPages, Music };';
   const L = new Function(...Object.keys(env_), code)(...Object.values(env_));
   L.Live.adopt(base && base.data ? L.Live.baseState() : null);
   return L;

@@ -395,6 +395,19 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
       'Fikstürde oynanan maçın yanında ⚽ (izle), lig tablosunda ve yükselme ligi tablosunda o an oynayan takımların yanında ⚽; tabloların altında Tablo / Fikstür sekmesi');
     const pf = LivePages.division('promo', 'fixture', lv);
     ok(cnt(pf, /class="b live" data-watch="promo"/g) === 1 && cnt(pf, /<section class="fx-week/g) === 22 + 2 && pf.includes('Yükselme ligi 1.si'), 'Yükselme ligi fikstürü: 22 hafta + eleme (yarı final, final), oynanan maçta ⚽');
+    /* background music: on the screens without a match in play (pages, list, countdown, intro / end screens), off while one is played */
+    {
+      const { Music, App } = L, n = Music.TRACKS.length;
+      Music.bag = []; Music.ti = -1;
+      const seq = Array.from({ length: 3 * n }, () => Music.pick());
+      ok(n >= 5 && new Set(Music.TRACKS.map(x => x.name)).size === n && [0, 1, 2].every(k => new Set(seq.slice(k * n, k * n + n)).size === n) && seq.every((x, i) => !i || x !== seq[i - 1]),
+        `Arka plan müziği: ${n} farklı parça; her biri bir kez çalmadan tekrar yok, aynı parça art arda gelmiyor`);
+      Live.tab = 'table'; const onPage = Live.musicTime();
+      Live.tab = 'live'; Live.watch = 'main'; Live.startSlot(m); Live.advanceSlot(t);
+      const inPlay = Live.watched() && !App.introOn() && !App.end ? Live.musicTime() : null;
+      ok(onPage === true && inPlay === false, 'Müzik sayfalarda çalıyor, maç oynanırken susuyor');
+      Live.unload(); Live.watch = ''; Live.tab = 'table';
+    }
     const t2 = M.over + 1000;
     ok(Live.onNow(t2).length === (P.over > t2 ? 1 : 0) && !Live.liveMap(t2).keys.has(`m-${M.s.week}-${M.s.weekMatch}`), 'Düdük çalınca maç canlı listesinden ve ⚽ işaretlerinden çıkıyor');
   }
