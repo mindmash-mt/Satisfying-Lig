@@ -19,7 +19,8 @@
    the overrun is absorbed by the next slots). A match's length on screen is computed from its own simulation, so every browser
    agrees on it too. A season begun before the promotion league existed (frozen in a base) ends the old way: the 12 pool clubs'
    knockout after the league's matches, one match a slot (League.cupPhase).
-   The site opens on the fixture. "Canlı" lists the matches on now and those starting within 10 minutes; the viewer picks one
+   The site opens on the fixture ("Lig tablosu" › "Fikstür": the league's and the promotion league's fixtures are sub-tabs of their
+   tables). "Canlı" lists the matches on now and those starting within 10 minutes; the viewer picks one
    and watches it (the canvas follows that channel from then on). A ⚽ next to a match in the fixture or a club in a table
    opens its live match too.
    The league's start comes from the deploy (BUILD_START, tools/live-start.js): a new league starts a few minutes after
@@ -459,6 +460,7 @@ const Live = {
       App.matchRealT += rdt;
       FX.update(rdt * ts, rdt);
     } else FX.update(rdt, rdt);
+    Music.want(this.sound && this.musicTime());
     const info = this.info();
     if (info !== this._info && $('liveInfo')) { this._info = info; $('liveInfo').textContent = info; }
     Renderer.draw(g, App);
@@ -552,7 +554,8 @@ const Live = {
     this.lastFrame = this.now();
   },
   ui() {
-    /* the tabs (WAI-ARIA tabs: ← → Home End move between them; only the selected one is in the Tab order). The site opens on the fixture. */
+    /* the tabs (WAI-ARIA tabs: ← → Home End move between them; only the selected one is in the Tab order). The site opens on the
+       league's fixture (the "Lig tablosu" tab, its "Fikstür" sub-tab). */
     const tabs = document.createElement('nav');
     tabs.id = 'liveTabs';
     tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', 'Bölümler');
@@ -576,21 +579,21 @@ const Live = {
       if (j < 0) return;
       e.preventDefault(); this.showTab(keys[j]); $('tab-' + keys[j]).focus();
     });
-    /* "Geçmiş": the season picker (a select, and ‹ › for the neighbouring seasons); "İstatistik": the head-to-head pickers */
+    /* "Geçmiş": the season picker (a select, and ‹ › for the neighbouring seasons); a club's page: the head-to-head's opponent */
     pane.addEventListener('change', (e) => {
       const s = /** @type {HTMLSelectElement} */ (e.target);
       if (s.matches('.hist-sel')) this.pickSeason(s.value);
       else if (s.matches('.h2h-sel')) {
-        const p = this.h2hPair().slice(); p[+s.dataset.i] = s.value; this.h2h = p; this.paneKey = ''; this.renderPane();
-        const again = /** @type {HTMLElement} */ (document.querySelector(`#livePane .h2h-sel[data-i="${s.dataset.i}"]`)); if (again) again.focus();
+        this.clubOpp = s.value; this.paneKey = ''; this.renderPane();
+        const again = /** @type {HTMLElement} */ (document.querySelector('#livePane .h2h-sel')); if (again) again.focus();
       }
     });
     pane.addEventListener('click', (e) => {
       /* a live match (a "Canlı" card, ⚽ in the fixture or next to a club): watch it */
       const w = /** @type {HTMLElement} */ (el(e).closest('[data-watch]')); if (w) { this.watchCh(w.dataset.watch, +w.dataset.from || 0); return; }
-      /* the fixture's league switch */
-      const dv = /** @type {HTMLElement} */ (el(e).closest('[data-div]'));
-      if (dv) { this.fxDiv = dv.dataset.div; this.paneKey = ''; this.scrollCur = true; this.renderPane(); const f = /** @type {HTMLElement} */ (document.querySelector(`#livePane [data-div="${dv.dataset.div}"]`)); if (f) f.focus(); return; }
+      /* "Lig tablosu" / "Yükselme ligi": the Tablo / Fikstür switch */
+      const sb = /** @type {HTMLElement} */ (el(e).closest('[data-sub]'));
+      if (sb) { this.pickSub(sb.dataset.sub); const f = /** @type {HTMLElement} */ (document.querySelector(`#livePane [data-sub="${sb.dataset.sub}"]`)); if (f) f.focus({ preventScroll: true }); return; }
       const b = /** @type {HTMLButtonElement} */ (el(e).closest('.hist-nav')); if (b && !b.disabled) { this.pickSeason(b.dataset.season); return; }
       const t = /** @type {HTMLElement} */ (el(e).closest('[data-team]')); if (t) { this.openClub(t.dataset.team); return; }
       if (el(e).closest('[data-back]')) this.closeClub();
@@ -637,29 +640,35 @@ const Live = {
     const on = this.watched(), what = on ? `${LivePages.what(on.ch, on.s.cup ? { cup: on.s.cup } : on.s)} · ` : this.watch ? `${this.watch === 'promo' ? 'Yükselme ligi' : 'Lig'} · ` : '';
     return `${what}Her ${this.every(now)} dk'da maç · sıradaki ${this.clock(next)}`;
   },
+  /* background music plays on every screen without a match in play: the pages, the "Canlı" list, the countdown table, and a
+     match's intro and end screens (it fades out at kick-off and comes back after the final whistle) */
+  musicTime() {
+    const g = this.replay ? App.game : this.tab === 'live' && this.watched() ? App.game : null;
+    return !g || !!App.end || g.over || App.introOn();
+  },
   /* the match on the canvas (one of the slot's), or null */
   watched() { return this.wm && App.game ? this.wm : null; },
   /* [key, label, short label for narrow screens] */
-  TABS: [['live', '⚽ Canlı', ''], ['fixture', 'Fikstür', ''], ['table', 'Lig tablosu', 'Tablo'], ['promo', 'Yükselme ligi', 'Yükselme'], ['history', 'Geçmiş', ''], ['stats', 'İstatistik', 'İstat.']],
-  tab: 'fixture', paneKey: '',
-  fxDiv: 'main',            // "Fikstür": the league shown ('main' | 'promo')
+  TABS: [['live', '⚽ Canlı', ''], ['table', 'Lig tablosu', 'Tablo'], ['promo', 'Yükselme ligi', 'Yükselme'], ['history', 'Geçmiş', ''], ['stats', 'İstatistik', 'İstat.']],
+  tab: 'table', paneKey: '',
+  /* "Lig tablosu" / "Yükselme ligi": the sub-tab shown ('table' | 'fixture'); the site opens on the league's fixture */
+  sub: { table: 'fixture', promo: 'table' },
   scrollCur: true,          // scroll the fixture to the current week on its next drawing
   watchFrom: 0,             // the viewer picked a match that starts later: the channel's matches before that slot are not loaded
   histSel: '',              // "Geçmiş": the selected season's key (LivePages.histList; '' = the latest finished one)
   club: '',                 // a club's page is open over the tab (StatsPages.club)
-  h2h: null,                // "İstatistik": the two clubs of the head-to-head (null = the next match's)
+  clubOpp: '',              // the club page's head-to-head opponent ('' = its next match's, see StatsPages.defaultOpp)
   pickSeason(k) { this.histSel = k; this.paneKey = ''; this.renderPane(); $('livePane').scrollTop = 0; },
-  /* the head-to-head's clubs: picked, else the next match's, else the top two */
-  h2hPair() {
-    const d = League.data, known = (id) => d.teams.some(t => t.id === id) || d.reserve.some(t => t.id === id);
-    if (this.h2h && this.h2h.every(known)) return this.h2h;
-    const n = this.nextIds();
-    if (n.length === 2 && n.every(known)) return n.slice();
-    const rk = League.ranking();
-    return rk.length >= 2 ? [rk[0].t.id, rk[1].t.id] : [d.teams[0].id, (d.teams[1] || d.teams[0]).id];
+  /* the open tab's sub-tab ("Lig tablosu" / "Yükselme ligi": 'table' | 'fixture'; other tabs: '') */
+  subOf(tab = this.tab) { return this.sub[tab] || ''; },
+  pickSub(v) {
+    if (!(this.tab in this.sub) || (v !== 'table' && v !== 'fixture')) return;
+    this.sub[this.tab] = v; this.paneKey = ''; this.scrollCur = this.wantsScroll(); $('livePane').scrollTop = 0; this.renderPane();
   },
+  /* the page shows a fixture (or the old format's knockout): scroll to its current week */
+  wantsScroll() { return this.subOf() === 'fixture' || (this.tab === 'promo' && !League.promoOn()); },
   openClub(id) {
-    this.club = id; this.paneKey = ''; this.renderPane(); $('livePane').scrollTop = 0;
+    this.club = id; this.clubOpp = ''; this.paneKey = ''; this.renderPane(); $('livePane').scrollTop = 0;
     const h = $('tmTitle'); if (h) h.focus();
   },
   closeClub() {
@@ -683,7 +692,7 @@ const Live = {
     $('livePane').setAttribute('aria-labelledby', 'tab-' + tab);
     $('tab-live').setAttribute('aria-controls', watching ? 'c' : 'livePane');
     $('liveList').classList.toggle('hidden', !watching);
-    this.scrollCur = tab === 'fixture' || (tab === 'promo' && !League.promoOn());
+    this.scrollCur = this.wantsScroll();
     $('livePane').scrollTop = 0;
     this.renderPane();
   },
@@ -716,16 +725,15 @@ const Live = {
     const d = League.data, now = this.now(), lv = this.liveMap(now);
     const pk = d.promo ? d.promo.history.length : 0, ck = d.cup ? Object.keys(d.cup.res).length : 0;
     /* the history tab shows one finished season only: it is built (and redrawn) when the selection or the archive changes, nothing else */
-    const pair = this.tab === 'stats' && !this.club ? this.h2hPair() : null;
-    const key = this.club ? ['club', this.club, d.season, d.history.length, pk, (d.seasons || []).length, ck].join('|')
+    const key = this.club ? ['club', this.club, this.clubOpp, d.season, d.history.length, pk, (d.seasons || []).length, ck].join('|')
       : this.tab === 'history' ? ['history', this.histSel, (d.seasons || []).length].join('|')
-      : this.tab === 'stats' ? ['stats', d.season, d.history.length, (d.seasons || []).length, pair.join()].join('|')
+      : this.tab === 'stats' ? ['stats', d.season, d.history.length, pk, (d.seasons || []).length].join('|')
       : this.tab === 'live' ? ['live', this.count(), this.cur ? this.cur.n : -1, lv.sig, this.upcoming(now).map(x => x.n).join()].join('|')
-      : [this.tab, this.fxDiv, d.season, d.history.length, pk, ck, this.count(), lv.sig].join('|');
+      : [this.tab, this.subOf(), d.season, d.history.length, pk, ck, this.count(), lv.sig].join('|');
     if (key === this.paneKey) return;
     this.paneKey = key;
-    const html = this.club ? StatsPages.club(this.club) : this.tab === 'table' ? LivePages.table(lv) : this.tab === 'promo' ? LivePages.promo(lv)
-      : this.tab === 'history' ? LivePages.history() : this.tab === 'stats' ? StatsPages.page(pair) : this.tab === 'live' ? LivePages.live(now) : LivePages.fixture(lv);
+    const html = this.club ? StatsPages.club(this.club, this.clubOpp) : this.tab === 'table' || this.tab === 'promo' ? LivePages.division(this.tab, this.subOf(), lv)
+      : this.tab === 'history' ? LivePages.history() : this.tab === 'stats' ? StatsPages.page() : LivePages.live(now);
     pane.innerHTML = `<div class="lp-in">${html}</div>`;
     if (this.tab === 'live') this.tickCountdowns(now, true);
     if (this.scrollCur && !this.club) {
@@ -781,7 +789,8 @@ const Live = {
     const M = this.wm, target = Math.min((now - M.start) / 1000, M.dur), rdt = 1 / 60;
     const enabled = AudioSys.enabled;
     this.ff = target - this.simT > 0.5;
-    if (this.ff) AudioSys.enabled = false;                       // no burst of sounds (or announcements) while fast-forwarding
+    /* no burst of sounds (or announcements) while fast-forwarding; no match sounds while a page covers the canvas (music plays then) */
+    if (this.ff || this.tab !== 'live') AudioSys.enabled = false;
     try {
       while (this.simT + rdt <= target) { Offline.stepFrame(this.st, rdt); this.simT += rdt; }
     } finally { AudioSys.enabled = enabled; this.ff = false; }
@@ -824,6 +833,7 @@ const Live = {
     } catch (e) { console.error(e); this.phase = 'error'; this.err = String(e && e.message || e); }
     this.renderPane();
     this.tickCountdowns(now);
+    Music.want(this.sound && this.musicTime());
     const info = this.info(now);
     if (info !== this._info && $('liveInfo')) { this._info = info; $('liveInfo').textContent = info; }
     const canShare = !!this.watched();
@@ -900,7 +910,7 @@ const LiveScreen = {
   },
 };
 
-/* the "Canlı", "Fikstür", "Lig tablosu", "Yükselme ligi" and "Geçmiş" tabs (HTML, Turkish like the rest of the site's controls).
+/* the "Canlı", "Lig tablosu", "Yükselme ligi" (each with its "Fikstür" sub-tab) and "Geçmiş" tabs (HTML, Turkish like the rest of the site's controls).
    lv (Live.liveMap): the matches on now — they get a ⚽ button (data-watch) in the fixture, and so do their clubs in the tables. */
 const LivePages = {
   MONTHS: ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'],
@@ -1089,13 +1099,16 @@ const LivePages = {
     return `${head}${bar}<div class="lp-sub">${old ? 'Eski lig · ' : ''}Sezon ${rec.season}${span} · ${what}</div>`
       + `<div class="lp-note">🏆 ${old ? 'Eski lig · ' : ''}Sezon ${rec.season} şampiyonu: <b>${esc(team(rec.champ).name)}</b></div>${table}${cup}${oc}`;
   },
-  /* the "Fikstür" tab (the page the site opens on): the league's season, or the promotion league's (switch on top) */
-  fixture(lv) {
-    const d = League.data, promo = Live.fxDiv === 'promo';
-    const seg = `<div class="seg" role="group" aria-label="Lig seçimi">`
-      + [['main', 'Lig'], ['promo', 'Yükselme ligi']].map(([k, l]) => `<button type="button" data-div="${k}" aria-pressed="${String((k === 'promo') === promo)}"${(k === 'promo') === promo ? ' class="on"' : ''}>${l}</button>`).join('') + '</div>';
-    return seg + (promo ? this.promoFixture(lv) : this.mainFixture(lv));
+  /* the "Lig tablosu" ('table') and "Yükselme ligi" ('promo') tabs: a Tablo / Fikstür switch on top, then the division's table or
+     its fixture (sub: 'table' | 'fixture'; the site opens on the league's fixture) */
+  division(tab, sub, lv) {
+    const fx = sub === 'fixture', promo = tab === 'promo';
+    const seg = `<div class="seg" role="group" aria-label="${promo ? 'Yükselme ligi' : 'Lig'}: tablo ya da fikstür">`
+      + [['table', 'Tablo'], ['fixture', 'Fikstür']].map(([k, l]) => `<button type="button" data-sub="${k}" aria-pressed="${String((k === 'fixture') === fx)}"${(k === 'fixture') === fx ? ' class="on"' : ''}>${l}</button>`).join('') + '</div>';
+    return seg + (promo ? (fx ? this.promoFixture(lv) : this.promo(lv)) : (fx ? this.mainFixture(lv) : this.table(lv)));
   },
+  /* a division's fixture: 'main' (the league) or 'promo' (the promotion league) */
+  fixture(lv, div = 'main') { return div === 'promo' ? this.promoFixture(lv) : this.mainFixture(lv); },
   /* one match of a fixture: its number, kick-off, result (or ⚽ when it is on now) and replay link */
   fxMatch(no, K, h, ids, team, isLive, ch, link) {
     const badge = (h ? '<span class="b done">Bitti</span>' : isLive ? this.liveBtn(ch) : '') + (h && h.date ? this.replayA(Object.assign({ seed: h.seed, ids: h.teams, theme: h.theme, start: Date.parse(h.date) }, link)) : '');
@@ -1120,13 +1133,13 @@ const LivePages = {
       }).join('');
       return `<section class="fx-week${cur ? ' cur' : ''}"><h3>Hafta ${w}<span>${this.day(k0)} · ${Live.clock(k0)}–${Live.clock(k1)}</span></h3><div class="fx-grid">${matches}</div></section>`;
     }).join('');
-    const extra = League.promoOn() ? ' · yükselme ligi maçları aynı saatlerde (Yükselme ligi)' : League.cupOn() ? ' · lig maçlarından sonra havuz kulüplerinin yükselme eleme maçları var (Yükselme ligi sekmesi)' : '';
+    const extra = League.promoOn() ? ' · yükselme ligi maçları aynı saatlerde (Yükselme ligi › Fikstür)' : League.cupOn() ? ' · lig maçlarından sonra havuz kulüplerinin yükselme eleme maçları var (Yükselme ligi sekmesi)' : '';
     return `<h2>Sezon ${d.season} fikstürü</h2><div class="lp-sub">${d.seasonLength} hafta · her takım her takımla bir kez, haftada bir maç oynar (üstteki takım ev sahibi) · maçlar ${CONFIG.MATCH_TIME} sn · maç saatleri (TSİ): ${this.bandsText()}${extra} · ⚽: şu an oynanan maç (dokunun: canlı izleyin)</div>${this.champ()}${weeks}`;
   },
   /* the promotion league's season: its weeks (each match at the same time as a league match) and then its playoff */
   promoFixture(lv) {
     const d = League.data;
-    if (!League.promoOn()) return `<h2>Yükselme ligi fikstürü</h2><div class="lp-sub">Bu sezon yükselme ligi yok: sezon eski formatla başladı, havuzdaki ${d.reserve.length} kulüp lig maçlarından sonra eleme oynar (Yükselme ligi sekmesi). Yükselme ligi yeni sezonla başlar.</div>`;
+    if (!League.promoOn()) return `<h2>Yükselme ligi fikstürü</h2><div class="lp-sub">Bu sezon yükselme ligi yok: sezon eski formatla başladı, havuzdaki ${d.reserve.length} kulüp lig maçlarından sonra eleme oynar (Yükselme ligi › Tablo). Yükselme ligi yeni sezonla başlar.</div>`;
     const p = d.promo, team = (id) => League.poolTeam(id) || LivePages.anyTeam(id), curW = Math.min(p.plan.length, Math.floor(p.history.length / p.per) + 1);
     const weeks = p.plan.map((pairs, wi) => {
       const w = wi + 1, i0 = wi * p.per, k0 = this.promoKickoff(i0).t, k1 = this.promoKickoff(i0 + pairs.length - 1).t;

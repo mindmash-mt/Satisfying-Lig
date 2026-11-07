@@ -380,22 +380,34 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
   {
     /* "Canlı": the matches on now and the ones within 10 minutes; ⚽ in the fixture and the tables; the site opens on the fixture */
     const L = loadLive(), { Live, League, LivePages } = L; Live.adopt(null);
-    ok(Live.tab === 'fixture', 'Site fikstürle açılıyor (Canlı sekmesi değil)');
+    ok(Live.tab === 'table' && Live.subOf() === 'fixture' && !Live.TABS.some(x => x[0] === 'fixture'), 'Site fikstürle açılıyor (Lig tablosu › Fikstür; ayrı Fikstür sekmesi yok)');
     const t = Live.slot(40) + 30e3, m = await Live.catchUp(0, () => t);
     Live.startSlot(m);
     const lv = Live.liveMap(t), on = Live.onNow(t), up = Live.upcoming(t), M = m.ms.find(x => x.ch === 'main'), P = m.ms.find(x => x.ch === 'promo');
-    const html = LivePages.live(t), fx = LivePages.fixture(lv), tb = LivePages.table(lv), pr = LivePages.promo(lv);
+    const html = LivePages.live(t), fx = LivePages.division('table', 'fixture', lv), tb = LivePages.division('table', 'table', lv), pr = LivePages.division('promo', 'table', lv);
     const cnt = (h, re) => (h.match(re) || []).length;
     ok(on.length === 2 && lv.teams.size === 4 && lv.keys.has(`m-${M.s.week}-${M.s.weekMatch}`) && lv.keys.has(`p-${P.s.week}-${P.s.weekMatch}`) && up.length >= 3 && up.length <= 4 && up.every(x => x.at > t && x.at <= t + 10 * 60e3),
       `O an: ${on.length} maç oynanıyor (lig + yükselme ligi), ${up.length} maç saati 10 dk içinde`);
     const cards = cnt(html, /class="lv-card/g), soon = up.reduce((s, x) => s + x.ms.length, 0);
     ok(cards === 2 + soon && cnt(html, /lv-card on" data-watch="main"/g) === 1 && cnt(html, /lv-card on" data-watch="promo"/g) === 1 && cnt(html, /data-from="/g) === soon && cnt(html, /data-at="/g) === soon,
       `Canlı bölümü: ${cards} kart (oynanan 2 + ${soon} yaklaşan), her biri izlemek için tıklanabilir`);
-    ok(cnt(fx, /class="b live" data-watch="main"/g) === 1 && cnt(tb, /class="lv-ball" data-watch="main"/g) === 2 && cnt(pr, /class="lv-ball" data-watch="promo"/g) === 2 && fx.includes('data-div="promo"'),
-      'Fikstürde oynanan maçın yanında ⚽ (izle), lig tablosunda ve yükselme ligi tablosunda o an oynayan takımların yanında ⚽');
-    Live.fxDiv = 'promo';
-    const pf = LivePages.fixture(lv);
+    ok(cnt(fx, /class="b live" data-watch="main"/g) === 1 && cnt(tb, /class="lv-ball" data-watch="main"/g) === 2 && cnt(pr, /class="lv-ball" data-watch="promo"/g) === 2 && [fx, tb, pr].every(h => h.includes('data-sub="table"') && h.includes('data-sub="fixture"')) && fx.includes('fikstürü') && !tb.includes('fx-week'),
+      'Fikstürde oynanan maçın yanında ⚽ (izle), lig tablosunda ve yükselme ligi tablosunda o an oynayan takımların yanında ⚽; tabloların altında Tablo / Fikstür sekmesi');
+    const pf = LivePages.division('promo', 'fixture', lv);
     ok(cnt(pf, /class="b live" data-watch="promo"/g) === 1 && cnt(pf, /<section class="fx-week/g) === 22 + 2 && pf.includes('Yükselme ligi 1.si'), 'Yükselme ligi fikstürü: 22 hafta + eleme (yarı final, final), oynanan maçta ⚽');
+    /* background music: on the screens without a match in play (pages, list, countdown, intro / end screens), off while one is played */
+    {
+      const { Music, App } = L, n = Music.TRACKS.length;
+      Music.bag = []; Music.ti = -1;
+      const seq = Array.from({ length: 3 * n }, () => Music.pick());
+      ok(n >= 5 && new Set(Music.TRACKS.map(x => x.name)).size === n && [0, 1, 2].every(k => new Set(seq.slice(k * n, k * n + n)).size === n) && seq.every((x, i) => !i || x !== seq[i - 1]),
+        `Arka plan müziği: ${n} farklı parça; her biri bir kez çalmadan tekrar yok, aynı parça art arda gelmiyor`);
+      Live.tab = 'table'; const onPage = Live.musicTime();
+      Live.tab = 'live'; Live.watch = 'main'; Live.startSlot(m); Live.advanceSlot(t);
+      const inPlay = Live.watched() && !App.introOn() && !App.end ? Live.musicTime() : null;
+      ok(onPage === true && inPlay === false, 'Müzik sayfalarda çalıyor, maç oynanırken susuyor');
+      Live.unload(); Live.watch = ''; Live.tab = 'table';
+    }
     const t2 = M.over + 1000;
     ok(Live.onNow(t2).length === (P.over > t2 ? 1 : 0) && !Live.liveMap(t2).keys.has(`m-${M.s.week}-${M.s.weekMatch}`), 'Düdük çalınca maç canlı listesinden ve ⚽ işaretlerinden çıkıyor');
   }
@@ -423,28 +435,39 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
         const res = mine.map(m => LiveStats.res(m, x[0]));
         return mine.length === x[1] && gf === x[6] && ga === x[7] && res.filter(v => v === 'W').length === x[3] && res.filter(v => v === 'D').length === x[4];
       })), 'İstatistik: arşivdeki maç skorları (m, maç başına 4 karakter) her kulübün O, G, B, AG, YG değerleriyle birebir tutuyor');
-      const sum = (id, k) => sz.reduce((s, r) => s + ((r.rows.find(x => x[0] === id) || [])[k] || 0), 0) + ((d.table[id] || {})[['', 'played', 'pts'][k]] || 0);
+      const decP = sz.map(r => LiveStats.decodePl(r));
+      ok(sz.every((r, i) => decP[i].length === r.pl.n && decP[i].every(m => m.dv === 'promo') && r.pl.rows.every(x => decP[i].filter(m => m.h === x[0] || m.a === x[0]).length === x[1]))
+          && S.ms.filter(m => m.dv === 'promo').length === sz.reduce((s, r) => s + r.pl.n, 0) + d.promo.history.length,
+        `İstatistik: yükselme ligi maçları da dahil (${S.ms.filter(m => m.dv === 'promo').length} maç; arşivdeki skorlar yükselme ligi tablosuyla tutuyor)`);
+      const row = (rows, id) => rows.find(x => x[0] === id) || [];
+      const sum = (id, k) => sz.reduce((s, r) => s + (row(r.rows, id)[k] || 0) + (row(r.pl.rows, id)[k] || 0), 0)
+        + ((d.table[id] || {})[['', 'played', 'pts'][k]] || 0) + ((d.promo.table[id] || {})[['', 'played', 'pts'][k]] || 0);
       ok(S.allTime.length > 18 && S.allTime.every(x => x.played === sum(x.id, 1) && x.pts === sum(x.id, 2)) && S.allTime.every((x, i) => !i || S.allTime[i - 1].pts >= x.pts)
           && S.titles.reduce((s, t) => s + t.n, 0) === d.champions.length,
-        `Tüm zamanlar tablosu: ${S.allTime.length} kulüp, O ve P sezon tablolarının toplamı, puana göre sıralı; şampiyonluklar = şampiyonlar listesi`);
+        `Tüm zamanlar tablosu: ${S.allTime.length} kulüp, O ve P sezon tablolarının (lig + yükselme ligi) toplamı, puana göre sıralı; şampiyonluklar = şampiyonlar listesi`);
       const seq = (id) => S.ms.filter(m => m.h === id || m.a === id);
       ok(S.streaks.w.length > 0 && S.streaks.w.every((s, i) => { const q = seq(s.id), a = q.indexOf(s.from), b = q.indexOf(s.to); return b - a + 1 === s.len && q.slice(a, b + 1).every(m => LiveStats.res(m, s.id) === 'W') && (!i || S.streaks.w[i - 1].len >= s.len); })
           && S.streaks.u.every(s => { const q = seq(s.id), a = q.indexOf(s.from), b = q.indexOf(s.to); return b - a + 1 === s.len && q.slice(a, b + 1).every(m => LiveStats.res(m, s.id) !== 'L'); })
           && S.big.every((m, i) => !i || Math.abs(S.big[i - 1].hs - S.big[i - 1].as) >= Math.abs(m.hs - m.as)),
         `Rekorlar: en uzun galibiyet serisi ${S.streaks.w[0] ? S.streaks.w[0].len : 0} maç (seriler maç maç doğru), en farklı galibiyet ${S.big[0] ? S.big[0].hs + '–' + S.big[0].as : '—'}`);
-      const [a, b] = [d.teams[0].id, d.teams[1].id];
-      ok(LiveStats.h2h(a, b).length === LiveStats.h2h(b, a).length && LiveStats.h2h(a, b).every(m => [m.h, m.a].sort().join() === [a, b].sort().join()) && S.perSeason.length === 3 && S.perSeason.every(x => x.avg > 0),
-        'İkili karşılaşma iki yönden aynı; sezon başına gol ortalaması (2 biten + sürmekte olan sezon)');
-      const P = StatsPages.page([a, b]), C = StatsPages.club(sz[1].champ);
-      ok(P.includes('Tüm zamanlar tablosu') && P.includes('En uzun galibiyet serileri') && P.includes('class="h2h-sel"') && P.includes('<svg class="st-chart"') && P.includes(`data-team="${a}"`)
+      const [a, b] = [d.teams[0].id, d.teams[1].id], pm = S.ms.find(m => m.dv === 'promo'), [pa, pb] = [pm.h, pm.a];
+      ok(LiveStats.h2h(a, b).length === LiveStats.h2h(b, a).length && LiveStats.h2h(a, b).every(m => [m.h, m.a].sort().join() === [a, b].sort().join())
+          && LiveStats.h2h(pa, pb).some(m => m.dv === 'promo') && S.perSeason.length === 3 && S.perSeason.every(x => x.avg > 0 && x.pn > 0),
+        'İkili karşılaşma iki yönden aynı, yükselme ligi maçları da içinde; sezon başına gol ortalaması (2 biten + sürmekte olan sezon, yükselme ligi dahil)');
+      const P = StatsPages.page(), C = StatsPages.club(sz[1].champ), CO = StatsPages.club(a, b), PC = StatsPages.club(d.reserve[0].id);
+      const selOf = (h) => (h.match(/<option value="([^"]+)" selected>/) || [])[1];
+      ok(P.includes('Tüm zamanlar tablosu') && P.includes('En uzun galibiyet serileri') && !P.includes('h2h-sel') && !P.includes('İkili karşılaşma') && P.includes('<svg class="st-chart"') && P.includes(`data-team="${a}"`)
           && C.includes('🏆 Şampiyon') && C.includes('Sezon geçmişi') && C.includes('Sezon sezon sırası') && C.includes('data-back') && LivePages.table().includes('class="tl" data-team='),
-        'İstatistik sekmesi ve kulüp sayfası çiziliyor (tablolar, grafikler, şampiyonluk); tablolardaki kulüp adları kulüp sayfasını açıyor');
+        'İstatistik sekmesi ve kulüp sayfası çiziliyor (tablolar, grafikler, şampiyonluk; ikili karşılaşma genel istatistikte yok); tablolardaki kulüp adları kulüp sayfasını açıyor');
+      ok(C.includes('İkili karşılaşma') && (C.match(/class="h2h-sel"/g) || []).length === 1 && selOf(CO) === b && !CO.includes(`<option value="${a}"`) && selOf(C) && selOf(C) !== sz[1].champ
+          && PC.includes('yükselme ligi') && PC.includes('İkili karşılaşma') && PC.includes('<td class="tn mut">Yükselme ligi</td>'),
+        'Kulüp sayfasında ikili karşılaşma: rakip seçiliyor (varsayılan: sıradaki rakibi), kulübün kendisi listede yok; havuz kulübünün yükselme ligi formu ve sezonları');
       const down = sz[0].out[0], DC = StatsPages.club(down);
       ok(DC.includes('🔻 Düştü') && DC.includes('Havuz'), 'Kulüp sayfası: düşen kulübün sezon geçmişinde düşme ve havuzda geçen sezon');
       /* a season archived before the scores were kept: tables still count it, match records start after it */
       const keep = sz[0].m; sz[0].m = ''; LiveStats._key = '';
       const S2 = LiveStats.get();
-      ok(S2.lost && S2.since === 2 && S2.allTime.every(x => x.played === sum(x.id, 1)) && S2.ms.length === S.ms.length - sz[0].n && StatsPages.page([a, b]).includes('yalnızca Sezon 2 ve sonrasını kapsar'),
+      ok(S2.lost && S2.since === 2 && S2.allTime.every(x => x.played === sum(x.id, 1)) && S2.ms.length === S.ms.length - sz[0].n && StatsPages.page().includes('yalnızca Sezon 2 ve sonrasını kapsar'),
         'Skorları olmayan eski sezon: tüm zamanlar tablosuna giriyor, maç rekorları sonraki sezondan başlıyor (not gösteriliyor)');
       sz[0].m = keep; LiveStats._key = '';
     }

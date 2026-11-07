@@ -2,55 +2,74 @@
    STATISTICS  (the live site's "İstatistik" tab and the club pages)
    Worked out from what the league state already carries: the finished seasons' archive (League.data.seasons: final
    tables, relegation / promotion, the playoff bracket and the league matches' scores, see Live.archiveSeason) and the
-   running season (table, history). Nothing here touches the league or its results (the simulation fingerprint does not
+   running season (table, history), the league's and the promotion league's (pl / promo: its matches count in the all-time
+   table, the records, the streaks, the head-to-head and the goal averages; titles and season records are the league's). Nothing here touches the league or its results (the simulation fingerprint does not
    change); the numbers are recomputed only when the league changes (a match ends, a season ends).
    Seasons archived before the scores were kept (no `m`) still count in the all-time table, the titles and the goal
    averages; the match records (biggest wins, streaks, head-to-head) start after them.
    ===================================================================== */
-/** @typedef {{ s: number, w: number, i: number, h: string, a: string, hs: number, as: number }} StatMatch  a league match: season, week, order in the season, home / away club and goals */
+/** @typedef {{ s: number, w: number, i: number, h: string, a: string, hs: number, as: number, dv: string }} StatMatch  a league match: season, week, order in the season, home / away club, goals and division ('main' the league, 'promo' the promotion league) */
 /** @typedef {{ id: string, len: number, from: StatMatch, to: StatMatch, on: boolean }} StatStreak */
 const LiveStats = {
   _key: '', _v: null,
   key() {
     const d = League.data, s = d.seasons || [];
-    return [d.season, d.history.length, s.length, s.length ? s[s.length - 1].season : 0, d.teams.map(t => t.id).join()].join('|');
+    return [d.season, d.history.length, d.promo ? d.promo.history.length : 0, s.length, s.length ? s[s.length - 1].season : 0, d.teams.map(t => t.id).join(), d.reserve.map(t => t.id).join()].join('|');
   },
   get() { const k = this.key(); if (k !== this._key || !this._v) { this._key = k; this._v = this.compute(); } return this._v; },
   /* this league's finished seasons (the 1v1 format), oldest first */
   recs() { return (League.data.seasons || []).filter(r => r && r.f === 2 && Array.isArray(r.rows)).slice().sort((x, y) => x.season - y.season); },
-  /* an archived season's league matches (Live.archiveSeason: 4 base-36 characters a match) */
-  decode(rec) {
-    const m = typeof rec.m === 'string' ? rec.m : '', per = Math.max(1, rec.rows.length >> 1), out = [];
+  /* an archived season's league matches (Live.archiveSeason: 4 base-36 characters a match); lg: { m, rows } (the season record
+     itself, or its promotion league rec.pl with dv 'promo') */
+  decode(rec, lg = rec, dv = 'main') {
+    const m = typeof lg.m === 'string' ? lg.m : '', per = Math.max(1, lg.rows.length >> 1), out = [];
     for (let j = 0; (j + 1) * 4 <= m.length; j++) {
-      const v = [0, 1, 2, 3].map(k => parseInt(m[j * 4 + k], 36)), h = rec.rows[v[0]], a = rec.rows[v[1]];
+      const v = [0, 1, 2, 3].map(k => parseInt(m[j * 4 + k], 36)), h = lg.rows[v[0]], a = lg.rows[v[1]];
       if (!h || !a || v.some(x => isNaN(x))) return [];
-      out.push({ s: rec.season, w: Math.floor(j / per) + 1, i: j, h: h[0], a: a[0], hs: v[2], as: v[3] });
+      out.push({ s: rec.season, w: Math.floor(j / per) + 1, i: j, h: h[0], a: a[0], hs: v[2], as: v[3], dv });
     }
     return out;
   },
-  /* the running season's league matches */
-  current() {
+  /* an archived season's promotion league matches ([] for a season without one) */
+  decodePl(rec) { return rec.pl && Array.isArray(rec.pl.rows) ? this.decode(rec, rec.pl, 'promo') : []; },
+  /* the running season's matches: the league's ('main') or the promotion league's ('promo') */
+  current(dv = 'main') {
+    const d = League.data, hist = dv === 'promo' ? (League.promoOn() ? d.promo.history : []) : d.history;
+    return hist.filter(h => h.result && h.result.length === 2)
+      .map((h, i) => ({ s: d.season, w: h.week, i, h: h.result[0].id, a: h.result[1].id, hs: h.result[0].score, as: h.result[1].score, dv }));
+  },
+  /* the running promotion league's table as archive rows (null: no promotion league or no match yet) */
+  curPromo() {
     const d = League.data;
-    return d.history.filter(h => h.result && h.result.length === 2)
-      .map((h, i) => ({ s: d.season, w: h.week, i, h: h.result[0].id, a: h.result[1].id, hs: h.result[0].score, as: h.result[1].score }));
+    if (!League.promoOn() || !d.promo.history.length) return null;
+    return { season: d.season, cur: true, n: d.promo.history.length, rows: League.promoRanking().map(x => [x.t.id, x.r.played, x.r.pts, x.r.w, x.r.d, x.r.l, x.r.gf, x.r.ga]) };
   },
   compute() {
     const d = League.data, recs = this.recs();
     const cur = { season: d.season, cur: true, n: d.history.length, champ: '', out: [], up: [],
       rows: League.ranking().map(x => [x.t.id, x.r.played, x.r.pts, x.r.w, x.r.d, x.r.l, x.r.gf, x.r.ga]) };
-    /* every season with its matches; an archived season without its scores breaks the records' continuity */
-    const blocks = recs.map(r => { const ms = this.decode(r); return { s: r.season, ms, lost: !ms.length && r.n > 0 }; }).concat([{ s: d.season, ms: this.current(), lost: false }]);
+    const curPl = this.curPromo();
+    /* every season with its matches (the league's, then the promotion league's: a club plays in one of them a season);
+       an archived season without its scores breaks the records' continuity */
+    const blocks = recs.map(r => {
+      const a = this.decode(r), b = this.decodePl(r);
+      return { s: r.season, ms: a.concat(b), lost: (!a.length && r.n > 0) || (!!r.pl && !b.length && r.pl.n > 0) };
+    }).concat([{ s: d.season, ms: this.current().concat(this.current('promo')), lost: false }]);
     let since = d.season;
     for (let k = blocks.length - 1; k >= 0 && !blocks[k].lost; k--) since = blocks[k].s;
     const ms = blocks.flatMap(b => b.ms);
-    /* all-time table: the seasons' final tables + the running season */
+    /* all-time table: the seasons' final tables + the running season, the league's and the promotion league's
+       (seasons: in the league, pl: in the promotion league) */
     const at = new Map();
-    const get = (id) => { if (!at.has(id)) at.set(id, { id, seasons: 0, played: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0, titles: 0, best: 0 }); return at.get(id); };
-    for (const r of recs.concat(d.history.length ? [cur] : [])) r.rows.forEach((x, i) => {
+    const get = (id) => { if (!at.has(id)) at.set(id, { id, seasons: 0, pl: 0, played: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0, titles: 0, best: 0 }); return at.get(id); };
+    const add = (r, promo) => r.rows.forEach((x, i) => {
       const A = get(x[0]);
-      A.seasons++; A.played += x[1]; A.pts += x[2]; A.w += x[3]; A.d += x[4]; A.l += x[5]; A.gf += x[6]; A.ga += x[7];
-      if (!r.cur && (!A.best || i + 1 < A.best)) A.best = i + 1;
+      if (promo) A.pl++; else A.seasons++;
+      A.played += x[1]; A.pts += x[2]; A.w += x[3]; A.d += x[4]; A.l += x[5]; A.gf += x[6]; A.ga += x[7];
+      if (!promo && !r.cur && (!A.best || i + 1 < A.best)) A.best = i + 1;
     });
+    for (const r of recs.concat(d.history.length ? [cur] : [])) add(r, false);
+    for (const r of recs.filter(r => r.pl).map(r => r.pl).concat(curPl ? [curPl] : [])) add(r, true);
     const titles = new Map();
     for (const c of d.champions) { const T = titles.get(c.id) || { id: c.id, n: 0, seasons: [] }; T.n++; T.seasons.push(c.season); titles.set(c.id, T); if (at.has(c.id)) at.get(c.id).titles++; }
     const allTime = [...at.values()].sort((x, y) => y.pts - x.pts || (y.gf - y.ga) - (x.gf - x.ga) || y.gf - x.gf || y.titles - x.titles || x.id.localeCompare(y.id));
@@ -59,7 +78,7 @@ const LiveStats = {
     const order = (x, y) => x.s - y.s || x.i - y.i;
     const big = ms.filter(m => m.hs !== m.as).sort((x, y) => Math.abs(y.hs - y.as) - Math.abs(x.hs - x.as) || Math.max(y.hs, y.as) - Math.max(x.hs, x.as) || order(x, y));
     const goals = ms.slice().sort((x, y) => (y.hs + y.as) - (x.hs + x.as) || order(x, y));
-    /* streaks (league matches, across seasons while the club stays in the league) */
+    /* streaks (league and promotion league matches, across seasons while the club plays in one of them) */
     /** @type {{ w: StatStreak[], u: StatStreak[] }} */
     const streaks = { w: [], u: [] };
     /** @type {Object<string, { w: StatStreak|null, u: StatStreak|null, last: number }>} */
@@ -69,7 +88,7 @@ const LiveStats = {
       if (b.lost) { Object.keys(run).forEach(id => { close(id, 'w'); close(id, 'u'); }); continue; }
       for (const m of b.ms) for (const [id, gf, ga] of [[m.h, m.hs, m.as], [m.a, m.as, m.hs]]) {
         const R = run[id] || (run[id] = { w: null, u: null, last: m.s });
-        if (R.last < m.s - 1) { close(id, 'w'); close(id, 'u'); }                  // out of the league in between
+        if (R.last < m.s - 1) { close(id, 'w'); close(id, 'u'); }                  // a season without matches in between (the old pool)
         R.last = m.s;
         for (const k of ['w', 'u']) {
           if (k === 'w' ? gf > ga : gf >= ga) { if (!R[k]) R[k] = { id, len: 0, from: m, to: m, on: false }; R[k].len++; R[k].to = m; }
@@ -78,12 +97,12 @@ const LiveStats = {
       }
     }
     for (const id of Object.keys(run)) {
-      const on = d.teams.some(t => t.id === id) && run[id].last >= d.season - 1;
+      const on = (d.teams.some(t => t.id === id) || d.reserve.some(t => t.id === id)) && run[id].last >= d.season - 1;
       for (const k of ['w', 'u']) { if (run[id][k]) run[id][k].on = on; close(id, k); }
     }
     const byLen = (x, y) => y.len - x.len || (y.on ? 1 : 0) - (x.on ? 1 : 0) || order(y.to, x.to);
     streaks.w.sort(byLen); streaks.u.sort(byLen);
-    /* season records (finished seasons only) and goals per season */
+    /* season records (the league's finished seasons only) and goals per season (league + promotion league) */
     const seasonRec = (f, better) => {
       let best = null;
       for (const r of recs) for (const x of r.rows) { const v = f(x); if (best === null || better(v, best.v)) best = { id: x[0], season: r.season, v }; }
@@ -96,13 +115,15 @@ const LiveStats = {
       { label: 'En çok gol atan', r: seasonRec(x => x[6], (a, b) => a > b), unit: 'gol' },
       { label: 'En az gol yiyen', r: seasonRec(x => x[7], (a, b) => a < b), unit: 'gol' },
     ] : [];
+    const tot = (lg) => (lg ? { n: lg.n || 0, g: lg.rows.reduce((s, x) => s + x[6], 0), dr: lg.rows.reduce((s, x) => s + x[4], 0) / 2 } : { n: 0, g: 0, dr: 0 });
     const perSeason = recs.concat([cur]).map(r => {
-      const n = r.cur ? d.history.length : r.n, g = r.rows.reduce((s, x) => s + x[6], 0), dr = r.rows.reduce((s, x) => s + x[4], 0) / 2;
-      return { season: r.season, cur: !!r.cur, n, goals: g, avg: n ? g / n : 0, draws: n ? dr / n : 0 };
+      const a = tot(r.cur ? Object.assign({}, r, { n: d.history.length }) : r), b = tot(r.cur ? curPl : r.pl);
+      const n = a.n + b.n, g = a.g + b.g, dr = a.dr + b.dr;
+      return { season: r.season, cur: !!r.cur, n, pn: b.n, goals: g, avg: n ? g / n : 0, draws: n ? dr / n : 0 };
     }).filter(x => x.n > 0);
     return { recs, cur, since, first: recs.length ? recs[0].season : d.season, lost: blocks.some(b => b.lost), ms, allTime, titles: titleList, big, goals, streaks, seasonRecs, perSeason };
   },
-  /* the matches between two clubs (oldest first) */
+  /* the matches between two clubs (oldest first; league and promotion league) */
   h2h(a, b) { return this.get().ms.filter(m => (m.h === a && m.a === b) || (m.h === b && m.a === a)); },
   /* a club's result in a match: 'W' / 'D' / 'L' (null if it did not play) */
   res(m, id) { const me = m.h === id ? m.hs : m.a === id ? m.as : -1, op = m.h === id ? m.as : m.hs; return me < 0 ? null : me > op ? 'W' : me < op ? 'L' : 'D'; },
@@ -131,19 +152,18 @@ const LiveStats = {
       else if (r.pl && r.pl.rows.some(x => x[0] === id)) {
         /* the promotion league: its place, and the playoff for its top 4 */
         const k = r.pl.rows.findIndex(x => x[0] === id), cf = r.cup ? this.cupFate(LivePages.cupOf(r), id) : '';
-        out.push({ season: r.season, pool: true, up, fate: `Yükselme ligi ${k + 1}.${cf ? ' · ' + cf : ''}`, champ: false, down: false });
+        out.push({ season: r.season, pool: true, pl: true, rank: k + 1, row: r.pl.rows[k], pts: r.pl.rows[k][2], played: r.pl.rows[k][1], cf, up, fate: `Yükselme ligi ${k + 1}.${cf ? ' · ' + cf : ''}`, champ: false, down: false });
       } else if (up || (r.cup && r.cup.draw.includes(id))) out.push({ season: r.season, pool: true, up, fate: r.cup ? this.cupFate(LivePages.cupOf(r), id) : '', champ: false, down: false });
     }
     const pos = S.cur.rows.findIndex(x => x[0] === id);
     if (pos >= 0) out.push({ season: d.season, cur: true, rank: pos + 1, size: S.cur.rows.length, row: S.cur.rows[pos], pts: S.cur.rows[pos][2], played: S.cur.rows[pos][1], champ: false, down: false, up: false, pool: false, fate: '' });
     else if (d.reserve.some(t => t.id === id)) {
       const c = League.cup(), cf = c ? this.cupFate(c, id) : '';
-      let fate = cf || 'Lig maçları bitince eleme oynar';
       if (League.promoOn()) {
         const k = League.promoRanking().findIndex(x => x.t.id === id), r = League.rowOf(d.promo.table, id);
-        fate = `Yükselme ligi ${k + 1}. sırada (${r.played} maç, ${r.pts} puan)${cf ? ' · ' + cf : ''}`;
-      }
-      out.push({ season: d.season, cur: true, pool: true, up: false, champ: false, down: false, fate });
+        out.push({ season: d.season, cur: true, pool: true, pl: true, cf, rank: k + 1, row: [id, r.played, r.pts, r.w, r.d, r.l, r.gf, r.ga], pts: r.pts, played: r.played,
+          up: false, champ: false, down: false, fate: `Yükselme ligi ${k + 1}. sırada (${r.played} maç, ${r.pts} puan)${cf ? ' · ' + cf : ''}` });
+      } else out.push({ season: d.season, cur: true, pool: true, up: false, champ: false, down: false, fate: cf || 'Lig maçları bitince eleme oynar' });
     }
     return out;
   },
@@ -155,8 +175,8 @@ const StatsPages = {
   chartW() { const w = typeof window !== 'undefined' && typeof window.innerWidth === 'number' ? window.innerWidth : 0; return w ? Math.round(Math.min(700, Math.max(280, w - 46))) : 640; },
   team(id) { return LivePages.anyTeam(id) || { id, name: id, code: '?', c1: '#888888', c2: '#ffffff' }; },
   name(id) { return LivePages.tlink(this.team(id)); },
-  /* "Sezon 3 · 5. hafta" */
-  when(m) { return `Sezon ${m.s} · ${m.w}. hafta`; },
+  /* "Sezon 3 · 5. hafta" ("Yükselme ligi · Sezon 3 · 5. hafta") */
+  when(m) { return `${m.dv === 'promo' ? 'Yükselme ligi · ' : ''}Sezon ${m.s} · ${m.w}. hafta`; },
   /* a match as "Real Madrid 5–1 Barcelona" (home first, the winner bold) */
   score(m) {
     const w = m.hs > m.as ? 'h' : m.hs < m.as ? 'a' : '';
@@ -166,22 +186,22 @@ const StatsPages = {
   streakTxt(s) { return `${this.name(s.id)} <b class="sc">${s.len} maç</b> <span class="mut">${this.when(s.from)} – ${s.to.s === s.from.s ? `${s.to.w}. hafta` : this.when(s.to)}${s.on ? ' · <em class="on">sürüyor</em>' : ''}</span>`; },
   card(title, body) { return `<section class="st-card"><h4>${title}</h4>${body}</section>`; },
   /* the "İstatistik" tab */
-  page(pair) {
+  page() {
     const S = LiveStats.get(), d = League.data, head = '<h2>İstatistik</h2>';
-    if (!S.allTime.length) return `${head}<div class="lp-sub">Henüz maç oynanmadı. İlk maçtan sonra tüm zamanlar tablosu, rekorlar ve ikili karşılaşmalar burada görünür.</div>`;
+    if (!S.allTime.length) return `${head}<div class="lp-sub">Henüz maç oynanmadı. İlk maçtan sonra tüm zamanlar tablosu ve rekorlar burada görünür.</div>`;
     const span = S.recs.length ? `Sezon ${S.first}–${d.season}` : `Sezon ${d.season}`;
-    const sub = `<div class="lp-sub">${span} · biten ${S.recs.length} sezon ve sürmekte olan sezon · kulüp adına dokunun: kulüp sayfası</div>`;
-    const note = S.lost && S.since > S.first ? `<div class="lp-legend">Maç rekorları (farklı galibiyet, seriler, ikili karşılaşmalar) yalnızca Sezon ${S.since} ve sonrasını kapsar; tablolar ve gol ortalamaları bütün sezonları kapsar.</div>` : '';
+    const sub = `<div class="lp-sub">${span} · biten ${S.recs.length} sezon ve sürmekte olan sezon · lig ve yükselme ligi maçları · kulüp adına dokunun: kulüp sayfası (ikili karşılaşmalar orada)</div>`;
+    const note = S.lost && S.since > S.first ? `<div class="lp-legend">Maç rekorları (farklı galibiyet, seriler) yalnızca Sezon ${S.since} ve sonrasını kapsar; tablolar ve gol ortalamaları bütün sezonları kapsar.</div>` : '';
     /* all-time table */
     const rows = S.allTime.map((x, i) => {
       const av = x.gf - x.ga;
-      return `<tr><td>${i + 1}</td><td class="tn">${LivePages.dot(this.team(x.id))}${this.name(x.id)}</td><td>${x.seasons}</td><td>${x.played}</td><td class="opt">${x.w}</td><td class="opt">${x.d}</td><td class="opt">${x.l}</td>`
+      return `<tr><td>${i + 1}</td><td class="tn">${LivePages.dot(this.team(x.id))}${this.name(x.id)}</td><td>${x.seasons}</td><td class="opt">${x.pl}</td><td>${x.played}</td><td class="opt">${x.w}</td><td class="opt">${x.d}</td><td class="opt">${x.l}</td>`
         + `<td class="opt">${x.gf}</td><td class="opt">${x.ga}</td><td>${av > 0 ? '+' : ''}${av}</td><td><b>${x.pts}</b></td><td>${x.titles ? `🏆 ${x.titles}` : ''}</td></tr>`;
     }).join('');
-    const table = `<h3 class="lp-h3">Tüm zamanlar tablosu</h3><table class="lp-table"><caption class="sr-only">Tüm zamanlar tablosu</caption><thead><tr><th scope="col">#</th><th scope="col">Takım</th><th scope="col" title="Ligde oynadığı sezon">Sz</th><th scope="col" title="Oynanan">O</th>`
+    const table = `<h3 class="lp-h3">Tüm zamanlar tablosu</h3><table class="lp-table"><caption class="sr-only">Tüm zamanlar tablosu</caption><thead><tr><th scope="col">#</th><th scope="col">Takım</th><th scope="col" title="Ligde oynadığı sezon">Sz</th><th scope="col" class="opt" title="Yükselme liginde oynadığı sezon">YL</th><th scope="col" title="Oynanan (lig + yükselme ligi)">O</th>`
       + `<th scope="col" class="opt" title="Galibiyet">G</th><th scope="col" class="opt" title="Beraberlik">B</th><th scope="col" class="opt" title="Mağlubiyet">M</th><th scope="col" class="opt" title="Atılan gol">AG</th><th scope="col" class="opt" title="Yenilen gol">YG</th>`
       + `<th scope="col" title="Averaj">AV</th><th scope="col" title="Puan">P</th><th scope="col" title="Şampiyonluk"><span aria-hidden="true">🏆</span><span class="sr-only">Şampiyonluk</span></th></tr></thead><tbody>${rows}</tbody></table>`
-      + `<div class="lp-legend">Bu ligin bütün sezonlarının toplamı (sürmekte olan sezon dahil); puanlar her sezonun kendi puanlamasıyla. Sıralama: puan → averaj → atılan gol.</div>`;
+      + `<div class="lp-legend">Bütün sezonların toplamı (sürmekte olan sezon dahil): lig ve yükselme ligi maçları birlikte; puanlar her sezonun kendi puanlamasıyla. Sz: ligde, YL: yükselme liginde geçen sezon. Sıralama: puan → averaj → atılan gol.</div>`;
     /* titles */
     const titles = `<h3 class="lp-h3">Şampiyonluklar</h3>` + (S.titles.length
       ? `<ol class="lp-champs">${S.titles.map(t => `<li><b>${this.name(t.id)}</b><span>${t.n} şampiyonluk</span><span>Sezon ${t.seasons.join(', ')}</span></li>`).join('')}</ol>`
@@ -193,9 +213,9 @@ const StatsPages = {
       + this.card('En gollü maçlar', this.list(top(S.goals).map(m => `${this.score(m)} <span class="mut">${m.hs + m.as} gol · ${this.when(m)}</span>`), 'Henüz maç yok.'))
       + this.card('En uzun galibiyet serileri', this.list(top(S.streaks.w).map(s => this.streakTxt(s)), 'Henüz art arda iki galibiyet yok.'))
       + this.card('En uzun yenilmezlik serileri', this.list(top(S.streaks.u).map(s => this.streakTxt(s)), 'Henüz seri yok.'))
-      + (S.seasonRecs.length ? this.card('Sezon rekorları', `<ol class="st-list">${S.seasonRecs.filter(x => x.r).map(x => `<li><span class="mut">${x.label}:</span> ${this.name(x.r.id)} <b class="sc">${x.r.v} ${x.unit}</b> <span class="mut">Sezon ${x.r.season}</span></li>`).join('')}</ol>`) : '')
+      + (S.seasonRecs.length ? this.card('Sezon rekorları (lig)', `<ol class="st-list">${S.seasonRecs.filter(x => x.r).map(x => `<li><span class="mut">${x.label}:</span> ${this.name(x.r.id)} <b class="sc">${x.r.v} ${x.unit}</b> <span class="mut">Sezon ${x.r.season}</span></li>`).join('')}</ol>`) : '')
       + '</div>';
-    return `${head}${sub}${note}${table}${titles}${recs}${this.goalsSection(S)}${this.h2hSection(pair)}`;
+    return `${head}${sub}${note}${table}${titles}${recs}${this.goalsSection(S)}`;
   },
   /* goals per match, season by season: a bar chart (hover: the numbers) and the same numbers as a table */
   goalsSection(S) {
@@ -210,34 +230,46 @@ const StatsPages = {
     const bars = P.map((x, i) => {
       const cx = L + step * (i + 0.5), top = y(x.avg), h = Math.max(0, T + ph - top), r = Math.min(4, bw / 2, h);
       const path = `M${cx - bw / 2},${T + ph}V${top + r}Q${cx - bw / 2},${top} ${cx - bw / 2 + r},${top}H${cx + bw / 2 - r}Q${cx + bw / 2},${top} ${cx + bw / 2},${top + r}V${T + ph}Z`;
-      const tip = `Sezon ${x.season}${x.cur ? ' (sürüyor)' : ''}: maç başına ${fmt(x.avg)} gol, ${x.n} maç, ${x.goals} gol, beraberlik %${Math.round(x.draws * 100)}`;
+      const tip = `Sezon ${x.season}${x.cur ? ' (sürüyor)' : ''}: maç başına ${fmt(x.avg)} gol, ${x.n} maç${x.pn ? ` (${x.pn} yükselme ligi)` : ''}, ${x.goals} gol, beraberlik %${Math.round(x.draws * 100)}`;
       return `<g class="hit"><title>${tip}</title><rect x="${cx - step / 2}" y="${T}" width="${step}" height="${ph}" fill="transparent"/><path d="${path}" class="bar${x.cur ? ' cur' : ''}"/>`
         + (lab.has(x) ? `<text x="${cx}" y="${top - 5}" class="vl" text-anchor="middle">${fmt(x.avg)}</text>` : '')
         + (i % every === 0 || i === P.length - 1 ? `<text x="${cx}" y="${H - 8}" class="ax" text-anchor="middle">${x.season}</text>` : '') + '</g>';
     }).join('');
     const svg = `<svg class="st-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Sezon başına maç başı gol ortalaması: en yüksek Sezon ${hi.season}, ${fmt(hi.avg)} gol">${ticks}${bars}</svg>`;
     const rows = P.slice().reverse().map(x => `<tr><td>Sezon ${x.season}${x.cur ? ' <em class="on">sürüyor</em>' : ''}</td><td>${x.n}</td><td>${x.goals}</td><td><b>${fmt(x.avg)}</b></td><td>%${Math.round(x.draws * 100)}</td></tr>`).join('');
-    return `<h3 class="lp-h3">Sezon başına gol ortalaması</h3><div class="st-box">${svg}<div class="lp-legend" style="margin:4px 0 0">Maç başına gol (çubuğun üstüne gelince ayrıntı) · soluk çubuk: sürmekte olan sezon</div></div>`
+    return `<h3 class="lp-h3">Sezon başına gol ortalaması</h3><div class="st-box">${svg}<div class="lp-legend" style="margin:4px 0 0">Maç başına gol, lig ve yükselme ligi maçları (çubuğun üstüne gelince ayrıntı) · soluk çubuk: sürmekte olan sezon</div></div>`
       + `<details class="st-det"><summary>Tablo olarak göster</summary><table class="lp-table"><thead><tr><th scope="col">Sezon</th><th scope="col">Maç</th><th scope="col">Gol</th><th scope="col">Maç başı</th><th scope="col">Beraberlik</th></tr></thead><tbody>${rows}</tbody></table></details>`;
   },
-  /* head-to-head: two pickers (every club the league knows) and their matches */
-  h2hSection(pair) {
-    const d = League.data, clubs = d.teams.concat(d.reserve).slice().sort((x, y) => x.name.localeCompare(y.name, 'tr'));
-    if (clubs.length < 2) return '';
-    const [a, b] = pair;
-    const sel = (i, v) => `<select class="h2h-sel" data-i="${i}" aria-label="${i ? 'İkinci' : 'Birinci'} kulüp">${clubs.map(t => `<option value="${esc(t.id)}"${t.id === v ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}</select>`;
-    const pick = `<div class="h2h-bar">${sel(0, a)}<span aria-hidden="true">vs</span>${sel(1, b)}</div>`;
-    if (a === b) return `<h3 class="lp-h3">İkili karşılaşma</h3>${pick}<div class="st-empty">İki farklı kulüp seçin.</div>`;
-    const ms = LiveStats.h2h(a, b), cnt = { W: 0, D: 0, L: 0 };
+  /* the opponent a club's head-to-head opens with: its next match's (league or promotion league), else its last match's,
+     else the first club in the list */
+  defaultOpp(id, clubs) {
+    const d = League.data, other = (ids) => (ids.includes(id) ? ids.find(x => x !== id) : '');
+    const plan = App.seasonPlan(), per = App.perWeek();
+    const fx = (plan ? plan.weeks.slice(0, d.seasonLength).flatMap(w => w.slice(0, per)).slice(d.history.length) : [])
+      .concat(League.promoOn() ? d.promo.plan.flat().slice(d.promo.history.length) : []);
+    const ok = (o) => !!o && clubs.some(t => t.id === o);
+    for (const ids of fx) { const o = other(ids); if (ok(o)) return o; }
+    const ms = LiveStats.get().ms;
+    for (let k = ms.length - 1; k >= 0; k--) { const o = other([ms[k].h, ms[k].a]); if (ok(o)) return o; }
+    return clubs.length ? clubs[0].id : '';
+  },
+  /* a club's head-to-head with an opponent picked from every club the league knows (opp: the picked one, '' = defaultOpp) */
+  clubH2h(id, opp) {
+    const d = League.data, clubs = d.teams.concat(d.reserve).filter(t => t.id !== id).sort((x, y) => x.name.localeCompare(y.name, 'tr'));
+    if (!clubs.length) return '';
+    const b = opp && clubs.some(t => t.id === opp) ? opp : this.defaultOpp(id, clubs), me = this.team(id), op = this.team(b);
+    const sel = `<select class="h2h-sel" aria-label="Rakip kulüp">${clubs.map(t => `<option value="${esc(t.id)}"${t.id === b ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}</select>`;
+    const pick = `<div class="h2h-bar"><b class="h2h-me">${LivePages.dot(me)}${esc(me.name)}</b><span aria-hidden="true">vs</span>${sel}</div>`;
+    const ms = LiveStats.h2h(id, b), cnt = { W: 0, D: 0, L: 0 };
     let ga = 0, gb = 0;
-    for (const m of ms) { cnt[LiveStats.res(m, a)]++; ga += m.h === a ? m.hs : m.as; gb += m.h === b ? m.hs : m.as; }
+    for (const m of ms) { cnt[LiveStats.res(m, id)]++; ga += m.h === id ? m.hs : m.as; gb += m.h === b ? m.hs : m.as; }
     const tile = (v, l) => `<div class="st-tile"><b>${v}</b><span>${l}</span></div>`;
-    const sum = ms.length ? `<div class="st-tiles">${tile(cnt.W, `${esc(this.team(a).code)} galibiyeti`)}${tile(cnt.D, 'beraberlik')}${tile(cnt.L, `${esc(this.team(b).code)} galibiyeti`)}${tile(`${ga}–${gb}`, 'goller')}</div>` : '';
-    const list = this.list(ms.slice().reverse().slice(0, 20).map(m => `${this.score(m)} <span class="mut">${this.when(m)}</span>`), 'Bu iki kulüp henüz ligde karşılaşmadı.');
-    return `<h3 class="lp-h3">İkili karşılaşma</h3>${pick}<div aria-live="polite">${sum}${list}</div>`;
+    const sum = ms.length ? `<div class="st-tiles">${tile(cnt.W, `${esc(me.code)} galibiyeti`)}${tile(cnt.D, 'beraberlik')}${tile(cnt.L, `${esc(op.code)} galibiyeti`)}${tile(`${ga}–${gb}`, 'goller')}</div>` : '';
+    const list = this.list(ms.slice().reverse().slice(0, 20).map(m => `${this.score(m)} <span class="mut">${this.when(m)}</span>`), 'Bu iki kulüp henüz karşılaşmadı.');
+    return `<h3 class="lp-h3">İkili karşılaşma</h3>${pick}<div aria-live="polite">${sum}${list}</div><div class="lp-legend" style="margin:4px 0 0">Lig ve yükselme ligi maçları · rakibi listeden seçin</div>`;
   },
   /* ---- a club's page ---- */
-  club(id) {
+  club(id, opp = '') {
     const t = LivePages.anyTeam(id), back = '<button type="button" class="tm-back" data-back="1">‹ Geri</button>';
     if (!t) return `${back}<h2>Kulüp bulunamadı</h2>`;
     const S = LiveStats.get(), d = League.data, list = LiveStats.seasonsOf(id), cur = list.find(x => x.cur);
@@ -246,19 +278,23 @@ const StatsPages = {
     const tile = (v, l) => `<div class="st-tile"><b>${v}</b><span>${l}</span></div>`;
     const tiles = `<div class="st-tiles">${tile(T ? T.n : 0, 'şampiyonluk')}${tile(list.filter(x => !x.pool && !x.old).length, 'ligde sezon')}${tile(A ? `${atRank}.` : '—', 'tüm zamanlar')}${tile(A ? A.pts : 0, 'toplam puan')}</div>`;
     const head = `${back}<div class="tm-head"><span class="tm-badge" style="background:${esc(t.c1)};border-color:${esc(t.c2)}" aria-hidden="true">${esc(t.code)}</span><div><h2 tabindex="-1" id="tmTitle">${esc(t.name)}</h2><div class="lp-sub" style="margin:0">${status}</div></div></div>`;
-    return head + tiles + this.clubForm(id) + this.clubChart(list) + this.clubSeasons(list) + this.clubEvents(list) + this.clubRecords(id);
+    return head + tiles + this.clubForm(id) + this.clubH2h(id, opp) + this.clubChart(list) + this.clubSeasons(list) + this.clubEvents(list) + this.clubRecords(id);
   },
-  /* the running season: points after every match (the leader's for comparison) and the last results */
+  /* the running season (the league's, or the promotion league's for a pool club): points after every match (the leader's for
+     comparison) and the last results */
   clubForm(id) {
-    const d = League.data, ms = LiveStats.current().filter(m => m.h === id || m.a === id);
-    if (!d.teams.some(t => t.id === id)) return '';
-    if (!ms.length) return `<h3 class="lp-h3">Sezon ${d.season} formu</h3><div class="st-empty">Bu sezon henüz maçı yok.</div>`;
-    const lastList = () => `<h3 class="lp-h3">Son maçlar</h3><ol class="st-list">${ms.slice(-10).reverse().map(m => { const r = LiveStats.res(m, id); return `<li><i class="fp f${r}">${FORM_TR[r]}</i>${this.score(m)} <span class="mut">${m.w}. hafta</span></li>`; }).join('')}</ol>`;
+    const d = League.data, promo = !d.teams.some(t => t.id === id);
+    if (promo && !(League.promoOn() && d.reserve.some(t => t.id === id))) return '';
+    const dv = promo ? 'promo' : 'main', all = LiveStats.current(dv), ms = all.filter(m => m.h === id || m.a === id);
+    const title = `Sezon ${d.season} formu${promo ? ' · yükselme ligi' : ''}`;
+    if (!ms.length) return `<h3 class="lp-h3">${title}</h3><div class="st-empty">Bu sezon henüz maçı yok.</div>`;
+    const lastList = () => `<h3 class="lp-h3">Son maçlar</h3><ol class="st-list">${ms.slice(-10).reverse().map(m => { const r = LiveStats.res(m, id); return `<li><i class="fp f${r}">${FORM_TR[r]}</i>${this.score(m)} <span class="mut">${promo ? 'Yükselme ligi · ' : ''}${m.w}. hafta</span></li>`; }).join('')}</ol>`;
     if (ms.length < 2) return lastList();                       // a line needs two matches
     const pts = (r) => (r === 'W' ? d.points[0] : r === 'D' ? d.points[1] : d.points[2]);
-    const cum = (tid) => { let s = 0; return LiveStats.current().filter(m => m.h === tid || m.a === tid).map(m => (s += pts(LiveStats.res(m, tid)))); };
-    const me = cum(id), leadId = League.ranking()[0].t.id, leadPts = leadId === id ? [] : cum(leadId), lead = leadPts.length >= 2 ? leadPts : null;
-    const W = this.chartW(), H = 200, L = 34, R = 70, T = 14, B = 26, pw = W - L - R, ph = H - T - B, n = Math.max(d.seasonLength, me.length, lead ? lead.length : 0);
+    const cum = (tid) => { let s = 0; return all.filter(m => m.h === tid || m.a === tid).map(m => (s += pts(LiveStats.res(m, tid)))); };
+    const leadId = (promo ? League.promoRanking() : League.ranking())[0].t.id;
+    const me = cum(id), leadPts = leadId === id ? [] : cum(leadId), lead = leadPts.length >= 2 ? leadPts : null;
+    const W = this.chartW(), H = 200, L = 34, R = 70, T = 14, B = 26, pw = W - L - R, ph = H - T - B, n = Math.max(promo ? d.promo.plan.length : d.seasonLength, me.length, lead ? lead.length : 0);
     const max = Math.max(3, ...me, ...(lead || [0])), x = (k) => L + (n > 1 ? (k / (n - 1)) * pw : pw / 2), y = (v) => T + ph - (v / max) * ph;
     const line = (a) => a.map((v, k) => `${k ? 'L' : 'M'}${x(k).toFixed(1)},${y(v).toFixed(1)}`).join('');
     const yt = [0, Math.round(max / 2), max].map(v => `<line x1="${L}" x2="${L + pw}" y1="${y(v)}" y2="${y(v)}" class="gr"/><text x="${L - 6}" y="${y(v) + 4}" class="ax" text-anchor="end">${v}</text>`).join('');
@@ -271,7 +307,7 @@ const StatsPages = {
     const svg = `<svg class="st-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Sezon ${d.season}: ${me.length} maçta ${me[me.length - 1]} puan${lead ? `, lider ${esc(this.team(leadId).name)} ${lead[lead.length - 1]} puan` : ''}">${yt}${xt}`
       + (lead ? `<path d="${line(lead)}" class="ln lead"/>${tag(lead, 'dl mut', `Lider ${esc(this.team(leadId).code)}`)}` : '')
       + `<path d="${line(me)}" class="ln"/>${dots}${tag(me, 'dl', esc(this.team(id).code))}</svg>`;
-    return `<h3 class="lp-h3">Sezon ${d.season} formu</h3><div class="st-box">${svg}<div class="lp-legend" style="margin:4px 0 0">Her maçtan sonraki toplam puan · noktalar: <b class="k-W">G</b> galibiyet, <b class="k-D">B</b> beraberlik, <b class="k-L">M</b> mağlubiyet</div></div>`
+    return `<h3 class="lp-h3">${title}</h3><div class="st-box">${svg}<div class="lp-legend" style="margin:4px 0 0">Her maçtan sonraki toplam puan · noktalar: <b class="k-W">G</b> galibiyet, <b class="k-D">B</b> beraberlik, <b class="k-L">M</b> mağlubiyet</div></div>`
       + lastList();
   },
   /* the finishing position season by season (this league; the pool below the table) */
@@ -300,15 +336,15 @@ const StatsPages = {
   },
   outcome(s) {
     return [s.champ ? '<span class="tg champ">🏆 Şampiyon</span>' : '', s.down ? '<span class="tg down">🔻 Düştü</span>' : '', s.up ? '<span class="tg up">🔺 Yükseldi</span>' : '',
-      s.pool && s.fate ? `<span class="mut">${esc(s.fate)}</span>` : '', s.cur ? '<span class="tg cur">Sürüyor</span>' : ''].filter(Boolean).join(' ');
+      s.pool && (s.pl ? s.cf : s.fate) ? `<span class="mut">${esc(s.pl ? s.cf : s.fate)}</span>` : '', s.cur ? '<span class="tg cur">Sürüyor</span>' : ''].filter(Boolean).join(' ');
   },
   clubSeasons(list) {
     if (!list.length) return '';
     const rows = list.slice().reverse().map(s => {
       const nm = `${s.old ? 'Eski lig · ' : ''}Sezon ${s.season}`;
-      if (s.pool) return `<tr><td>${nm}</td><td class="tn mut">Havuz</td><td>—</td><td>—</td><td class="opt">—</td><td>—</td><td class="tn">${this.outcome(s)}</td></tr>`;
+      if (s.pool && !s.pl) return `<tr><td>${nm}</td><td class="tn mut">Havuz</td><td>—</td><td>—</td><td class="opt">—</td><td>—</td><td class="tn">${this.outcome(s)}</td></tr>`;
       const r = s.row, gd = r ? r[6] - r[7] : 0;
-      return `<tr><td>${nm}</td><td class="tn">Lig</td><td><b>${s.rank}.</b></td><td>${s.played}</td><td class="opt">${r ? `${r[3]}-${r[4]}-${r[5]}` : '—'}</td><td>${r ? `${gd > 0 ? '+' : ''}${gd}` : '—'}</td><td class="tn"><b>${s.pts}</b> <span class="mut">puan</span> ${this.outcome(s)}</td></tr>`;
+      return `<tr><td>${nm}</td><td class="tn${s.pl ? ' mut' : ''}">${s.pl ? 'Yükselme ligi' : 'Lig'}</td><td><b>${s.rank}.</b></td><td>${s.played}</td><td class="opt">${r ? `${r[3]}-${r[4]}-${r[5]}` : '—'}</td><td>${r ? `${gd > 0 ? '+' : ''}${gd}` : '—'}</td><td class="tn"><b>${s.pts}</b> <span class="mut">puan</span> ${this.outcome(s)}</td></tr>`;
     }).join('');
     return `<h3 class="lp-h3">Sezon geçmişi</h3><table class="lp-table st-seasons"><caption class="sr-only">Sezon geçmişi</caption><thead><tr><th scope="col">Sezon</th><th scope="col">Nerede</th><th scope="col">Sıra</th><th scope="col" title="Oynanan">O</th><th scope="col" class="opt" title="Galibiyet-beraberlik-mağlubiyet">G-B-M</th><th scope="col" title="Averaj">AV</th><th scope="col">Puan · sonuç</th></tr></thead><tbody>${rows}</tbody></table>`;
   },
