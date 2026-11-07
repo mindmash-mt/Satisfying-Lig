@@ -155,7 +155,7 @@
   .lp-champs { list-style: none; margin: 0; padding: 0; background: var(--surface); border-radius: 12px; overflow: hidden; }
   .lp-champs li { display: flex; gap: 10px; padding: 7px 10px; border-bottom: 1px solid #1f283a; font-size: 13px; }
   .lp-champs li span { color: var(--muted); } .lp-champs li b { flex: 1; } .lp-champs li:first-child b { color: var(--accent2); }
-  .fx-week { scroll-margin-top: 62px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px 12px; margin-bottom: 12px; }
+  .fx-week { scroll-margin-top: 104px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px 12px; margin-bottom: 12px; }
   .fx-week.cur { border-color: var(--accent); }
   .fx-week h3 { margin: 0 0 8px; font-family: "Bebas Neue", sans-serif; font-weight: 400; font-size: 26px; letter-spacing: .5px; display: flex; align-items: baseline; gap: 10px; }
   .fx-week h3 span { font-family: Inter, sans-serif; font-size: 12.5px; color: var(--muted); letter-spacing: 0; }
@@ -175,7 +175,9 @@
   @keyframes lvpulse { 50% { box-shadow: inset 0 0 0 1px rgba(0,230,118,.15); } }
   .lp-table tr.po td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
   /* "Lig tablosu" / "Yükselme ligi": the Tablo / Fikstür switch */
-  .seg { display: inline-flex; gap: 2px; padding: 3px; margin: 6px 0 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 99px; }
+  /* it stays on screen while the page scrolls (just under the tabs), so the table and the fixture are one tap apart */
+  .seg { display: flex; width: fit-content; gap: 2px; padding: 3px; margin: 6px 0 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 99px;
+    position: sticky; top: -10px; z-index: 3;   /* 54px from the top: the offset is counted inside #livePane's 64px padding */ box-shadow: 0 0 0 6px #090c12, 0 6px 14px 4px rgba(9,12,18,.9); }
   .seg button { border: none; background: transparent; border-radius: 99px; padding: 6px 14px; color: var(--muted); font-weight: 600; }
   .seg button.on { background: var(--surface2); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
   /* "Canlı": the matches on now and starting soon */
