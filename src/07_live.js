@@ -23,8 +23,9 @@
    tables). "Canlı" lists the matches on now and those starting within 10 minutes; the viewer picks one
    and watches it (the canvas follows that channel from then on). A ⚽ next to a match in the fixture or a club in a table
    opens its live match too.
-   The league's start comes from the deploy (BUILD_START, tools/live-start.js): a new league starts a few minutes after
-   it goes live. BUILD_START also carries the old league's champions and finished seasons ("Geçmiş" tab).
+   The league's start comes from the deploy (BUILD_START, tools/live-start.js): a new league starts at CONFIG.LIVE.start
+   if that is still ahead, otherwise a few minutes after it goes live. BUILD_START.legacy (an old league's archive for the
+   "Geçmiş" tab) is no longer written: a new league starts from nothing.
    Changing the simulation never restarts the league: the Pages workflow freezes the league as it stands (BUILD_BASE) and the new
    rules play on from there (see hash() / applyRules() below and tools/live-base.js).
    The studio (old panel: preview, recording, videos) is at ?studio. Debug: ?now=<past ISO time>.

@@ -4,8 +4,8 @@ name: GitHub Pages
 # Site, canlı ligi kendi kendine oynatır (src/07_live.js). 15 dakikalık yayın yalnızca live-state.json
 # checkpoint'ini tazeler: siteye ilk girenler en fazla son birkaç maçı kendileri hesaplar.
 # Checkpoint tarayıcısız üretilir (Node, ~15 sn) ve yayındaki son checkpoint'ten devam eder.
-# Yeni bir lig (CONFIG.LIVE.salt değişti) ilk yayınında, yayından birkaç dakika sonra başlar (tools/live-start.js,
-# live-start.json; eski ligin şampiyonları ve biten sezonları Geçmiş sekmesine taşınır).
+# Yeni bir lig (CONFIG.LIVE.salt değişti) CONFIG.LIVE.start ileri bir saatse o saatte, değilse yayından birkaç dakika
+# sonra sıfırdan başlar (tools/live-start.js, live-start.json; eski ligin tabloları ve istatistikleri taşınmaz).
 # Simülasyon değişirse lig SIFIRLANMAZ: yayındaki son checkpoint yeni sitenin "tabanı" olur (tools/live-base.js,
 # live-base.json) ve yeni kurallar o durumdan devam eder. Yayındaki dosyalar okunamazsa yayın durur (lig yanlışlıkla
 # sıfırlanmasın; 15 dk sonra yeniden denenir).
