@@ -528,10 +528,17 @@ console.log(`${N} lig maçı + ${N} eleme maçı (1'e 1) + sezon fikstürü, Mat
     const { decide, START_DELAY } = require('./live-start.js'), L = loadLive(), cfg = L.CONFIG.LIVE;
     const now = Date.parse('2026-11-04T18:41:20Z');   // 21:41:20 in Istanbul
     const oldPub = { hash: 'cf0af4167499:satisfying-lig-live-1:2026-11-04T00:36:05:00/5,09:00/10,19:00/3:10', data: { season: 6, champions: [{ id: 't3', name: 'Atlético Madrid', season: 5, pts: 60, x: 1 }], seasons: [{ season: 5 }] } };
-    let r = decide({ cfg, prev: null, pub: oldPub, now });
+    const past = Object.assign({}, cfg, { start: '2026-11-04T12:00' });   // CONFIG.LIVE.start already gone at the deploy
+    let r = decide({ cfg: past, prev: { salt: 'eski', start: '2026-11-01T00:00', legacy: { champions: [], seasons: [{ season: 1 }] } }, pub: oldPub, now });
     const exp = new Date(Math.ceil((now + START_DELAY * 60e3) / 60e3) * 60e3 + 3 * 3600e3).toISOString().slice(0, 16);
-    ok(r.action === 'new' && r.start.salt === cfg.salt && r.start.start === exp && r.start.start === '2026-11-04T21:46' && r.start.legacy.seasons.length === 1 && r.start.legacy.champions[0].x === undefined && r.start.legacy.from === 'satisfying-lig-live-1',
-      `Başlangıç: ilk yayında yeni lig ${START_DELAY} dk sonra (21:41:20 → ${r.start.start}); eski ligin sezonları ve şampiyonları taşındı`);
+    ok(r.action === 'new' && r.start.salt === cfg.salt && r.start.start === exp && r.start.start === '2026-11-04T21:46' && !r.start.legacy,
+      `Başlangıç: ilk yayında yeni lig ${START_DELAY} dk sonra (21:41:20 → ${r.start.start}); eski ligin sezonları, şampiyonları ve istatistikleri taşınmadı`);
+    const ahead = Object.assign({}, cfg, { start: '2026-11-04T23:00' });
+    r = decide({ cfg: ahead, prev: null, pub: oldPub, now });
+    ok(r.action === 'new' && r.start.start === '2026-11-04T23:00' && !r.start.legacy, 'Başlangıç: CONFIG.LIVE.start yayından sonraysa yeni lig tam o saatte başlıyor');
+    r = decide({ cfg: Object.assign({}, cfg, { start: '2026-11-04T21:42' }), prev: null, pub: null, now });
+    ok(r.start.start === '2026-11-04T21:46', 'Başlangıç: CONFIG.LIVE.start yayından 1 dk içindeyse yayından birkaç dk sonra başlıyor');
+    r = decide({ cfg: past, prev: null, pub: oldPub, now });
     const first = r.start;
     r = decide({ cfg, prev: first, pub: oldPub, now: now + 3600e3 });
     ok(r.action === 'keep' && r.start === first, 'Başlangıç: sonraki yayınlarda aynen taşınıyor (lig yeniden başlamıyor)');

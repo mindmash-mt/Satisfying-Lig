@@ -391,7 +391,7 @@
 </div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 <script>
-const BUILD_SIM_HASH = '5e7ad4fb1b50';
+const BUILD_SIM_HASH = '381b173eb3b9';
 const BUILD_BASE = null;
 const BUILD_START = null;
 /* =====================================================================
@@ -449,15 +449,15 @@ const CONFIG = {
   /* the public site's live league (07_live.js), a league that never stops. Istanbul time (UTC+3 all year).
      bands: from each `from` until the next band, one match every `every` minutes (one band, every 3 minutes: 480 matches a day).
      The first match is at `start`. On the site `start` is set by the first deploy of a new salt (tools/live-start.js →
-     BUILD_START: the league starts a few minutes after it goes live); `start` here is only the fallback for local builds.
+     BUILD_START): at `start` if that is still ahead at the deploy, otherwise a few minutes after it goes live.
      gap: seconds between a match that ran over and the next one.
      Changing start / salt starts a NEW live league: all browsers drop their saved state.
      Changing the simulation (results, scoring, balance) or the timetable (bands, gap) does NOT: the league is frozen as it stands
      and the new rules / timetable play on from there (tools/live-base.js). */
   LIVE: {
-    start: '2026-11-04T22:00',   // 'YYYY-MM-DD' (that day at the first band's time) or 'YYYY-MM-DDTHH:MM' — overridden by BUILD_START
+    start: '2026-11-08T13:00',   // 'YYYY-MM-DD' (that day at the first band's time) or 'YYYY-MM-DDTHH:MM' — overridden by BUILD_START
     bands: [{ from: '00:00', every: 3 }],
-    utcOffset: 3, gap: 5, salt: 'satisfying-lig-live-2', keepChampions: 50,
+    utcOffset: 3, gap: 5, salt: 'satisfying-lig-live-3', keepChampions: 50,
   },
 };
 const DT = 1 / CONFIG.STEP_HZ;
@@ -4023,8 +4023,9 @@ const Offline = {
    tables). "Canlı" lists the matches on now and those starting within 10 minutes; the viewer picks one
    and watches it (the canvas follows that channel from then on). A ⚽ next to a match in the fixture or a club in a table
    opens its live match too.
-   The league's start comes from the deploy (BUILD_START, tools/live-start.js): a new league starts a few minutes after
-   it goes live. BUILD_START also carries the old league's champions and finished seasons ("Geçmiş" tab).
+   The league's start comes from the deploy (BUILD_START, tools/live-start.js): a new league starts at CONFIG.LIVE.start
+   if that is still ahead, otherwise a few minutes after it goes live. BUILD_START.legacy (an old league's archive for the
+   "Geçmiş" tab) is no longer written: a new league starts from nothing.
    Changing the simulation never restarts the league: the Pages workflow freezes the league as it stands (BUILD_BASE) and the new
    rules play on from there (see hash() / applyRules() below and tools/live-base.js).
    The studio (old panel: preview, recording, videos) is at ?studio. Debug: ?now=<past ISO time>.

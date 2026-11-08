@@ -53,15 +53,15 @@ const CONFIG = {
   /* the public site's live league (07_live.js), a league that never stops. Istanbul time (UTC+3 all year).
      bands: from each `from` until the next band, one match every `every` minutes (one band, every 3 minutes: 480 matches a day).
      The first match is at `start`. On the site `start` is set by the first deploy of a new salt (tools/live-start.js →
-     BUILD_START: the league starts a few minutes after it goes live); `start` here is only the fallback for local builds.
+     BUILD_START): at `start` if that is still ahead at the deploy, otherwise a few minutes after it goes live.
      gap: seconds between a match that ran over and the next one.
      Changing start / salt starts a NEW live league: all browsers drop their saved state.
      Changing the simulation (results, scoring, balance) or the timetable (bands, gap) does NOT: the league is frozen as it stands
      and the new rules / timetable play on from there (tools/live-base.js). */
   LIVE: {
-    start: '2026-11-04T22:00',   // 'YYYY-MM-DD' (that day at the first band's time) or 'YYYY-MM-DDTHH:MM' — overridden by BUILD_START
+    start: '2026-11-08T13:00',   // 'YYYY-MM-DD' (that day at the first band's time) or 'YYYY-MM-DDTHH:MM' — overridden by BUILD_START
     bands: [{ from: '00:00', every: 3 }],
-    utcOffset: 3, gap: 5, salt: 'satisfying-lig-live-2', keepChampions: 50,
+    utcOffset: 3, gap: 5, salt: 'satisfying-lig-live-3', keepChampions: 50,
   },
 };
 const DT = 1 / CONFIG.STEP_HZ;

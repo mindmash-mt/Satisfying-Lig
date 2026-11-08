@@ -38,7 +38,7 @@ Günün her saatinde **her 3 dakikada bir maç saati**: günde **480 maç saati*
 
 Bir sezon 17 hafta × 9 maç = **153 maç saatidir** ≈ **7 saat 39 dakika** (günde ~3,1 sezon). Her saatte bir lig maçı oynanır; aynı saatlerde yükselme ligi 132 maçını (22 hafta × 6) bu 153 saate eşit aralıkla yayar (17 saatte yükselme ligi maçı yoktur) ve **son 4 saatte** ilk 4 takımın **yükselme elemesi** oynanır: yarı finaller, 3.lük maçı ve **final, ligin son maçıyla aynı anda** (bkz. [Yükselme ligi](#yükselme-ligi-canlı-lig)). Böylece iki sezon aynı anda biter: şampiyon belirlenir, ligin son 3 takımı düşer, elemenin ilk 3'ü lige çıkar ve iki lig de bir sonraki maç saatinde yeni sezona başlar. Ligde her takım 27 dakikada bir sahaya çıkar. Şampiyonlar listesinde son 50 sezon tutulur.
 
-**Başlangıç:** yeni bir lig, ilk yayınından **birkaç dakika sonra** kendiliğinden başlar (`tools/live-start.js`, bkz. [Nasıl çalışıyor](#nasıl-çalışıyor-sunucusuz-ücretsiz)). Başlangıç saati o yayında bir kez belirlenir ve sonraki her yayında aynen korunur.
+**Başlangıç:** yeni bir lig, `CONFIG.LIVE.start` yayın anında henüz gelmemiş bir saatse **tam o saatte**, değilse ilk yayınından **birkaç dakika sonra** kendiliğinden başlar (`tools/live-start.js`, bkz. [Nasıl çalışıyor](#nasıl-çalışıyor-sunucusuz-ücretsiz)). Başlangıç saati o yayında bir kez belirlenir ve sonraki her yayında aynen korunur. Şu anki lig (`satisfying-lig-live-3`) **8 Kasım 2026 13:00**'te sıfırdan başladı: önceki ligin tabloları, sezonları, şampiyonları ve istatistikleri taşınmadı.
 
 **Taşma kuralı (kilitlenme olmaz):** bir maç saatinin maçları (en uzunu), ekranları dahil sıradaki maç saatine kadar bitmezse sıradaki saatin maçları önceki bitince 5 sn sonra başlar (`gap`). Lig maçları ekranlarıyla ~108 sn (en fazla ~116 sn), altın gole ya da penaltıya giden eleme maçları en fazla ~2,3 dakika sürer; hepsi 3 dakikaya sığar. 48 saatlik testte 960 maçta hiç gecikme olmadı; kural yalnızca güvence için var. `node tools/live-check.js` aralığı zorla 1 dakikaya indirip maçların üst üste binmediğini ve takvimin kendini toparladığını test eder.
 
@@ -46,13 +46,13 @@ Ayar `src/01_core.js` dosyasındaki `CONFIG.LIVE`:
 
 ```js
 LIVE: {
-  start: '2026-11-04T22:00',   // yalnızca yerel derleme için; sitede başlangıcı ilk yayın belirler (BUILD_START)
+  start: '2026-11-08T13:00',   // yeni ligin başlama saati (yayın anında geçmişse ilk yayından birkaç dk sonra; BUILD_START)
   bands: [{ from: '00:00', every: 3 }],
-  utcOffset: 3, gap: 5, salt: 'satisfying-lig-live-2', keepChampions: 50,
+  utcOffset: 3, gap: 5, salt: 'satisfying-lig-live-3', keepChampions: 50,
 },
 ```
 
-`start` ya da `salt` değişirse canlı lig **yeni bir lig** olarak baştan kurulur; bütün tarayıcılar kayıtlı durumu bırakır. **Takvimi (`bands`, `gap`) değiştirmek ligi sıfırlamaz:** lig o anki hâliyle dondurulur ve yeni takvim, son oynanan maçın bitişinden sonraki ilk aralıkta başlar (kural değişikliği gibi, bkz. aşağıda). Yeni bir lig başlatmanın doğru yolu `salt`'ı değiştirmektir: ilk yayın yeni başlangıç saatini kendisi seçer ve eski ligin şampiyonlarını ve biten sezonlarını Geçmiş'e taşır. (`salt` ve `start` ligin kimliğidir. **Simülasyonu değiştirmek ligi sıfırlamaz**, bkz. aşağıdaki [Kural değişikliği ligi sıfırlamaz](#kural-değişikliği-ligi-sıfırlamaz).)
+`start` ya da `salt` değişirse canlı lig **yeni bir lig** olarak baştan kurulur; bütün tarayıcılar kayıtlı durumu bırakır. **Takvimi (`bands`, `gap`) değiştirmek ligi sıfırlamaz:** lig o anki hâliyle dondurulur ve yeni takvim, son oynanan maçın bitişinden sonraki ilk aralıkta başlar (kural değişikliği gibi, bkz. aşağıda). Yeni bir lig başlatmanın doğru yolu `salt`'ı değiştirmektir (istenirse `start`'a ileri bir saat yazılır): yeni lig **sıfırdan** başlar; eski ligin tabloları, şampiyonları, biten sezonları ve istatistikleri taşınmaz. (`salt` ve `start` ligin kimliğidir. **Simülasyonu değiştirmek ligi sıfırlamaz**, bkz. aşağıdaki [Kural değişikliği ligi sıfırlamaz](#kural-değişikliği-ligi-sıfırlamaz).)
 
 ### Geçmiş sezonlar
 
@@ -60,7 +60,7 @@ LIVE: {
 
 Biten her sezon, sezon geçişinde kompakt bir kayıt olarak lig durumuna eklenir (`seasons`; sezon başına ~2,7 KB, en yeni `CONFIG.LIVE.keepChampions` = 50 sezon): son tablo, düşenler, yükselenler, eleme kurası/sonuçları, lig maçlarının skorları (`m`: maç başına 4 karakter, ev sahibi · deplasman · goller; İstatistik sekmesi ve kulüp sayfaları için) ve yükselme liginin tablosu ile skorları (`pl`). Geçmiş sekmesinde sezonun lig tablosunun altında yükselme ligi tablosu (elemeye kalan ilk 4 yeşil çizgili) ve yükselme elemesi görünür; yükselme liginden önceki sezonlarda eski 12 kulüplük eleme. Maçların seed'i ve ayrıntısı tutulmaz. Kayıt, tablonun sezonun bittiği andaki hâlidir; sonradan puanlama değişse de yeniden yazılmaz. Kural değişikliklerinde taban bu arşivi de taşır.
 
-**Eski lig (6'lı grup maçları):** iki takımlı maç formatına geçilmeden önce oynanan ligin biten sezonları ve şampiyonları, yeni ligin ilk yayınında yayındaki checkpoint'ten alınıp `live-start.json`'a yazılır ve Geçmiş seçicisinde `Eski lig · Sezon N` olarak, kendi sütunlarıyla (sıra puanları, birincilikler, son 3 maçtaki sırası) görünür. Eski ligin o an sürmekte olan sezonu bitmediği için taşınmaz.
+**Eski lig (6'lı grup maçları):** sayfa, `live-start.json`'da bir `legacy` arşivi varsa onu Geçmiş seçicisinde `Eski lig · Sezon N` olarak, kendi sütunlarıyla gösterebilir. 8 Kasım 2026'daki sıfırlamadan beri yeni ligler eski ligin arşivini taşımaz (`legacy: null`), bu yüzden Geçmiş ve İstatistik yalnızca sürmekte olan ligin sezonlarını gösterir.
 
 ### İstatistik ve kulüp sayfaları
 
@@ -89,7 +89,7 @@ Simülasyon deterministiktir: aynı seed + aynı takımlar = birebir aynı maç.
 2. O an oynanan maçların sonucu da önceden hesaplanır; izlenen maç saate göre ileri sarılır ve oradan gerçek zamanlı oynar, izlenmeyen maç son düdük anında ligine işlenir.
 3. Hesaplanan lig tarayıcıda saklanır (`localStorage`, `arenaLive_v3`); bir sonraki ziyarette yalnızca yeni maçlar hesaplanır. Kayıtlı durumun hash'i `<kural>:<lig kimliği>[@<taban>]` biçimindedir; başka kurala ya da tabana ait durum geçersiz sayılır.
 4. **Checkpoint:** GitHub Pages iş akışı her yayında ve **15 dakikada bir** (zamanlanmış) ligin o anki durumunu `live-state.json` olarak yayınlar (`tools/live-state.js`). Tarayıcısız çalışır (Node) ve sitede yayında olan son checkpoint'ten devam eder; süre lig yaşlandıkça uzamaz. **Not:** GitHub zamanlanmış iş akışlarını garanti etmez; bu repoda pratikte günde birkaç kez çalışıyor. Bu durumda siteye ilk girenler son checkpoint'ten bu yana oynanan maçları kendileri hesaplar (bir maç ~0,07 sn; saatlerce eski bir checkpoint bile birkaç saniye sürer). Checkpoint yalnızca hızlandırır; yoksa tarayıcı aynı sonucu kendisi hesaplar (kural değişmişse tabandan). Hesaplama başarısız olursa yayındaki son checkpoint aynen yeniden yayınlanır.
-5. **Başlangıç (`live-start.json`):** iş akışı her yayında önce `tools/live-start.js`'i çalıştırır. Yayındaki `live-start.json` bu `salt`'a aitse aynen taşınır. Yoksa ve yayındaki checkpoint bu `salt`'ın ligine aitse başlangıç onun lig kimliğinden geri okunur (dosya kaybolsa bile lig yeniden başlamaz). İkisi de yoksa bu `salt` ilk kez yayınlanıyordur: başlangıç = **şimdi + 4 dakika** (İstanbul saati, dakikaya yuvarlanmış; ilk maç ondan sonraki ilk 3 dakikalık aralıkta). `build.sh` dosyayı sayfaya gömer (`BUILD_START`). Yayındaki dosyalar okunamazsa (404 dışında bir hata) yayın durur.
+5. **Başlangıç (`live-start.json`):** iş akışı her yayında önce `tools/live-start.js`'i çalıştırır. Yayındaki `live-start.json` bu `salt`'a aitse aynen taşınır. Yoksa ve yayındaki checkpoint bu `salt`'ın ligine aitse başlangıç onun lig kimliğinden geri okunur (dosya kaybolsa bile lig yeniden başlamaz). İkisi de yoksa bu `salt` ilk kez yayınlanıyordur: başlangıç = `CONFIG.LIVE.start` yayından sonraysa o saat, değilse **şimdi + 4 dakika** (İstanbul saati, dakikaya yuvarlanmış; ilk maç ondan sonraki ilk 3 dakikalık aralıkta). Eski ligin hiçbir verisi taşınmaz. `build.sh` dosyayı sayfaya gömer (`BUILD_START`). Yayındaki dosyalar okunamazsa (404 dışında bir hata) yayın durur.
 6. **Yeni site:** açık bir sayfa 10 dakikada bir yayındaki checkpoint'e bakar; site başka bir lig ya da başka kurallarla yeniden yayınlanmışsa kendini yeniler (en fazla 10 dakikada bir).
 7. **Cihaz saati:** telefonun saati yanlışsa site, GitHub Pages yanıtındaki saate göre düzeltir.
 8. **Sekme uyursa:** sekme 1 dakikadan uzun arka planda kalıp geri gelince lig en yeni kayıtlı durumdan yeniden kurulur ve o anki maça katılır.

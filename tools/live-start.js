@@ -7,9 +7,9 @@
     • Yayındaki live-start.json bu salt'a aitse aynen taşınır: lig her yayında aynı saatte başlamış olarak kalır.
     • Yoksa ama yayındaki checkpoint (live-state.json) bu salt'ın ligine aitse, başlangıç onun lig kimliğinden geri okunur
       (live-start.json kaybolsa bile lig sıfırlanmaz).
-    • İkisi de yoksa bu salt ilk kez yayınlanıyordur: başlangıç = şimdi + START_DELAY dakika (İstanbul saati, dakikaya
-      yuvarlanmış). Yayındaki checkpoint başka (eski) bir lige aitse onun şampiyonları ve biten sezonları "eski lig" olarak
-      saklanır (Geçmiş sekmesi); o ligin sürmekte olan sezonu tamamlanmadığı için saklanmaz.
+    • İkisi de yoksa bu salt ilk kez yayınlanıyordur: başlangıç = CONFIG.LIVE.start ileri bir saatse o saat, değilse
+      şimdi + START_DELAY dakika (İstanbul saati, dakikaya yuvarlanmış). Yeni lig sıfırdan başlar: eski ligin tabloları,
+      şampiyonları, biten sezonları ve istatistikleri taşınmaz (live-start.json'da `legacy` yok).
 
   Yayındaki dosyalar okunamazsa (404 dışında bir hata) araç HATA verir ve yayın yapılmaz: başlangıç saati yanlışlıkla
   değişip lig sıfırlanmasın; 15 dakika sonra yeniden denenir.
@@ -35,22 +35,19 @@ function decide({ cfg, prev, pub, now, manual }) {
   const id = pub && typeof pub.hash === 'string' ? pub.hash.split('@')[0] : '';
   const m = id.match(/^[^:]*:([^:]+):(\d{4}-\d\d-\d\dT\d\d:\d\d|\d{4}-\d\d-\d\d)(?::|$)/);
   if (m && m[1] === cfg.salt) {
-    const legacy = prev && prev.legacy ? prev.legacy : null;
-    return { action: 'recover', start: { salt: cfg.salt, start: m[2], legacy }, why: `live-start.json yok; başlangıç (${m[2]}) yayındaki checkpoint'ten geri okundu` };
+    return { action: 'recover', start: { salt: cfg.salt, start: m[2], legacy: null }, why: `live-start.json yok; başlangıç (${m[2]}) yayındaki checkpoint'ten geri okundu` };
   }
   let start = manual;
+  /* CONFIG.LIVE.start ahead of the deploy: the new league starts then (e.g. on the hour); otherwise a few minutes after the deploy */
+  const planned = /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(cfg.start || '') ? Date.parse(cfg.start + ':00Z') - cfg.utcOffset * 3600e3 : NaN;
+  if (!start && planned > now + 60e3) start = cfg.start;
   if (!start) {
     const t = new Date(Math.ceil((now + START_DELAY * 60e3) / 60e3) * 60e3 + cfg.utcOffset * 3600e3);
     start = t.toISOString().slice(0, 16);
   }
-  /* the league being replaced: its champions and finished seasons (the running season is not finished: it is not kept) */
-  let legacy = null;
-  if (pub && pub.data && Array.isArray(pub.data.seasons) && !(m && m[1] === cfg.salt)) {
-    legacy = { from: m ? m[1] : null, endedAt: new Date(now).toISOString(), season: pub.data.season || null,
-      champions: (pub.data.champions || []).map(c => ({ id: c.id, name: c.name, season: c.season, pts: c.pts })), seasons: pub.data.seasons };
-  } else if (prev && prev.legacy) legacy = prev.legacy;
-  return { action: 'new', start: { salt: cfg.salt, start, createdAt: new Date(now).toISOString(), legacy },
-    why: `yeni lig (${cfg.salt}): ilk maç ${start} (TSİ)${legacy ? `; eski ligin ${legacy.seasons.length} biten sezonu ve ${legacy.champions.length} şampiyonu Geçmiş'e taşındı` : ''}` };
+  /* a new league starts from nothing: the replaced league's tables, champions, seasons and statistics are not carried over */
+  return { action: 'new', start: { salt: cfg.salt, start, createdAt: new Date(now).toISOString(), legacy: null },
+    why: `yeni lig (${cfg.salt}): ilk maç ${start} (TSİ); eski ligin tabloları, sezonları ve istatistikleri taşınmadı` };
 }
 
 /* a published file: { text } or { absent: true } (404). Any other failure is an error: never guess the league away. */
