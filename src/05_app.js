@@ -10,17 +10,27 @@ const CUP_SHAPE = [
   { k: 'SF-1', r: 2, a: 'wQF-1', b: 'wQF-2' }, { k: 'SF-2', r: 2, a: 'wQF-3', b: 'wQF-4' },
   { k: '3RD', r: 3, a: 'lSF-1', b: 'lSF-2' }, { k: 'FIN', r: 3, a: 'wSF-1', b: 'wSF-2' },
 ];
-/* the live league's promotion playoff (07_live.js): the pool clubs play their own league (the promotion league, alongside the
-   league, see Live.promoNew) and its top PO_SIZE play this single-leg knockout in the season's last slots: 1st v 4th, 2nd v 3rd
-   (the better placed club at home), then the third-place match and the final. Round numbers are CUP_SHAPE's (2 = semi-finals,
-   3 = final), so the names and the screens are the same. Champion, runner-up and the third-place winner go up. */
-const PO_SIZE = 4;
+/* the live league's promotion (07_live.js): the pool clubs play their own league (the promotion league, alongside the league,
+   see Live.promoNew). Its top PO_DIRECT clubs go up directly; the next four (3rd–6th) play this single-leg knockout in the
+   season's last slots for the last place: 3rd v 6th, 4th v 5th (the better placed club at home), then the final, whose winner
+   goes up. The draw is the table's top PO_SIZE (s0, s1: the clubs that went up directly). Round numbers are CUP_SHAPE's
+   (2 = semi-finals, 3 = final), so the names and the screens are the same. */
+const PO_DIRECT = 2, PO_SIZE = 6;
 const PO_SHAPE = [
+  { k: 'SF-1', r: 2, a: 's2', b: 's5' }, { k: 'SF-2', r: 2, a: 's3', b: 's4' }, { k: 'FIN', r: 3, a: 'wSF-1', b: 'wSF-2' },
+];
+/* the promotion league's first format (a season begun with it ends with it, and the archive keeps such seasons): no direct
+   places, the top 4 play 1st v 4th, 2nd v 3rd, the third-place match and the final; champion, runner-up and third go up */
+const PO_OLD_SIZE = 4;
+const PO_OLD = [
   { k: 'SF-1', r: 2, a: 's0', b: 's3' }, { k: 'SF-2', r: 2, a: 's1', b: 's2' },
   { k: '3RD', r: 3, a: 'lSF-1', b: 'lSF-2' }, { k: 'FIN', r: 3, a: 'wSF-1', b: 'wSF-2' },
 ];
-/* the bracket a draw belongs to: 4 clubs = the promotion league's playoff, else the old 12-club playoff */
-const cupShape = (c) => (c && Array.isArray(c.draw) && c.draw.length <= PO_SIZE ? PO_SHAPE : CUP_SHAPE);
+/* the bracket a draw belongs to: 6 clubs = the promotion league's (2 direct + 4 in the playoff), up to 4 = its first format,
+   else the old 12-club playoff */
+const cupShape = (c) => { const n = c && Array.isArray(c.draw) ? c.draw.length : 0; return n === PO_SIZE ? PO_SHAPE : n <= PO_OLD_SIZE ? PO_OLD : CUP_SHAPE; };
+/* the clubs of a draw that went up without playing (the promotion league's top PO_DIRECT) */
+const cupDirect = (c) => (cupShape(c) === PO_SHAPE ? c.draw.slice(0, PO_DIRECT) : []);
 const CUP_ROUNDS = ['FIRST ROUND', 'QUARTER-FINALS', 'SEMI-FINALS', 'FINAL'];
 const CUP_ROUNDS_TR = ['1. tur', 'Çeyrek final', 'Yarı final', 'Final'];
 /* a match's name: [video (English), panel (Turkish)] */
@@ -55,11 +65,12 @@ const cupName = (k) => {
 /** @typedef {{ season: number, key: string, size: number, created: string, weeks: string[][][] }} SeasonPlan  weeks[w][m] = [home, away] */
 /**
  * @typedef {Object} PromoState  the live league's promotion league of the season: the pool clubs' own league, played alongside the
- * league (one promotion match in most of the league's slots, see Live.promoNew), then the playoff of its top PO_SIZE (League.cup)
+ * league (one promotion match in most of the league's slots, see Live.promoNew), then its top 2 go up and 3rd–6th play the playoff (League.cup)
  * @property {number} season
  * @property {number} per       matches a week (pool clubs / 2)
  * @property {number} N         the league's matches this season = the season's slots
  * @property {number} po        playoff matches (PO_SHAPE, in the season's last po slots; 0 = the top clubs go up without a playoff)
+ * @property {number} [direct]  clubs that go up directly, the next four play the playoff (absent: the first format, PO_OLD)
  * @property {number} n         promotion league matches (plan.length × per)
  * @property {string[][][]} plan  plan[w][m] = [home, away] (a double round robin, or as much of it as fits)
  * @property {Object<string, TableRow>} table
@@ -81,7 +92,7 @@ const cupName = (k) => {
  * @property {number[]} points       [win, draw, loss]
  * @property {SeasonPlan|null} seasonPlan
  * @property {string[]|null} tieOrder
- * @property {CupState|null} cup     the promotion playoff (the old 12-club one, or the promotion league's top 4: see cupShape)
+ * @property {CupState|null} cup     the promotion playoff (the old 12-club one, or the promotion league's: see cupShape)
  * @property {PromoState|null} [promo]  live league: this season's promotion league (null: a season of the old format)
  * @property {HistoryEntry[]} history
  * @property {{ id: string, name: string, season: number, pts: number }[]} champions
@@ -258,9 +269,14 @@ const League = {
   validPlanShape(p) {
     return !!(p && typeof p === 'object' && Array.isArray(p.weeks) && p.weeks.every(w => Array.isArray(w) && w.every(g => Array.isArray(g) && g.length === 2)));
   },
-  /* ---------- promotion: the old 12-club playoff (CUP_SHAPE) or the live league's promotion league + its top-4 playoff (PO_SHAPE) ---------- */
+  /* ---------- promotion: the old 12-club playoff (CUP_SHAPE) or the live league's promotion league + its playoff (PO_SHAPE / PO_OLD) ---------- */
   /* this season has a promotion league (live league; a season begun under the old format finishes without one) */
   promoOn() { const d = this.data, p = d.promo; return !!(p && p.season === (d.season || 1)); },
+  /* this season's promotion league: the clubs that go up directly (0: none — no playoff, or the first format) and the clubs in
+     the playoff's draw (the direct ones included) */
+  poDirect() { const p = this.data.promo; return this.promoOn() && p.po ? (p.direct || 0) : 0; },
+  poSize() { return this.poDirect() ? PO_SIZE : PO_OLD_SIZE; },
+  poShape() { return this.poDirect() ? PO_SHAPE : PO_OLD; },
   /* the promotion league's matches are all played */
   promoLeagueOver() { const p = this.data.promo; return this.promoOn() && p.history.length >= p.n; },
   /* the promotion league and its playoff are over: who goes up is settled */
@@ -296,19 +312,19 @@ const League = {
      promotion league with its playoff, are all finished */
   seasonOver() { return this.mainOver() && (this.promoOn() ? this.promoOver() : (!this.cupOn() || this.cupDone())); },
   /* this season's bracket: its draw and the results so far. The old playoff: a random order of the pool, drawn from the season's
-     seed when the league matches are over; the promotion league's: its top PO_SIZE in table order, when its matches are over.
+     seed when the league matches are over; the promotion league's: its top poSize() in table order, when its matches are over.
      build: draw it now if it is due and not drawn yet. Null before that. */
   cup(build) {
     const d = this.data, season = d.season || 1;
     if (!this.cupOn()) return null;
     const ids = d.reserve.map(t => t.id), c = d.cup, po = this.promoOn();
-    if (c && c.season === season && c.draw.length === (po ? PO_SIZE : ids.length) && c.draw.every(id => ids.includes(id))) return c;
+    if (c && c.season === season && c.draw.length === (po ? this.poSize() : ids.length) && c.draw.every(id => ids.includes(id))) return c;
     if (!build || !(po ? this.promoLeagueOver() : this.mainOver())) return null;
-    d.cup = { season, draw: po ? this.promoRanking().slice(0, PO_SIZE).map(x => x.t.id) : new RNG(pickSeed('cupdraw', season)).shuffle(ids), res: {} };
+    d.cup = { season, draw: po ? this.promoRanking().slice(0, this.poSize()).map(x => x.t.id) : new RNG(pickSeed('cupdraw', season)).shuffle(ids), res: {} };
     this.save();
     return d.cup;
   },
-  cupDone() { const c = this.cup(); return !!(c && c.res['FIN'] && c.res['3RD']); },
+  cupDone() { const c = this.cup(); return !!(c && cupShape(c).every(m => c.res[m.k])); },
   poolTeam(id) { return this.data.reserve.find(t => t.id === id) || null; },
   /* the playoff matches in playing order with their clubs (ids; null = not decided yet) and result */
   cupMatches() { return this.cupMatchesOf(this.cup()); },
@@ -327,7 +343,8 @@ const League = {
   cupTop3() {
     const c = this.cup();
     if (!this.cupDone()) return null;
-    return [c.res['FIN'].winner, c.res['FIN'].loser, c.res['3RD'].winner].map(id => this.poolTeam(id)).filter(Boolean);
+    const dir = cupDirect(c);                               // the promotion league's top 2, then the playoff's winner
+    return (dir.length ? dir.concat(c.res['FIN'].winner) : [c.res['FIN'].winner, c.res['FIN'].loser, c.res['3RD'].winner]).map(id => this.poolTeam(id)).filter(Boolean);
   },
   /* a finished playoff match into the bracket (same entry as a league match: League.record) */
   recordCup(s, res, winnerId) {
@@ -784,7 +801,7 @@ const App = {
       }
       return { label, status: m.k === key ? 'now' : 'later', a, b };
     });
-    return { heading: 'PLAYOFFS', sub: `SEASON ${League.data.season || 1} · ${CUP_ROUNDS[round]} · TOP 3 GO UP`, later: 'COMING UP', matches };
+    return { heading: 'PLAYOFFS', sub: `SEASON ${League.data.season || 1} · ${CUP_ROUNDS[round]} · ${League.poDirect() ? 'THE WINNER GOES UP' : 'TOP 3 GO UP'}`, later: 'COMING UP', matches };
   },
   /* a division's clubs, table, results and fixture: 'main' (the league) or 'promo' (the live league's promotion league) */
   div(key) {
@@ -792,11 +809,11 @@ const App = {
     if (key === 'promo') {
       const p = League.promoOn() ? d.promo : null;
       return { key, teams: d.reserve, table: p ? p.table : {}, history: p ? p.history : [], weeks: p ? p.plan : [], per: p ? p.per : Math.max(1, d.reserve.length >> 1),
-        rank: (t, h) => League.promoRanking(t, h), tableTitle: 'PROMOTION LEAGUE', po: p && p.po ? PO_SIZE : 0, prefix: 'PROMO · ' };
+        rank: (t, h) => League.promoRanking(t, h), tableTitle: 'PROMOTION LEAGUE', po: p && p.po ? League.poSize() : 0, up: League.poDirect(), prefix: 'PROMO · ' };
     }
     const plan = this.seasonPlan();
     return { key: 'main', teams: d.teams, table: d.table, history: d.history, weeks: plan ? plan.weeks : [], per: this.perWeek(),
-      rank: (t, h) => League.ranking(t, h), tableTitle: 'LEAGUE TABLE', po: 0, prefix: '' };
+      rank: (t, h) => League.ranking(t, h), tableTitle: 'LEAGUE TABLE', po: 0, up: 0, prefix: '' };
   },
   /* live league: the promotion match of the slot about to be played (the promotion channel), or null if it has none.
      The next unplayed promotion match is played once its planned slot (League.promoSlot) has come. */
@@ -804,7 +821,7 @@ const App = {
     if (!League.promoOn()) return null;
     const d = League.data, p = d.promo, j = Live.count() - (d.liveSeasonStart || 0), i = League.promoDone();
     if (i >= p.n + p.po || League.promoSlot(i) > j) return null;
-    if (i >= p.n) {                                                   // the promotion league is over: its top 4's playoff
+    if (i >= p.n) {                                                   // the promotion league is over: its playoff
       League.cup(true);
       const m = League.cupNext();
       return m ? this.buildCupSetup(m, 'promo') : null;
@@ -960,7 +977,7 @@ const App = {
     });
     const W = g.winner >= 0 ? g.teams[g.winner] : null;
     this.end = { title: s.title, winner: W ? { name: W.name, code: W.code, c1: W.c1, c2: W.c2 } : null, rows, standings, seasonEnd: null,
-      tableTitle: D.tableTitle, po: D.po,
+      tableTitle: D.tableTitle, po: D.po, up: D.up,
       subtitle: scoreLine(g), score: { a: this.tObj(H), b: this.tObj(A), sa: H.score, sb: A.score } };
     this.endT = 0;
     /* persist (the live league may have recorded it already: a match the viewer joined after its whistle) */
@@ -1005,7 +1022,7 @@ const App = {
       l3 = 'Who wins next season? Comment your team 👇';
     } else if (s.cup === '3RD') l2 = `🥉 ${W.name} take the last promotion place!`;
     else if (s.cup === 'FIN') l2 = '';
-    else if (s.round === 2) l2 = `${W.name} are promoted and go on to the final!`;
+    else if (s.round === 2) l2 = League.poDirect() ? `${W.name} go on to the final!` : `${W.name} are promoted and go on to the final!`;
     else l2 = `${W.name} move on!`;
     if (!l3) l3 = 'Who goes up next? Comment your team 👇';
     return [l1, l2, l3, '#satisfying #football #simulation #oddlysatisfying #league'].filter(Boolean).join('\n');

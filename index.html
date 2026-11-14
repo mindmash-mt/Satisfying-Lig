@@ -174,6 +174,7 @@
   .lv-ball:focus-visible { outline: 2px solid var(--accent2); outline-offset: 1px; }
   @keyframes lvpulse { 50% { box-shadow: inset 0 0 0 1px rgba(0,230,118,.15); } }
   .lp-table tr.po td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  .lp-table tr.up td:first-child { box-shadow: inset 3px 0 0 #FFD54F; }
   /* "Lig tablosu" / "Yükselme ligi": the Tablo / Fikstür switch */
   /* it stays on screen while the page scrolls (just under the tabs), so the table and the fixture are one tap apart */
   .seg { display: flex; width: fit-content; gap: 2px; padding: 3px; margin: 6px 0 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 99px;
@@ -391,7 +392,7 @@
 </div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 <script>
-const BUILD_SIM_HASH = '381b173eb3b9';
+const BUILD_SIM_HASH = '0c0a55aa1679';
 const BUILD_BASE = null;
 const BUILD_START = null;
 /* =====================================================================
@@ -405,7 +406,11 @@ const CONFIG = {
   BALL_R: 16, BALL_SPEED: 600, WALL_ACCEL: 0.10, BALL_MAX_MULT: 2.4, GOAL_RESPAWN: 1.1,
   POST_R: 10, FINAL_GOAL_FRAC: 0.54, NET_DEPTH_RECT: 34,
   KEEPER_INSET: 28, KEEPER_LEN_FRAC: 0.30, KEEPER_THICK: 14, KEEPER_SPEED: 320, KEEPER_GAIN: 3, KEEPER_READ: 0.3,
-  PLAYER_R: 24, PLAYER_SPEED: 260,
+  /* both keepers have the same skill (how fast they react and how far they read the ball's path, see KEEPER_GAIN / KEEPER_READ) */
+  KEEPER_SKILL: 0.4,
+  /* PLAYER_CHASE: a player leans toward the ball while it is in its third (turn rate toward it, rad/s; 0: pure wandering).
+     FWD_AIM_DEG: the forward's touch is a shot at the centre of the rival goal, at most this far off. */
+  PLAYER_R: 24, PLAYER_SPEED: 260, PLAYER_CHASE: 2.5, FWD_AIM_DEG: 20,
   WIN_SLOW_GAME: 0.24, TS_SLOW: 0.3,
   FINAL_SLOWMO_GAME: 0.375, FINAL_SLOWMO_TS: 0.25, FINAL_SLOWMO_DIST: 120,
   /* the pitch fills the frame from just under the top bar (title · score · clock) to the bottom edge; the goal tally
@@ -756,11 +761,12 @@ class Game {
     this.half = 1;               // 1 / 2; at half time the clubs change ends (rectTeams swaps)
     this.slowmo = null; this.slowmoCd = 0;
     this.spawnBlock = 0;
+    this.kickTeam = -1;          // the club that takes the next kick-off (the one that just conceded; -1: a random direction)
 
     this.teams = o.teams.slice(0, 2).map((d, i) => ({
       i, id: d.id, name: d.name, code: d.code, c1: d.c1, c2: d.c2,
       place: 0, gf: 0, gfT: [], ga: 0, saves: 0, score: 0, pen: 0,
-      skill: this.rng.range(0.25, 0.55),
+      skill: CONFIG.KEEPER_SKILL,         // both keepers are equally good: no hidden draw before the match
       hitT: -1,
       k: { s: 0, vs: 0, halfLen: 20, flashT: -9, saveCd: 0, active: true },
     }));
@@ -773,6 +779,7 @@ class Game {
     this.spawnBall(true);
   }
 
+  ballInPlay() { for (const b of this.balls) if (b.state === 'live') return true; return false; }
   emit(type, data) { if (this.onEvent) this.onEvent(type, data || {}); }
   /* seconds left on the clock (the golden goal has its own clock) */
   timeLeft() { return this.extra ? Math.max(0, this.extraStart + CONFIG.GOLDEN_TIME - this.clock) : Math.max(0, this.matchTime - this.clock); }
@@ -862,9 +869,17 @@ class Game {
       if (ok) break;
       x = ox + this.rng.range(-70, 70); y = oy + this.rng.range(-70, 70);
     }
-    const a = this.rng.range(0, TAU), sp = this.targetSpeed();
-    const b = { id: this.ballId++, x, y, px: x, py: y, vx: DM.cos(a) * sp, vy: DM.sin(a) * sp, sp, boost: 1, wallT: -9,
-      lastTouch: -1, state: 'live', born: initial ? -10 : this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0, shot: false, shotTeam: -1 };
+    /* after a goal the club that conceded kicks off: the ball leaves the centre spot toward the rival goal (within KICK_MAX_DEG
+       of straight ahead, like a player's touch). The match's first ball and the second half's start in a random direction. */
+    const kt = this.kickTeam, sp = this.targetSpeed();
+    this.kickTeam = -1;
+    let vx, vy;
+    if (kt >= 0) {
+      const a = this.rng.range(-1, 1) * CONFIG.KICK_MAX_DEG * DEG;
+      vx = DM.sin(a) * sp; vy = (kt === this.rectTeams[0] ? 1 : -1) * DM.cos(a) * sp;
+    } else { const a = this.rng.range(0, TAU); vx = DM.cos(a) * sp; vy = DM.sin(a) * sp; }
+    const b = { id: this.ballId++, x, y, px: x, py: y, vx, vy, sp, boost: 1, wallT: -9,
+      lastTouch: kt, prevTouch: -1, byKeeper: false, state: 'live', born: initial ? -10 : this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0, shot: false, shotTeam: -1 };
     this.balls.push(b);
     this.spawnBlock = this.t + 0.35;
     this.emit('spawnBall', { x, y, initial: !!initial, id: b.id });
@@ -880,12 +895,15 @@ class Game {
   }
   step(dt) {
     if (this.over) return;
-    /* the match clock runs on screen time: a slow-motion step takes longer on screen */
-    if (!this.winnerSet && !this.morph) {                        // the clock stops during the half-time break
+    /* the match clock runs on game time: in slow motion it runs slow too (a slow-motion moment costs no playing time), and it
+       stops during the half-time break and from a goal until the kick-off that follows it (no ball in play) */
+    if (!this.winnerSet && !this.morph) {
       if (this.t === 0) this.emit('kickoff', {});
-      this.clock += dt / this.timeScale();
-      const left = Math.ceil(this.timeLeft());                   // last 10 seconds: one tick a second (sound / clock pulse only)
-      if (left <= 10 && left > 0 && left !== this.lastTick) { this.lastTick = left; this.emit('countdown', { n: left }); }
+      if (this.pens || this.ballInPlay()) {
+        this.clock += dt;
+        const left = Math.ceil(this.timeLeft());                 // last 10 seconds: one tick a second (sound / clock pulse only)
+        if (left <= 10 && left > 0 && left !== this.lastTick) { this.lastTick = left; this.emit('countdown', { n: left }); }
+      }
     }
     this.t += dt;
     if (this.pens) { this.stepPens(dt); return; }
@@ -975,13 +993,24 @@ class Game {
     if (vn < 0) { p.vx -= 2 * vn * nx; p.vy -= 2 * vn * ny; p.h = DM.atan2(p.vy, p.vx); }
   }
   updatePlayers(dt) {
-    const R = CONFIG.PLAYER_R, sp = CONFIG.PLAYER_SPEED;
+    const R = CONFIG.PLAYER_R, sp = CONFIG.PLAYER_SPEED, chase = CONFIG.PLAYER_CHASE * dt;
+    let ball = null;
+    for (const b of this.balls) if (b.state === 'live') { ball = b; break; }
     for (const p of this.players) {
       if (!p.alive) continue;
       p.turnT -= dt;
       if (p.turnT <= 0) { p.turnT = this.rng.range(0.3, 0.9); p.turnTarget = this.rng.range(-2.4, 2.4); }
       p.turn += (p.turnTarget - p.turn) * Math.min(1, dt * 3);
       p.h += p.turn * dt;
+      /* a player sees the ball: while it is in the player's third the player keeps wandering but leans toward it
+         (it turns toward the ball by at most PLAYER_CHASE rad/s) */
+      if (ball && chase > 0 && p.role) {
+        const z = this.zoneOf(p);
+        if (ball.y >= z[0] && ball.y <= z[1]) {
+          const dx = ball.x - p.x, dy = ball.y - p.y;
+          p.h += clamp(DM.atan2(p.vx * dy - p.vy * dx, p.vx * dx + p.vy * dy), -chase, chase);
+        }
+      }
       p.vx = DM.cos(p.h) * sp; p.vy = DM.sin(p.h) * sp;
       p.x += p.vx * dt; p.y += p.vy * dt;
       for (const s of this.geo.sides) {
@@ -1059,10 +1088,16 @@ class Game {
     const fresh = this.t - b.hitP > 0.12;
     b.hitP = this.t;
     if (!fresh) { b.x = p.x + nx * rad; b.y = p.y + ny * rad; return; }
-    const down = p.team === this.rectTeams[0], a = this.rng.range(-1, 1) * CONFIG.KICK_MAX_DEG * DEG, sp = DM.hypot(b.vx, b.vy) || b.sp;
+    const down = p.team === this.rectTeams[0], sp = DM.hypot(b.vx, b.vy) || b.sp, K = CONFIG.KICK_MAX_DEG * DEG;
+    let a = this.rng.range(-1, 1);
+    if (p.role === 'fwd') {
+      /* the forward shoots: at the centre of the rival goal, at most FWD_AIM_DEG off (never more than KICK_MAX_DEG off straight ahead) */
+      const g = this.geo.goals.find(gg => gg.team !== p.team);
+      a = g ? clamp(DM.atan2(g.mx - b.x, Math.abs(g.my - b.y)) + a * CONFIG.FWD_AIM_DEG * DEG, -K, K) : a * K;
+    } else a *= K;
     b.vx = DM.sin(a) * sp; b.vy = (down ? 1 : -1) * DM.cos(a) * sp;
     b.x = p.x + (b.vx / sp) * rad; b.y = p.y + (b.vy / sp) * rad;
-    b.lastTouch = p.team;
+    b.lastTouch = p.team; b.byKeeper = false;
     this.emit('player', { x: b.x - (b.vx / sp) * CONFIG.BALL_R, y: b.y - (b.vy / sp) * CONFIG.BALL_R, team: p.team });
     if (!this.winnerSet && p.captain && this.headingToRivalGoal(b, p.team)) {
       if (!b.shot || b.shotTeam !== p.team) {
@@ -1080,7 +1115,10 @@ class Game {
     const d2 = dx * dx + dy * dy;
     if (d2 >= rad * rad) return;
     this.endShot(b);
-    b.lastTouch = T.i;                 // keepers count as the last touch too (goal credit / own goal)
+    /* a keeper's touch is the last touch, but the touch before it is kept: a ball that goes in off the keeper is the goal of
+       whoever sent it there, not the keeper's own goal (see scoreGoal) */
+    if (!(b.byKeeper && b.lastTouch === T.i)) b.prevTouch = b.lastTouch;
+    b.lastTouch = T.i; b.byKeeper = true;
     const outward = b.vx * k.nx + b.vy * k.ny;
     let d = Math.sqrt(d2);
     if (d < 1e-6) { dx = -k.nx; dy = -k.ny; d = 1; }
@@ -1177,10 +1215,11 @@ class Game {
     b.nl = { a: along, o: out, va: b.vx * g.tx + b.vy * g.ty, vo: Math.max(120, b.vx * g.nx + b.vy * g.ny) };
     if (this.winnerSet) return;
     const T = this.teams[g.team];
-    const scorer = b.lastTouch, own = scorer === g.team;
+    const scorer = b.byKeeper && b.lastTouch === g.team ? b.prevTouch : b.lastTouch, own = scorer === g.team;
     T.ga++;
     T.hitT = this.t; this.stats.goals++;
     this.spawnBlock = Math.max(this.spawnBlock, this.t + CONFIG.GOAL_RESPAWN);
+    this.kickTeam = g.team;                                // the club that conceded takes the kick-off
     if (own) this.stats.ownGoals++;
     const other = g.team === 0 ? 1 : 0;
     this.creditGoal(other); this.teams[other].score++;
@@ -1227,7 +1266,7 @@ class Game {
     this.emit('halfTime', {});
     this.half = 2; this.clock = this.matchTime / 2;
     for (const b of this.balls) if (b.state !== 'dead') b.state = 'vanish';
-    this.slowmo = null;
+    this.slowmo = null; this.kickTeam = -1;
     this.rectTeams = [this.rectTeams[1], this.rectTeams[0]];
     this.geo = this.computeGeo();
     for (const T of this.teams) { T.k.s = 0; T.k.vs = 0; }
@@ -2494,7 +2533,8 @@ const LeagueTable = {
     this.pill(ctx, slotX(N - 1), cy, C.pillW, h, newF[newF.length - 1], easeOutBack((tt - 2.2) / 0.35, 2.6));
   },
   /* rows: see App.onOver / LiveScreen. st: { tt: seconds since this screen started, post: animate the match result, alpha,
-     po: the promotion league's table — its top po rows are the playoff places (green, a PLAYOFFS line under them) and nobody goes down } */
+     po: the promotion league's table — its top po rows are the playoff places (green, a PLAYOFFS line under them) and nobody goes down;
+     up: its top up rows go up directly (gold, a PROMOTION line under them) } */
   draw(ctx, rows, title, sub, st) {
     const SX = 510, tt = st.tt, post = st.post;
     const n = rows.length, X0 = 70, W = 880, top = 345;
@@ -2514,12 +2554,18 @@ const LeagueTable = {
     outlinedText(ctx, 'PTS', X0 + C.pts, hy, head, hc, null, 0);
     if (CONFIG.FORM_COUNT > 0) outlinedText(ctx, `LAST ${CONFIG.FORM_COUNT}`, X0 + C.form + formW / 2, hy, head, hc, null, 0);
     /* relegation line above the last RELEGATE_COUNT rows (the promotion league: the playoff line under its top po rows) */
-    const PO = st.po || 0, RC = PO ? 0 : CONFIG.RELEGATE_COUNT, zones = RC > 0 && n >= RC + 5, poZone = PO > 0 && n > PO;
+    const PO = st.po || 0, UP = st.up || 0, RC = PO ? 0 : CONFIG.RELEGATE_COUNT, zones = RC > 0 && n >= RC + 5, poZone = PO > 0 && n > PO;
     if (poZone) {
       const ly = top + PO * rh;
       ctx.save(); ctx.setLineDash([14, 10]); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(46,230,107,0.85)';
       ctx.beginPath(); ctx.moveTo(X0, ly); ctx.lineTo(X0 + W, ly); ctx.stroke(); ctx.restore();
       outlinedText(ctx, 'PLAYOFFS', X0 + W, ly - 1, `700 15px ${FONT_UI}`, this.GREEN, 'rgba(0,0,0,0.8)', 4, 'right');
+      if (UP > 0 && UP < PO) {                               // ...and the line under the clubs that go up directly
+        const uy = top + UP * rh;
+        ctx.save(); ctx.setLineDash([14, 10]); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,213,79,0.85)';
+        ctx.beginPath(); ctx.moveTo(X0, uy); ctx.lineTo(X0 + W, uy); ctx.stroke(); ctx.restore();
+        outlinedText(ctx, 'PROMOTION', X0 + W, uy - 1, `700 15px ${FONT_UI}`, '#FFD54F', 'rgba(0,0,0,0.8)', 4, 'right');
+      }
     }
     if (zones) {
       const ly = top + (n - RC) * rh;
@@ -2543,10 +2589,10 @@ const LeagueTable = {
       else if (r.out) { ctx.lineWidth = 4; ctx.strokeStyle = this.RED; ctx.stroke(); }          // relegated
       ctx.fillStyle = r.c1; roundRect(ctx, x, y + 3, 12, rh - 6, 6); ctx.fill();
       const rank = Math.round(pos) + 1;
-      if (poZone && rank <= PO) {                            // promotion league: playoff places, green badges
-        const bs = rh * 0.62;
-        roundRect(ctx, x + C.rank - bs / 2, cy - bs / 2, bs, bs, 8); ctx.fillStyle = rank === 1 ? '#FFD54F' : '#22C55E'; ctx.fill();
-        outlinedText(ctx, String(rank), x + C.rank, cy + 2, `${Math.round(rh * 0.5)}px ${FONT_BIG}`, rank === 1 ? '#2a1f00' : '#04210f', null, 0);
+      if (poZone && rank <= PO) {                            // promotion league: direct places gold, playoff places green
+        const bs = rh * 0.62, gold = rank <= Math.max(1, UP);
+        roundRect(ctx, x + C.rank - bs / 2, cy - bs / 2, bs, bs, 8); ctx.fillStyle = gold ? '#FFD54F' : '#22C55E'; ctx.fill();
+        outlinedText(ctx, String(rank), x + C.rank, cy + 2, `${Math.round(rh * 0.5)}px ${FONT_BIG}`, gold ? '#2a1f00' : '#04210f', null, 0);
       } else if (zones && (rank === 1 || rank > n - RC)) {   // leader: gold badge, relegation places: red badge
         const lead = rank === 1, bs = rh * 0.62;
         roundRect(ctx, x + C.rank - bs / 2, cy - bs / 2, bs, bs, 8); ctx.fillStyle = lead ? '#FFD54F' : 'rgba(255,77,77,0.9)'; ctx.fill();
@@ -2712,7 +2758,7 @@ const EndScreen = {
     }
     const se = e.seasonEnd;
     const sc = e.score ? `FULL TIME · ${upTR(e.score.a.name)} ${e.score.sa}–${e.score.sb} ${upTR(e.score.b.name)}` : 'AFTER ' + e.title;
-    LeagueTable.draw(ctx, e.rows, e.tableTitle || 'LEAGUE TABLE', se ? `🏆 ${upTR(se.champion.name)} · SEASON ${se.season} CHAMPIONS` : sc, { tt: et, post: true, alpha: clamp01(et / 0.3), po: e.po || 0 });
+    LeagueTable.draw(ctx, e.rows, e.tableTitle || 'LEAGUE TABLE', se ? `🏆 ${upTR(se.champion.name)} · SEASON ${se.season} CHAMPIONS` : sc, { tt: et, post: true, alpha: clamp01(et / 0.3), po: e.po || 0, up: e.up || 0 });
     for (const p of FX.endParts) {
       if (et > 2.3) break;
       ctx.save(); ctx.globalAlpha = clamp01((2.3 - et) / 0.3); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
@@ -2735,17 +2781,27 @@ const CUP_SHAPE = [
   { k: 'SF-1', r: 2, a: 'wQF-1', b: 'wQF-2' }, { k: 'SF-2', r: 2, a: 'wQF-3', b: 'wQF-4' },
   { k: '3RD', r: 3, a: 'lSF-1', b: 'lSF-2' }, { k: 'FIN', r: 3, a: 'wSF-1', b: 'wSF-2' },
 ];
-/* the live league's promotion playoff (07_live.js): the pool clubs play their own league (the promotion league, alongside the
-   league, see Live.promoNew) and its top PO_SIZE play this single-leg knockout in the season's last slots: 1st v 4th, 2nd v 3rd
-   (the better placed club at home), then the third-place match and the final. Round numbers are CUP_SHAPE's (2 = semi-finals,
-   3 = final), so the names and the screens are the same. Champion, runner-up and the third-place winner go up. */
-const PO_SIZE = 4;
+/* the live league's promotion (07_live.js): the pool clubs play their own league (the promotion league, alongside the league,
+   see Live.promoNew). Its top PO_DIRECT clubs go up directly; the next four (3rd–6th) play this single-leg knockout in the
+   season's last slots for the last place: 3rd v 6th, 4th v 5th (the better placed club at home), then the final, whose winner
+   goes up. The draw is the table's top PO_SIZE (s0, s1: the clubs that went up directly). Round numbers are CUP_SHAPE's
+   (2 = semi-finals, 3 = final), so the names and the screens are the same. */
+const PO_DIRECT = 2, PO_SIZE = 6;
 const PO_SHAPE = [
+  { k: 'SF-1', r: 2, a: 's2', b: 's5' }, { k: 'SF-2', r: 2, a: 's3', b: 's4' }, { k: 'FIN', r: 3, a: 'wSF-1', b: 'wSF-2' },
+];
+/* the promotion league's first format (a season begun with it ends with it, and the archive keeps such seasons): no direct
+   places, the top 4 play 1st v 4th, 2nd v 3rd, the third-place match and the final; champion, runner-up and third go up */
+const PO_OLD_SIZE = 4;
+const PO_OLD = [
   { k: 'SF-1', r: 2, a: 's0', b: 's3' }, { k: 'SF-2', r: 2, a: 's1', b: 's2' },
   { k: '3RD', r: 3, a: 'lSF-1', b: 'lSF-2' }, { k: 'FIN', r: 3, a: 'wSF-1', b: 'wSF-2' },
 ];
-/* the bracket a draw belongs to: 4 clubs = the promotion league's playoff, else the old 12-club playoff */
-const cupShape = (c) => (c && Array.isArray(c.draw) && c.draw.length <= PO_SIZE ? PO_SHAPE : CUP_SHAPE);
+/* the bracket a draw belongs to: 6 clubs = the promotion league's (2 direct + 4 in the playoff), up to 4 = its first format,
+   else the old 12-club playoff */
+const cupShape = (c) => { const n = c && Array.isArray(c.draw) ? c.draw.length : 0; return n === PO_SIZE ? PO_SHAPE : n <= PO_OLD_SIZE ? PO_OLD : CUP_SHAPE; };
+/* the clubs of a draw that went up without playing (the promotion league's top PO_DIRECT) */
+const cupDirect = (c) => (cupShape(c) === PO_SHAPE ? c.draw.slice(0, PO_DIRECT) : []);
 const CUP_ROUNDS = ['FIRST ROUND', 'QUARTER-FINALS', 'SEMI-FINALS', 'FINAL'];
 const CUP_ROUNDS_TR = ['1. tur', 'Çeyrek final', 'Yarı final', 'Final'];
 /* a match's name: [video (English), panel (Turkish)] */
@@ -2780,11 +2836,12 @@ const cupName = (k) => {
 /** @typedef {{ season: number, key: string, size: number, created: string, weeks: string[][][] }} SeasonPlan  weeks[w][m] = [home, away] */
 /**
  * @typedef {Object} PromoState  the live league's promotion league of the season: the pool clubs' own league, played alongside the
- * league (one promotion match in most of the league's slots, see Live.promoNew), then the playoff of its top PO_SIZE (League.cup)
+ * league (one promotion match in most of the league's slots, see Live.promoNew), then its top 2 go up and 3rd–6th play the playoff (League.cup)
  * @property {number} season
  * @property {number} per       matches a week (pool clubs / 2)
  * @property {number} N         the league's matches this season = the season's slots
  * @property {number} po        playoff matches (PO_SHAPE, in the season's last po slots; 0 = the top clubs go up without a playoff)
+ * @property {number} [direct]  clubs that go up directly, the next four play the playoff (absent: the first format, PO_OLD)
  * @property {number} n         promotion league matches (plan.length × per)
  * @property {string[][][]} plan  plan[w][m] = [home, away] (a double round robin, or as much of it as fits)
  * @property {Object<string, TableRow>} table
@@ -2806,7 +2863,7 @@ const cupName = (k) => {
  * @property {number[]} points       [win, draw, loss]
  * @property {SeasonPlan|null} seasonPlan
  * @property {string[]|null} tieOrder
- * @property {CupState|null} cup     the promotion playoff (the old 12-club one, or the promotion league's top 4: see cupShape)
+ * @property {CupState|null} cup     the promotion playoff (the old 12-club one, or the promotion league's: see cupShape)
  * @property {PromoState|null} [promo]  live league: this season's promotion league (null: a season of the old format)
  * @property {HistoryEntry[]} history
  * @property {{ id: string, name: string, season: number, pts: number }[]} champions
@@ -2983,9 +3040,14 @@ const League = {
   validPlanShape(p) {
     return !!(p && typeof p === 'object' && Array.isArray(p.weeks) && p.weeks.every(w => Array.isArray(w) && w.every(g => Array.isArray(g) && g.length === 2)));
   },
-  /* ---------- promotion: the old 12-club playoff (CUP_SHAPE) or the live league's promotion league + its top-4 playoff (PO_SHAPE) ---------- */
+  /* ---------- promotion: the old 12-club playoff (CUP_SHAPE) or the live league's promotion league + its playoff (PO_SHAPE / PO_OLD) ---------- */
   /* this season has a promotion league (live league; a season begun under the old format finishes without one) */
   promoOn() { const d = this.data, p = d.promo; return !!(p && p.season === (d.season || 1)); },
+  /* this season's promotion league: the clubs that go up directly (0: none — no playoff, or the first format) and the clubs in
+     the playoff's draw (the direct ones included) */
+  poDirect() { const p = this.data.promo; return this.promoOn() && p.po ? (p.direct || 0) : 0; },
+  poSize() { return this.poDirect() ? PO_SIZE : PO_OLD_SIZE; },
+  poShape() { return this.poDirect() ? PO_SHAPE : PO_OLD; },
   /* the promotion league's matches are all played */
   promoLeagueOver() { const p = this.data.promo; return this.promoOn() && p.history.length >= p.n; },
   /* the promotion league and its playoff are over: who goes up is settled */
@@ -3021,19 +3083,19 @@ const League = {
      promotion league with its playoff, are all finished */
   seasonOver() { return this.mainOver() && (this.promoOn() ? this.promoOver() : (!this.cupOn() || this.cupDone())); },
   /* this season's bracket: its draw and the results so far. The old playoff: a random order of the pool, drawn from the season's
-     seed when the league matches are over; the promotion league's: its top PO_SIZE in table order, when its matches are over.
+     seed when the league matches are over; the promotion league's: its top poSize() in table order, when its matches are over.
      build: draw it now if it is due and not drawn yet. Null before that. */
   cup(build) {
     const d = this.data, season = d.season || 1;
     if (!this.cupOn()) return null;
     const ids = d.reserve.map(t => t.id), c = d.cup, po = this.promoOn();
-    if (c && c.season === season && c.draw.length === (po ? PO_SIZE : ids.length) && c.draw.every(id => ids.includes(id))) return c;
+    if (c && c.season === season && c.draw.length === (po ? this.poSize() : ids.length) && c.draw.every(id => ids.includes(id))) return c;
     if (!build || !(po ? this.promoLeagueOver() : this.mainOver())) return null;
-    d.cup = { season, draw: po ? this.promoRanking().slice(0, PO_SIZE).map(x => x.t.id) : new RNG(pickSeed('cupdraw', season)).shuffle(ids), res: {} };
+    d.cup = { season, draw: po ? this.promoRanking().slice(0, this.poSize()).map(x => x.t.id) : new RNG(pickSeed('cupdraw', season)).shuffle(ids), res: {} };
     this.save();
     return d.cup;
   },
-  cupDone() { const c = this.cup(); return !!(c && c.res['FIN'] && c.res['3RD']); },
+  cupDone() { const c = this.cup(); return !!(c && cupShape(c).every(m => c.res[m.k])); },
   poolTeam(id) { return this.data.reserve.find(t => t.id === id) || null; },
   /* the playoff matches in playing order with their clubs (ids; null = not decided yet) and result */
   cupMatches() { return this.cupMatchesOf(this.cup()); },
@@ -3052,7 +3114,8 @@ const League = {
   cupTop3() {
     const c = this.cup();
     if (!this.cupDone()) return null;
-    return [c.res['FIN'].winner, c.res['FIN'].loser, c.res['3RD'].winner].map(id => this.poolTeam(id)).filter(Boolean);
+    const dir = cupDirect(c);                               // the promotion league's top 2, then the playoff's winner
+    return (dir.length ? dir.concat(c.res['FIN'].winner) : [c.res['FIN'].winner, c.res['FIN'].loser, c.res['3RD'].winner]).map(id => this.poolTeam(id)).filter(Boolean);
   },
   /* a finished playoff match into the bracket (same entry as a league match: League.record) */
   recordCup(s, res, winnerId) {
@@ -3509,7 +3572,7 @@ const App = {
       }
       return { label, status: m.k === key ? 'now' : 'later', a, b };
     });
-    return { heading: 'PLAYOFFS', sub: `SEASON ${League.data.season || 1} · ${CUP_ROUNDS[round]} · TOP 3 GO UP`, later: 'COMING UP', matches };
+    return { heading: 'PLAYOFFS', sub: `SEASON ${League.data.season || 1} · ${CUP_ROUNDS[round]} · ${League.poDirect() ? 'THE WINNER GOES UP' : 'TOP 3 GO UP'}`, later: 'COMING UP', matches };
   },
   /* a division's clubs, table, results and fixture: 'main' (the league) or 'promo' (the live league's promotion league) */
   div(key) {
@@ -3517,11 +3580,11 @@ const App = {
     if (key === 'promo') {
       const p = League.promoOn() ? d.promo : null;
       return { key, teams: d.reserve, table: p ? p.table : {}, history: p ? p.history : [], weeks: p ? p.plan : [], per: p ? p.per : Math.max(1, d.reserve.length >> 1),
-        rank: (t, h) => League.promoRanking(t, h), tableTitle: 'PROMOTION LEAGUE', po: p && p.po ? PO_SIZE : 0, prefix: 'PROMO · ' };
+        rank: (t, h) => League.promoRanking(t, h), tableTitle: 'PROMOTION LEAGUE', po: p && p.po ? League.poSize() : 0, up: League.poDirect(), prefix: 'PROMO · ' };
     }
     const plan = this.seasonPlan();
     return { key: 'main', teams: d.teams, table: d.table, history: d.history, weeks: plan ? plan.weeks : [], per: this.perWeek(),
-      rank: (t, h) => League.ranking(t, h), tableTitle: 'LEAGUE TABLE', po: 0, prefix: '' };
+      rank: (t, h) => League.ranking(t, h), tableTitle: 'LEAGUE TABLE', po: 0, up: 0, prefix: '' };
   },
   /* live league: the promotion match of the slot about to be played (the promotion channel), or null if it has none.
      The next unplayed promotion match is played once its planned slot (League.promoSlot) has come. */
@@ -3529,7 +3592,7 @@ const App = {
     if (!League.promoOn()) return null;
     const d = League.data, p = d.promo, j = Live.count() - (d.liveSeasonStart || 0), i = League.promoDone();
     if (i >= p.n + p.po || League.promoSlot(i) > j) return null;
-    if (i >= p.n) {                                                   // the promotion league is over: its top 4's playoff
+    if (i >= p.n) {                                                   // the promotion league is over: its playoff
       League.cup(true);
       const m = League.cupNext();
       return m ? this.buildCupSetup(m, 'promo') : null;
@@ -3685,7 +3748,7 @@ const App = {
     });
     const W = g.winner >= 0 ? g.teams[g.winner] : null;
     this.end = { title: s.title, winner: W ? { name: W.name, code: W.code, c1: W.c1, c2: W.c2 } : null, rows, standings, seasonEnd: null,
-      tableTitle: D.tableTitle, po: D.po,
+      tableTitle: D.tableTitle, po: D.po, up: D.up,
       subtitle: scoreLine(g), score: { a: this.tObj(H), b: this.tObj(A), sa: H.score, sb: A.score } };
     this.endT = 0;
     /* persist (the live league may have recorded it already: a match the viewer joined after its whistle) */
@@ -3730,7 +3793,7 @@ const App = {
       l3 = 'Who wins next season? Comment your team 👇';
     } else if (s.cup === '3RD') l2 = `🥉 ${W.name} take the last promotion place!`;
     else if (s.cup === 'FIN') l2 = '';
-    else if (s.round === 2) l2 = `${W.name} are promoted and go on to the final!`;
+    else if (s.round === 2) l2 = League.poDirect() ? `${W.name} go on to the final!` : `${W.name} are promoted and go on to the final!`;
     else l2 = `${W.name} move on!`;
     if (!l3) l3 = 'Who goes up next? Comment your team 👇';
     return [l1, l2, l3, '#satisfying #football #simulation #oddlysatisfying #league'].filter(Boolean).join('\n');
@@ -4011,7 +4074,7 @@ const Offline = {
    side, each on its own "channel", and their matches of a slot kick off together:
      • main:  the league (18 clubs, 17 weeks × 9 = 153 matches: one in every slot of the season),
      • promo: the promotion league of the 12 pool clubs (a double round robin, 22 weeks × 6 = 132 matches spread evenly over
-              the season's slots) and then its playoff (top 4: semi-finals, third place, final) in the season's last 4 slots,
+              the season's slots) its top 2 go up directly and 3rd–6th play the playoff (semi-finals, final) in the season's last 3 slots,
               so both seasons end with the same slot (League.promoSlot). Champion, runner-up and third place go up.
    A match: ~5 s that week's matches, the 90 s match with a 6 s half-time break, ~9 s the animated table. A slot starts at
    its time, or GAP seconds after the previous slot's last match ended if that one ran over (a league match is ~108 s on
@@ -4150,7 +4213,7 @@ const Live = {
     else if (!(d.promo && d.promo.season === d.season)) d.promo = null;
   },
   /* a season's promotion league: the pool clubs' double round robin (as many of its weeks as fit) spread over the league's N slots,
-     the playoff in the last PO_SIZE slots. Its fixture and tie-break draw come from the season's seeds, like the league's. */
+     the playoff (PO_SHAPE) in the last slots. Its fixture and tie-break draw come from the season's seeds, like the league's. */
   promoNew(d) {
     const ids = d.reserve.map(t => t.id), nP = ids.length;
     if (nP < 2 || nP % 2) return null;
@@ -4158,7 +4221,7 @@ const Live = {
     const po = nP >= PO_SIZE && CONFIG.RELEGATE_COUNT === 3 ? PO_SHAPE.length : 0;
     const weeks = Math.max(0, Math.min(2 * (nP - 1), Math.floor((N - po) / per)));
     if (!weeks && !po) return null;
-    return { season: d.season, per, N, po, n: weeks * per, plan: weeks ? planRoundRobin(ids, weeks, new RNG(this.seed(['pplan', d.season]))) : [],
+    return { season: d.season, per, N, po, direct: po ? PO_DIRECT : 0, n: weeks * per, plan: weeks ? planRoundRobin(ids, weeks, new RNG(this.seed(['pplan', d.season]))) : [],
       table: {}, history: [], tieOrder: new RNG(this.seed(['ptie', d.season])).shuffle(ids) };
   },
   /* make a saved state the live league (null = a brand-new league) */
@@ -4179,7 +4242,7 @@ const Live = {
     const d = League.data, j = n - (d.liveSeasonStart || 0), per = App.perWeek(), N = d.seasonLength * per, out = [];
     if (j < 0) return out;
     const plan = App.seasonPlan(), cm = League.cupMatches();
-    const shape = League.promoOn() ? PO_SHAPE : CUP_SHAPE;
+    const shape = League.promoOn() ? League.poShape() : CUP_SHAPE;
     const cupAt = (ch, i) => { const k = shape[i], x = cm[i]; if (k) out.push({ ch, cup: k.k, r: k.r, ids: x ? [x.a, x.b] : [null, null] }); };
     if (j < N) { const w = Math.floor(j / per) + 1, m = j % per + 1; out.push({ ch: 'main', week: w, wm: m, ids: plan ? ((plan.weeks[w - 1] || [])[m - 1] || []).slice() : [] }); }
     else if (!League.promoOn() && League.cupOn() && j < N + CUP_SHAPE.length) cupAt('main', j - N);
@@ -4249,7 +4312,8 @@ const Live = {
      Playoff results: [winner, loser, goals, goals, time, (penalties winner, penalties loser) | (golden goal: 1)].
      m: the season's league matches in the order played, 4 base-36 characters each: home and away club (index into rows) and
      their goals (the "İstatistik" tab and the club pages: records, streaks, head-to-head; ~0,6 KB a season). '' = not kept.
-     pl: the promotion league (seasons since it exists): { n, rows, m } like the league's (rows in table order); its top 4's playoff is cup. */
+     pl: the promotion league (seasons since it exists): { n, rows, m } like the league's (rows in table order); its playoff is cup
+     (draw of 6: the top 2 went up directly and 3rd–6th played; draw of 4: the first format). */
   archiveSeason(a) {
     const min = (iso) => { const t = Date.parse(iso); return isNaN(t) ? 0 : Math.round(t / 60000); };
     const cup = a.cup, pr = a.promo, ts = a.history.concat(pr ? pr.history : []).map(h => min(h.date)).concat(cup ? Object.values(cup.res).map(r => min(r.date)) : []).filter(Boolean);
@@ -4425,7 +4489,7 @@ const Live = {
     if (!p) return say('Maç bağlantısı geçersiz');
     if (p[1] !== this.sim()) return say('Bu maç eski kurallarla oynandı, tekrarı gösterilemiyor');
     const L = League.normalize(null), team = (id) => L.teams.find(t => t.id === id) || L.reserve.find(t => t.id === id);
-    const [A, B] = [team(p[3]), team(p[4])], cup = p[9] && CUP_SHAPE.concat(PO_SHAPE).some(c => c.k === p[9]) ? p[9] : null;
+    const [A, B] = [team(p[3]), team(p[4])], cup = p[9] && CUP_SHAPE.concat(PO_SHAPE, PO_OLD).some(c => c.k === p[9]) ? p[9] : null;
     if (!A || !B || A === B || !THEME_DEFS[p[5]] || (p[9] && !cup)) return say('Maç bağlantısı geçersiz');
     const promo = p[6] === 'p', wk = +p[7] || 0, wm = +p[8] || 0;
     const seed = +p[2] >>> 0, start = +p[10] * 1000, opts = App.matchOpts([A, B], seed, p[5], !!cup);
@@ -4879,9 +4943,9 @@ const LiveScreen = {
         oldPts: x.r.pts, newPts: x.r.pts, played: x.r.played, dPlayed: 0, oldGd: gd, newGd: gd, res: null, delta: null, oldForm: f, newForm: f };
     });
     const last = d.champions.length ? d.champions[d.champions.length - 1] : null;
-    const sub = promo ? (League.promoLeagueOver() ? `SEASON ${d.season} · FINAL TABLE · TOP ${PO_SIZE} TO THE PLAYOFFS` : `SEASON ${d.season} · AFTER ${hist.length} MATCHES`)
+    const sub = promo ? (League.promoLeagueOver() ? `SEASON ${d.season} · FINAL TABLE · ${League.poDirect() ? `TOP ${League.poDirect()} GO UP · ${League.poDirect() + 1}–${League.poSize()} TO THE PLAYOFFS` : `TOP ${League.poSize()} TO THE PLAYOFFS`}` : `SEASON ${d.season} · AFTER ${hist.length} MATCHES`)
       : sc ? `SEASON ${d.season} · FINAL TABLE` : d.history.length ? `SEASON ${d.season} · AFTER ${d.history.length} MATCHES` : last ? `🏆 ${upTR(last.name)} · SEASON ${last.season} CHAMPIONS` : `SEASON ${d.season}`;
-    LeagueTable.draw(ctx, rows, promo ? 'PROMOTION LEAGUE' : 'LEAGUE TABLE', sub, { tt: 99, post: false, alpha: 1, po: promo && d.promo.po ? PO_SIZE : 0 });
+    LeagueTable.draw(ctx, rows, promo ? 'PROMOTION LEAGUE' : 'LEAGUE TABLE', sub, { tt: 99, post: false, alpha: 1, po: promo && d.promo.po ? League.poSize() : 0, up: promo ? League.poDirect() : 0 });
     /* next match box: who plays, the kick-off and the countdown */
     const X0 = 70, W = 880, y = 1668, h = 200;
     roundRect(ctx, X0, y, W, h, 28);
@@ -4971,7 +5035,7 @@ const LivePages = {
   tableHtml(list, lv) {
     const rows = list.map((x, i) => {
       const av = x.r.gf - x.r.ga;
-      return `<tr class="${x.rel ? 'rel' : x.po ? 'po' : ''}"><td>${i + 1}</td><td class="tn">${this.dot(x.t)}${this.tlink(x.t)}${this.ball(x.t.id, lv, x.t.name)}</td><td>${x.r.played}</td>` +
+      return `<tr class="${x.rel ? 'rel' : x.up ? 'up' : x.po ? 'po' : ''}"><td>${i + 1}</td><td class="tn">${this.dot(x.t)}${this.tlink(x.t)}${this.ball(x.t.id, lv, x.t.name)}</td><td>${x.r.played}</td>` +
         `<td class="opt">${x.r.w}</td><td class="opt">${x.r.d}</td><td class="opt">${x.r.l}</td><td class="opt">${x.r.gf}</td><td class="opt">${x.r.ga}</td><td>${av > 0 ? '+' : ''}${av}</td><td><b>${x.r.pts}</b></td><td class="form">${formHtml(x.form)}</td></tr>`;
     }).join('');
     return `<table class="lp-table"><thead><tr><th scope="col">#</th><th scope="col">Takım</th><th scope="col" title="Oynanan">O</th><th scope="col" class="opt" title="Galibiyet">G</th><th scope="col" class="opt" title="Beraberlik">B</th><th scope="col" class="opt" title="Mağlubiyet">M</th><th scope="col" class="opt" title="Atılan gol">AG</th><th scope="col" class="opt" title="Yenilen gol">YG</th><th scope="col" title="Averaj">AV</th><th scope="col" title="Puan">P</th><th scope="col" title="Son ${CONFIG.FORM_COUNT} maç (en sağdaki en yeni)">Son ${CONFIG.FORM_COUNT}</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -4989,7 +5053,8 @@ const LivePages = {
   table(lv) {
     const d = League.data, rk = League.ranking(), out = rk.length - Math.min(CONFIG.RELEGATE_COUNT, d.reserve.length);
     const list = rk.map((x, i) => ({ t: x.t, r: x.r, form: League.formOf(x.t.id), rel: i >= out }));
-    const up = League.promoOn() ? `; yerlerine yükselme liginin ilk ${PO_SIZE} takımının elemesinde ilk 3'e girenler çıkar (Yükselme ligi sekmesi)`
+    const up = League.poDirect() ? `; yerlerine yükselme liginin ilk ${League.poDirect()} takımı ve ${League.poDirect() + 1}.–${League.poSize()}. takımların elemesinin galibi çıkar (Yükselme ligi sekmesi)`
+      : League.promoOn() ? `; yerlerine yükselme liginin ilk ${League.poSize()} takımının elemesinde ilk 3'e girenler çıkar (Yükselme ligi sekmesi)`
       : League.cupOn() ? `; yerlerine havuzdaki ${CONFIG.CUP_SIZE} takımın eleme maçlarında ilk 3'e girenler çıkar (Yükselme sekmesi)` : '';
     return `<h2>Lig tablosu</h2><div class="lp-sub">Sezon ${d.season} · ${d.history.length} / ${d.seasonLength * App.perWeek()} maç oynandı</div>${this.champ()}
       ${this.tableHtml(list, lv)}
@@ -5086,10 +5151,10 @@ const LivePages = {
     const ups = `<div class="lp-note">🔺 Yükselenler: <b>${rec.up.map(id => esc(team(id).name)).join(', ')}</b></div>`;
     const bracket = () => { const c = this.cupOf(rec); return this.cupRounds(League.cupMatchesOf(c), c, { team: (id) => this.anyTeam(id), kick: (m) => ({ t: m.res ? m.res.t : 0, late: false }) }); };
     if (rec.pl) {
-      /* the promotion league (and its top 4's playoff) */
-      const po = new Set(rec.cup ? rec.cup.draw : []);
-      const rows = rec.pl.rows.map(r => ({ t: team(r[0]), r: { played: r[1], pts: r[2], w: r[3], d: r[4], l: r[5], gf: r[6], ga: r[7] }, form: r.slice(8), po: po.has(r[0]) }));
-      cup = `<h3 class="lp-h3">Yükselme ligi</h3>${this.tableHtml(rows)}<div class="lp-legend">${rec.pl.n} maç · ${po.size ? `yeşil çizgili ilk ${po.size} takım yükselme elemesi oynadı` : 'ilk takımlar lige yükseldi'}.</div>`
+      /* the promotion league (and its playoff) */
+      const dir = new Set(rec.cup ? cupDirect(rec.cup) : []), po = new Set(rec.cup ? rec.cup.draw.filter(id => !dir.has(id)) : []);   // top 2 went up directly, the rest of the draw played
+      const rows = rec.pl.rows.map(r => ({ t: team(r[0]), r: { played: r[1], pts: r[2], w: r[3], d: r[4], l: r[5], gf: r[6], ga: r[7] }, form: r.slice(8), po: po.has(r[0]), up: dir.has(r[0]) }));
+      cup = `<h3 class="lp-h3">Yükselme ligi</h3>${this.tableHtml(rows)}<div class="lp-legend">${rec.pl.n} maç · ${dir.size ? `sarı çizgili ilk ${dir.size} takım doğrudan yükseldi, yeşil çizgili ${po.size} takım son yer için yükselme elemesi oynadı` : po.size ? `yeşil çizgili ilk ${po.size} takım yükselme elemesi oynadı` : 'ilk takımlar lige yükseldi'}.</div>`
         + (rec.cup ? `<h3 class="lp-h3">Yükselme elemesi</h3>${ups}${bracket()}` : ups);
     } else if (rec.cup) {
       cup = `<h3 class="lp-h3">Yükselme eleme maçları</h3>${ups}${bracket()}`;
@@ -5150,29 +5215,30 @@ const LivePages = {
       }).join('');
       return `<section class="fx-week${w === curW && !League.promoLeagueOver() ? ' cur' : ''}"><h3>Hafta ${w}<span>${this.day(k0)} · ${Live.clock(k0)}–${Live.clock(k1)}</span></h3><div class="fx-grid">${matches}</div></section>`;
     }).join('');
-    return `<h2>Sezon ${d.season} · yükselme ligi fikstürü</h2><div class="lp-sub">${p.plan.length} hafta · havuzdaki ${d.reserve.length} kulüp, haftada ${p.per} maç · her maç bir lig maçıyla aynı saatte başlar · sezonun son ${p.po} maç saatinde ilk ${PO_SIZE} takımın yükselme elemesi · ⚽: şu an oynanan maç</div>`
+    return `<h2>Sezon ${d.season} · yükselme ligi fikstürü</h2><div class="lp-sub">${p.plan.length} hafta · havuzdaki ${d.reserve.length} kulüp, haftada ${p.per} maç · her maç bir lig maçıyla aynı saatte başlar · ${p.po ? `sezonun son ${p.po} maç saatinde ${League.poDirect() ? `${League.poDirect() + 1}.–${League.poSize()}. takımların` : `ilk ${League.poSize()} takımın`} yükselme elemesi · ` : ''}⚽: şu an oynanan maç</div>`
       + weeks + (p.po ? `<h3 class="lp-h3">Yükselme elemesi</h3>${this.promoBracket(lv)}` : '');
   },
   /* the promotion league's playoff: its rounds (the clubs once the league is over, else "Yükselme ligi 1.si" …) */
   promoBracket(lv) {
-    const p = League.data.promo, c = League.cup() || { season: League.data.season, draw: [], res: {} }, ms = League.cupMatchesOf(c);
+    const p = League.data.promo, c = League.cup() || { season: League.data.season, draw: new Array(League.poSize()).fill(null), res: {} }, ms = League.cupMatchesOf(c);
     const r = this.cupRounds(ms, c, { team: (id) => League.poolTeam(id), kick: (m) => this.cupKickoff(m.i, m), lv, ch: 'promo', seed: (i) => `Yükselme ligi ${i + 1}.si` });
     return League.promoLeagueOver() ? r : r.replace(/fx-week cur/g, 'fx-week');   // the current week is the promotion league's until it is over
   },
-  /* the "Yükselme ligi" tab: the promotion league's table (top 4: playoff), its playoff; a season of the old format: its knockout */
+  /* the "Yükselme ligi" tab: the promotion league's table (top 2: up directly, 3rd–6th: playoff), its playoff; a season of the old format: its knockout */
   promo(lv) {
     const d = League.data;
     if (!League.promoOn()) return `<div class="lp-note">Bu sezon eski formatla başladı: havuzdaki kulüpler lig maçlarından sonra eleme oynar. <b>Yükselme ligi</b> (havuz kulüplerinin ligle aynı anda oynadığı çift devreli lig) yeni sezonla başlar.</div>` + this.cup(lv);
-    const p = d.promo, rk = League.promoRanking();
-    const list = rk.map((x, i) => ({ t: x.t, r: x.r, form: League.formOf(x.t.id, p.history), po: !!p.po && i < PO_SIZE }));
+    const p = d.promo, rk = League.promoRanking(), PD = League.poDirect(), PS = League.poSize();
+    const list = rk.map((x, i) => ({ t: x.t, r: x.r, form: League.formOf(x.t.id, p.history), po: !!p.po && i < PS, up: i < PD }));
     const legs = p.plan.length >= 2 * (d.reserve.length - 1) ? 'çift devreli (her takımla iki kez: bir iç saha, bir deplasman)' : `${p.plan.length} haftalık`;
     const top = League.cupTop3(), c = League.cup();
     const done = top ? `<div class="lp-note">🔺 Yükselenler: <b>${top.map(t => esc(t.name)).join(', ')}</b></div>` : '';
     const guide = `<div class="lp-legend">Havuzdaki ${d.reserve.length} kulüp, ligle aynı anda kendi aralarında ${legs} bir lig oynar; her maç bir lig maçıyla aynı saatte başlar ve iki sezon aynı anda biter. `
-      + (p.po ? `Sezon sonunda ilk ${PO_SIZE} takım <b>yükselme elemesi</b> oynar: yarı finaller 1.–4. ve 2.–3. (ev sahibi üst sıradaki), sonra 3.lük maçı ve final (tek maç; berabere biterse en fazla ${CONFIG.GOLDEN_TIME} sn altın gol, sonra penaltılar). <b>Final galibi, finalist ve 3.lük maçının galibi</b> lige yükselir; ligin son ${CONFIG.RELEGATE_COUNT} takımı havuza düşer. Eleme sezonun son ${p.po} maç saatindedir: final, ligin son maçıyla aynı anda.`
+      + (PD ? `Sezon sonunda <b>ilk ${PD} takım doğrudan lige yükselir</b>. ${PD + 1}.–${PS}. takımlar son yer için <b>yükselme elemesi</b> oynar: yarı finaller ${PD + 1}.–${PS}. ve ${PD + 2}.–${PS - 1}. (ev sahibi üst sıradaki), sonra final (tek maç; berabere biterse en fazla ${CONFIG.GOLDEN_TIME} sn altın gol, sonra penaltılar). <b>Final galibi</b> de lige yükselir; ligin son ${CONFIG.RELEGATE_COUNT} takımı havuza düşer. Eleme sezonun son ${p.po} maç saatindedir: final, ligin son maçıyla aynı anda.`
+        : p.po ? `Sezon sonunda ilk ${PS} takım <b>yükselme elemesi</b> oynar: yarı finaller 1.–4. ve 2.–3. (ev sahibi üst sıradaki), sonra 3.lük maçı ve final (tek maç; berabere biterse en fazla ${CONFIG.GOLDEN_TIME} sn altın gol, sonra penaltılar). <b>Final galibi, finalist ve 3.lük maçının galibi</b> lige yükselir; ligin son ${CONFIG.RELEGATE_COUNT} takımı havuza düşer. Eleme sezonun son ${p.po} maç saatindedir: final, ligin son maçıyla aynı anda.`
         : `Sezon sonunda ilk ${CONFIG.RELEGATE_COUNT} takım lige yükselir.`) + ` ⚽: şu an maçı olan takım.</div>`;
     return `<h2>Yükselme ligi</h2><div class="lp-sub">Sezon ${d.season} · ${p.history.length} / ${p.n} maç oynandı${c ? ` · eleme ${Object.keys(c.res).length} / ${p.po} maç` : ''}</div>${done}`
-      + this.tableHtml(list, lv) + `<div class="lp-legend">${this.pointsText(d.points)} · Yeşil çizgili ilk ${PO_SIZE} takım yükselme elemesine kalır.</div>${guide}`
+      + this.tableHtml(list, lv) + `<div class="lp-legend">${this.pointsText(d.points)} · ${PD ? `Sarı çizgili ilk ${PD} takım doğrudan yükselir, yeşil çizgili ${PD + 1}.–${PS}. takımlar yükselme elemesine kalır` : `Yeşil çizgili ilk ${PS} takım yükselme elemesine kalır`}.</div>${guide}`
       + (p.po ? `<h3 class="lp-h3">Yükselme elemesi</h3>${this.promoBracket(lv)}` : '');
   },
   /* the "Canlı" tab: the matches on now and those that start within 10 minutes; a card opens its match on the canvas */
@@ -5334,6 +5400,7 @@ const LiveStats = {
     if (!c || !c.draw.includes(id)) return '';
     const ms = League.cupMatchesOf(c).filter(m => m.res && (m.res.winner === id || m.res.loser === id));
     const last = ms[ms.length - 1];
+    if (cupDirect(c).includes(id)) return 'Doğrudan yükseldi';
     if (!last) return c.draw.length > PO_SIZE && c.draw.slice(0, 4).includes(id) ? 'Elemede (1. turu bay geçti)' : 'Elemede';
     const won = last.res.winner === id;
     if (last.k === 'FIN') return won ? 'Eleme birincisi' : 'Eleme finalisti';

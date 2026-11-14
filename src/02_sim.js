@@ -62,11 +62,12 @@ class Game {
     this.half = 1;               // 1 / 2; at half time the clubs change ends (rectTeams swaps)
     this.slowmo = null; this.slowmoCd = 0;
     this.spawnBlock = 0;
+    this.kickTeam = -1;          // the club that takes the next kick-off (the one that just conceded; -1: a random direction)
 
     this.teams = o.teams.slice(0, 2).map((d, i) => ({
       i, id: d.id, name: d.name, code: d.code, c1: d.c1, c2: d.c2,
       place: 0, gf: 0, gfT: [], ga: 0, saves: 0, score: 0, pen: 0,
-      skill: this.rng.range(0.25, 0.55),
+      skill: CONFIG.KEEPER_SKILL,         // both keepers are equally good: no hidden draw before the match
       hitT: -1,
       k: { s: 0, vs: 0, halfLen: 20, flashT: -9, saveCd: 0, active: true },
     }));
@@ -79,6 +80,7 @@ class Game {
     this.spawnBall(true);
   }
 
+  ballInPlay() { for (const b of this.balls) if (b.state === 'live') return true; return false; }
   emit(type, data) { if (this.onEvent) this.onEvent(type, data || {}); }
   /* seconds left on the clock (the golden goal has its own clock) */
   timeLeft() { return this.extra ? Math.max(0, this.extraStart + CONFIG.GOLDEN_TIME - this.clock) : Math.max(0, this.matchTime - this.clock); }
@@ -168,9 +170,17 @@ class Game {
       if (ok) break;
       x = ox + this.rng.range(-70, 70); y = oy + this.rng.range(-70, 70);
     }
-    const a = this.rng.range(0, TAU), sp = this.targetSpeed();
-    const b = { id: this.ballId++, x, y, px: x, py: y, vx: DM.cos(a) * sp, vy: DM.sin(a) * sp, sp, boost: 1, wallT: -9,
-      lastTouch: -1, state: 'live', born: initial ? -10 : this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0, shot: false, shotTeam: -1 };
+    /* after a goal the club that conceded kicks off: the ball leaves the centre spot toward the rival goal (within KICK_MAX_DEG
+       of straight ahead, like a player's touch). The match's first ball and the second half's start in a random direction. */
+    const kt = this.kickTeam, sp = this.targetSpeed();
+    this.kickTeam = -1;
+    let vx, vy;
+    if (kt >= 0) {
+      const a = this.rng.range(-1, 1) * CONFIG.KICK_MAX_DEG * DEG;
+      vx = DM.sin(a) * sp; vy = (kt === this.rectTeams[0] ? 1 : -1) * DM.cos(a) * sp;
+    } else { const a = this.rng.range(0, TAU); vx = DM.cos(a) * sp; vy = DM.sin(a) * sp; }
+    const b = { id: this.ballId++, x, y, px: x, py: y, vx, vy, sp, boost: 1, wallT: -9,
+      lastTouch: kt, prevTouch: -1, byKeeper: false, state: 'live', born: initial ? -10 : this.t, netT: 0, nl: null, netTeam: -1, hitP: -9, vanishT: 0, shot: false, shotTeam: -1 };
     this.balls.push(b);
     this.spawnBlock = this.t + 0.35;
     this.emit('spawnBall', { x, y, initial: !!initial, id: b.id });
@@ -186,12 +196,15 @@ class Game {
   }
   step(dt) {
     if (this.over) return;
-    /* the match clock runs on screen time: a slow-motion step takes longer on screen */
-    if (!this.winnerSet && !this.morph) {                        // the clock stops during the half-time break
+    /* the match clock runs on game time: in slow motion it runs slow too (a slow-motion moment costs no playing time), and it
+       stops during the half-time break and from a goal until the kick-off that follows it (no ball in play) */
+    if (!this.winnerSet && !this.morph) {
       if (this.t === 0) this.emit('kickoff', {});
-      this.clock += dt / this.timeScale();
-      const left = Math.ceil(this.timeLeft());                   // last 10 seconds: one tick a second (sound / clock pulse only)
-      if (left <= 10 && left > 0 && left !== this.lastTick) { this.lastTick = left; this.emit('countdown', { n: left }); }
+      if (this.pens || this.ballInPlay()) {
+        this.clock += dt;
+        const left = Math.ceil(this.timeLeft());                 // last 10 seconds: one tick a second (sound / clock pulse only)
+        if (left <= 10 && left > 0 && left !== this.lastTick) { this.lastTick = left; this.emit('countdown', { n: left }); }
+      }
     }
     this.t += dt;
     if (this.pens) { this.stepPens(dt); return; }
@@ -281,13 +294,24 @@ class Game {
     if (vn < 0) { p.vx -= 2 * vn * nx; p.vy -= 2 * vn * ny; p.h = DM.atan2(p.vy, p.vx); }
   }
   updatePlayers(dt) {
-    const R = CONFIG.PLAYER_R, sp = CONFIG.PLAYER_SPEED;
+    const R = CONFIG.PLAYER_R, sp = CONFIG.PLAYER_SPEED, chase = CONFIG.PLAYER_CHASE * dt;
+    let ball = null;
+    for (const b of this.balls) if (b.state === 'live') { ball = b; break; }
     for (const p of this.players) {
       if (!p.alive) continue;
       p.turnT -= dt;
       if (p.turnT <= 0) { p.turnT = this.rng.range(0.3, 0.9); p.turnTarget = this.rng.range(-2.4, 2.4); }
       p.turn += (p.turnTarget - p.turn) * Math.min(1, dt * 3);
       p.h += p.turn * dt;
+      /* a player sees the ball: while it is in the player's third the player keeps wandering but leans toward it
+         (it turns toward the ball by at most PLAYER_CHASE rad/s) */
+      if (ball && chase > 0 && p.role) {
+        const z = this.zoneOf(p);
+        if (ball.y >= z[0] && ball.y <= z[1]) {
+          const dx = ball.x - p.x, dy = ball.y - p.y;
+          p.h += clamp(DM.atan2(p.vx * dy - p.vy * dx, p.vx * dx + p.vy * dy), -chase, chase);
+        }
+      }
       p.vx = DM.cos(p.h) * sp; p.vy = DM.sin(p.h) * sp;
       p.x += p.vx * dt; p.y += p.vy * dt;
       for (const s of this.geo.sides) {
@@ -365,10 +389,16 @@ class Game {
     const fresh = this.t - b.hitP > 0.12;
     b.hitP = this.t;
     if (!fresh) { b.x = p.x + nx * rad; b.y = p.y + ny * rad; return; }
-    const down = p.team === this.rectTeams[0], a = this.rng.range(-1, 1) * CONFIG.KICK_MAX_DEG * DEG, sp = DM.hypot(b.vx, b.vy) || b.sp;
+    const down = p.team === this.rectTeams[0], sp = DM.hypot(b.vx, b.vy) || b.sp, K = CONFIG.KICK_MAX_DEG * DEG;
+    let a = this.rng.range(-1, 1);
+    if (p.role === 'fwd') {
+      /* the forward shoots: at the centre of the rival goal, at most FWD_AIM_DEG off (never more than KICK_MAX_DEG off straight ahead) */
+      const g = this.geo.goals.find(gg => gg.team !== p.team);
+      a = g ? clamp(DM.atan2(g.mx - b.x, Math.abs(g.my - b.y)) + a * CONFIG.FWD_AIM_DEG * DEG, -K, K) : a * K;
+    } else a *= K;
     b.vx = DM.sin(a) * sp; b.vy = (down ? 1 : -1) * DM.cos(a) * sp;
     b.x = p.x + (b.vx / sp) * rad; b.y = p.y + (b.vy / sp) * rad;
-    b.lastTouch = p.team;
+    b.lastTouch = p.team; b.byKeeper = false;
     this.emit('player', { x: b.x - (b.vx / sp) * CONFIG.BALL_R, y: b.y - (b.vy / sp) * CONFIG.BALL_R, team: p.team });
     if (!this.winnerSet && p.captain && this.headingToRivalGoal(b, p.team)) {
       if (!b.shot || b.shotTeam !== p.team) {
@@ -386,7 +416,10 @@ class Game {
     const d2 = dx * dx + dy * dy;
     if (d2 >= rad * rad) return;
     this.endShot(b);
-    b.lastTouch = T.i;                 // keepers count as the last touch too (goal credit / own goal)
+    /* a keeper's touch is the last touch, but the touch before it is kept: a ball that goes in off the keeper is the goal of
+       whoever sent it there, not the keeper's own goal (see scoreGoal) */
+    if (!(b.byKeeper && b.lastTouch === T.i)) b.prevTouch = b.lastTouch;
+    b.lastTouch = T.i; b.byKeeper = true;
     const outward = b.vx * k.nx + b.vy * k.ny;
     let d = Math.sqrt(d2);
     if (d < 1e-6) { dx = -k.nx; dy = -k.ny; d = 1; }
@@ -483,10 +516,11 @@ class Game {
     b.nl = { a: along, o: out, va: b.vx * g.tx + b.vy * g.ty, vo: Math.max(120, b.vx * g.nx + b.vy * g.ny) };
     if (this.winnerSet) return;
     const T = this.teams[g.team];
-    const scorer = b.lastTouch, own = scorer === g.team;
+    const scorer = b.byKeeper && b.lastTouch === g.team ? b.prevTouch : b.lastTouch, own = scorer === g.team;
     T.ga++;
     T.hitT = this.t; this.stats.goals++;
     this.spawnBlock = Math.max(this.spawnBlock, this.t + CONFIG.GOAL_RESPAWN);
+    this.kickTeam = g.team;                                // the club that conceded takes the kick-off
     if (own) this.stats.ownGoals++;
     const other = g.team === 0 ? 1 : 0;
     this.creditGoal(other); this.teams[other].score++;
@@ -533,7 +567,7 @@ class Game {
     this.emit('halfTime', {});
     this.half = 2; this.clock = this.matchTime / 2;
     for (const b of this.balls) if (b.state !== 'dead') b.state = 'vanish';
-    this.slowmo = null;
+    this.slowmo = null; this.kickTeam = -1;
     this.rectTeams = [this.rectTeams[1], this.rectTeams[0]];
     this.geo = this.computeGeo();
     for (const T of this.teams) { T.k.s = 0; T.k.vs = 0; }
