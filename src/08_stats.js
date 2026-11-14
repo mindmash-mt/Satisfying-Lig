@@ -132,6 +132,7 @@ const LiveStats = {
     if (!c || !c.draw.includes(id)) return '';
     const ms = League.cupMatchesOf(c).filter(m => m.res && (m.res.winner === id || m.res.loser === id));
     const last = ms[ms.length - 1];
+    if (cupDirect(c).includes(id)) return 'Doğrudan yükseldi';
     if (!last) return c.draw.length > PO_SIZE && c.draw.slice(0, 4).includes(id) ? 'Elemede (1. turu bay geçti)' : 'Elemede';
     const won = last.res.winner === id;
     if (last.k === 'FIN') return won ? 'Eleme birincisi' : 'Eleme finalisti';

@@ -9,7 +9,11 @@ const CONFIG = {
   BALL_R: 16, BALL_SPEED: 600, WALL_ACCEL: 0.10, BALL_MAX_MULT: 2.4, GOAL_RESPAWN: 1.1,
   POST_R: 10, FINAL_GOAL_FRAC: 0.54, NET_DEPTH_RECT: 34,
   KEEPER_INSET: 28, KEEPER_LEN_FRAC: 0.30, KEEPER_THICK: 14, KEEPER_SPEED: 320, KEEPER_GAIN: 3, KEEPER_READ: 0.3,
-  PLAYER_R: 24, PLAYER_SPEED: 260,
+  /* both keepers have the same skill (how fast they react and how far they read the ball's path, see KEEPER_GAIN / KEEPER_READ) */
+  KEEPER_SKILL: 0.4,
+  /* PLAYER_CHASE: a player leans toward the ball while it is in its third (turn rate toward it, rad/s; 0: pure wandering).
+     FWD_AIM_DEG: the forward's touch is a shot at the centre of the rival goal, at most this far off. */
+  PLAYER_R: 24, PLAYER_SPEED: 260, PLAYER_CHASE: 2.5, FWD_AIM_DEG: 20,
   WIN_SLOW_GAME: 0.24, TS_SLOW: 0.3,
   FINAL_SLOWMO_GAME: 0.375, FINAL_SLOWMO_TS: 0.25, FINAL_SLOWMO_DIST: 120,
   /* the pitch fills the frame from just under the top bar (title · score · clock) to the bottom edge; the goal tally
